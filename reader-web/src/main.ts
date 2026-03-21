@@ -236,11 +236,53 @@ class DigestHeadingRenderer extends Renderer {
   }
 }
 
+/** Adds `digest-capture-link` for in-app capture navigation from wikilink-derived anchors. */
+class DigestProseRenderer extends DigestHeadingRenderer {
+  constructor(h2IdPrefix: string) {
+    super(h2IdPrefix);
+  }
+
+  override link(token: Tokens.Link): string {
+    const { href, title, tokens } = token;
+    if (href.startsWith('#/capture/')) {
+      const inner = this.parser.parseInline(tokens);
+      const t =
+        title != null && String(title).trim() !== ''
+          ? ` title="${String(title).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
+          : '';
+      return `<a href="${href}" class="digest-capture-link"${t}>${inner}</a>`;
+    }
+    return super.link(token);
+  }
+}
+
+/**
+ * CLI digest lines use Obsidian wikilinks: `[[Captures/<id>/note|Title]]`.
+ * Marked does not parse those; convert to markdown links the SPA understands.
+ */
+function transformDigestCapturesWikilinks(markdown: string): string {
+  const mdLink = (folder: string, display: string) => {
+    const id = folder.trim();
+    const raw = display.trim() || id;
+    const label = raw
+      .replace(/\\/g, '\\\\')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]');
+    return `[${label}](#/capture/${encodeURIComponent(id)})`;
+  };
+  let s = markdown;
+  s = s.replace(/\[\[Captures\/(.+?)\/note\|([^\]]+)\]\]/g, (_, folder: string, alias: string) =>
+    mdLink(folder, alias),
+  );
+  s = s.replace(/\[\[Captures\/(.+?)\/note\]\]/g, (_, folder: string) => mdLink(folder, folder));
+  return s;
+}
+
 function markdownToProseHtml(markdown: string, opts?: { h2IdPrefix?: string }): string {
   const pfx = opts?.h2IdPrefix;
   if (!pfx) return marked.parse(markdown) as string;
 
-  return marked.parse(markdown, { renderer: new DigestHeadingRenderer(pfx) }) as string;
+  return marked.parse(markdown, { renderer: new DigestProseRenderer(pfx) }) as string;
 }
 
 function renderDigestMetaPanel(front: Record<string, string>): string {
@@ -1292,7 +1334,9 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
   const bodyMd = stripDigestBodyLeadingH1(parsed?.body ?? markdown, week);
   const metaPanel = parsed?.front ? renderDigestMetaPanel(parsed.front) : '';
   const toc = renderDigestToc(bodyMd);
-  const bodyHtml = markdownToProseHtml(bodyMd, { h2IdPrefix: 'digest' });
+  const bodyHtml = markdownToProseHtml(transformDigestCapturesWikilinks(bodyMd), {
+    h2IdPrefix: 'digest',
+  });
 
   const ch = challengeMarkdown?.trim();
   const challengeBlock =

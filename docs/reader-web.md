@@ -50,7 +50,7 @@ Path pattern (CLI output):
 
 - Digests: `vault/Digests/YYYY-Www.md`
 - Challenges: `vault/Challenges/YYYY-Www.md` (from `pnpm challenge`)
-- Reader API: `GET /api/digests/:week` (markdown), `GET /api/challenges/:week` (404 if missing). On digest detail (`#/digest/YYYY-Www`), the UI loads both and renders the challenge section below the digest when the file exists.
+- Reader API: `GET /api/digests/:week` (markdown), `GET /api/challenges/:week` (404 if missing). On digest detail (`#/digest/YYYY-Www`), the UI loads both and renders the challenge section below the digest when the file exists. **Captures** lines with vault wikilinks `[[Captures/…/note|…]]` are turned into in-app links `#/capture/<id>` when rendering (vault file unchanged). Further layout options: [`reader-web-digest-capture-display-options.md`](reader-web-digest-capture-display-options.md).
 
 ## CLI helpers related to reader data
 
