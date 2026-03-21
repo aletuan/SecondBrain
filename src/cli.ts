@@ -7,6 +7,7 @@ import {
   writeChallengeFromDigestFile,
 } from './challenge/fromDigest.js';
 import { generateDigest } from './digest.js';
+import type { IngestProgressEvent } from './ingest/ingestProgress.js';
 import { runIngest } from './ingest/runIngest.js';
 import type { OpenAIClientLike } from './llm/enrich.js';
 import { applyTranslationToCaptureSource } from './llm/translateTranscript.js';
@@ -34,37 +35,45 @@ const program = new Command()
 program
   .command('ingest')
   .argument('<url>', 'URL to ingest')
-  .option('--no-llm', 'skip OpenAI enrichment even if OPENAI_API_KEY is set')
   .option(
-    '--no-translate-transcript',
-    'YouTube only: skip Vietnamese transcript translation (default: translate when OPENAI_API_KEY is set)',
+    '--progress-json',
+    'emit one JSON progress object per line on stderr (v1 schema for Reader SSE)',
   )
-  .option(
-    '--translate-transcript',
-    'YouTube only: require transcript translation (error if segments or OPENAI_API_KEY missing)',
+  .description(
+    'Ingest a URL into the vault (YouTube: auto Vi transcript when segments + OPENAI_API_KEY; always enrich note when OPENAI_API_KEY)',
   )
-  .description('Ingest a URL into the vault')
   .action(
     async (
       url: string,
-      opts: { llm?: boolean; translateTranscript?: boolean; noTranslateTranscript?: boolean },
+      opts: {
+        progressJson?: boolean;
+      },
     ) => {
+      const writeProgress = (ev: IngestProgressEvent) => {
+        process.stderr.write(`${JSON.stringify(ev)}\n`);
+      };
       try {
-        if (opts.translateTranscript && opts.noTranslateTranscript) {
-          throw new Error('ingest: use only one of --translate-transcript and --no-translate-transcript');
-        }
-        const translateTranscriptVi: boolean | undefined = opts.noTranslateTranscript
-          ? false
-          : opts.translateTranscript
-            ? true
-            : undefined;
         const dir = await runIngest({
           url,
-          noLlm: opts.llm === false,
-          translateTranscriptVi,
+          onProgress: opts.progressJson ? (ev) => writeProgress(ev) : undefined,
         });
+        if (opts.progressJson) {
+          writeProgress({
+            v: 1,
+            kind: 'done',
+            captureDir: dir,
+            captureId: path.basename(dir),
+          });
+        }
         console.log(dir);
       } catch (e) {
+        if (opts.progressJson) {
+          writeProgress({
+            v: 1,
+            kind: 'error',
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
         printError(e);
         process.exitCode = 1;
       }

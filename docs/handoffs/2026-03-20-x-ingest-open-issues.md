@@ -127,7 +127,7 @@ Lấy cookies: browser DevTools → Application → Cookies → `x.com` → copy
 pnpm verify-x-tweet 2034902650534187503
 
 # Full ingest (no LLM)
-pnpm exec tsx src/cli.ts ingest --no-llm 'https://x.com/_avichawla/status/2034902650534187503'
+pnpm exec tsx src/cli.ts ingest 'https://x.com/_avichawla/status/2034902650534187503'
 
 # Test twitter-cli trực tiếp
 twitter article 2034902650534187503 --json

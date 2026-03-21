@@ -253,7 +253,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 - [x] **Step 1:** Đăng ký lệnh `ingest <url>` (hoặc `ingest -- <url>`): parse URL, đọc `VAULT_ROOT`, load `config/routing.yaml` (fallback example path document trong README).
 - [x] **Step 2:** `resolveStrategy(url)` → gọi đúng adapter (`httpReadability` / `apify` / `xApi`).
-- [x] **Step 3:** Normalise → `writeCapture` → optional `enrichNote` (có flag `--no-llm` nếu muốn tách bước — YAGNI: có thể bỏ flag nếu luôn gọi LLM khi có key).
+- [x] **Step 3:** Normalise → `writeCapture` → `enrichNote` khi có `OPENAI_API_KEY` (không còn cờ tắt LLM trên lệnh `ingest`).
 - [x] **Step 4:** Log đường dẫn thư mục capture ra stdout (để user mở Obsidian).
 - [x] **Step 5:** Manual: `pnpm ingest -- https://example.com` (trang article tĩnh) tạo folder dưới `vault/Captures/...` — ghi lại trong README.
 - [x] **Step 6 (tùy chọn):** Test integration temp vault + mock fetch (Task 9b) — không chặn MVP.
@@ -340,7 +340,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 - **Mục đích:** Từ transcript đã ghi trong capture, sinh thêm bản **Tiếng Việt** (LLM), gắn nhãn rõ *bản dịch / suy diễn* để không nhầm với nguyên bản.
 - **Tạo / sửa:** `src/llm/translateTranscript.ts`; `tests/llm/translateTranscript.test.ts` (fixture transcript ngắn → snapshot khối `vi`).
-- **CLI:** `pnpm exec tsx src/cli.ts ingest --translate-transcript '<url>'` (flag **trước** URL nếu dùng `watch?v=`) hoặc `pnpm translate-transcript -- --capture <path>` — xem README.
+- **CLI:** `pnpm exec tsx src/cli.ts ingest '<url>'` (YouTube: dịch Vi tự động khi có segment + key) hoặc `pnpm translate-transcript -- --capture <path>` — xem README.
 - **Xong khi:** `pnpm test` có test mới pass; contract output (section Markdown hoặc file phụ) được mô tả trong comment hoặc README một dòng.
 
 ### B2 — Docs reader web + hợp đồng hiển thị (**Task 14d**)
@@ -390,7 +390,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **CLI (gợi ý)**
 
-- `ingest <youtube-url> [--translate-transcript vi]` hoặc `pnpm translate-transcript -- --capture <path>` chỉ đọc/ghi transcript đã có.
+- `ingest <youtube-url>` (dịch Vi trong ingest khi đủ điều kiện) hoặc `pnpm translate-transcript -- --capture <path>` chỉ đọc/ghi transcript đã có.
 - Env: dùng chung `OPENAI_*`; không bắt buộc biến mới.
 
 **Reader web (UI)**

@@ -1,6 +1,10 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {
+  tryParseIngestProgressLine,
+  type IngestProgressEvent,
+} from './ingestProgressParse.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
 
 function collectStream(stream: NodeJS.ReadableStream): Promise<string> {
@@ -40,13 +44,12 @@ export async function assertIngestEnvironment(cwd: string = process.cwd()): Prom
 
 export type IngestCliOptions = {
   url: string;
-  noLlm?: boolean;
-  /**
-   * `undefined` — CLI defaults (YouTube + OPENAI_API_KEY → translate transcript).
-   * `true` — `--translate-transcript` (strict errors if translation cannot run).
-   * `false` — `--no-translate-transcript`.
-   */
-  translateTranscript?: boolean;
+  /** Forward v1 JSON lines from CLI stderr (see Brain `ingestProgress`). */
+  progressJson?: boolean;
+  /** Called for each parsed progress object while the process runs. */
+  onIngestProgress?: (ev: IngestProgressEvent) => void;
+  /** For cancelling the child when the HTTP client disconnects (SSE). */
+  onChild?: (child: ChildProcess) => void;
   cwd?: string;
 };
 
@@ -55,6 +58,48 @@ export type IngestCliOptions = {
  * Avoids `pnpm run ingest -- …`, which can forward a stray `--` into argv and break Commander
  * (“Expected 1 argument but got 2”).
  */
+function collectStderrWithProgress(
+  child: ChildProcess,
+  onLine: NonNullable<IngestCliOptions['onIngestProgress']>,
+): Promise<string> {
+  const stderr = child.stderr;
+  if (!stderr) return Promise.resolve('');
+  let carry = '';
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      const tail = carry.trim();
+      if (tail) {
+        const ev = tryParseIngestProgressLine(tail);
+        if (ev) onLine(ev);
+      }
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    };
+    stderr.on('data', (c: string | Buffer) => {
+      const s = Buffer.isBuffer(c) ? c.toString('utf8') : c;
+      chunks.push(Buffer.from(s, 'utf8'));
+      carry += s;
+      const parts = carry.split(/\r?\n/);
+      carry = parts.pop() ?? '';
+      for (const line of parts) {
+        const ev = tryParseIngestProgressLine(line);
+        if (ev) onLine(ev);
+      }
+    });
+    stderr.on('error', (err) => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    });
+    stderr.on('end', finish);
+    child.once('close', finish);
+  });
+}
+
 export async function runIngestCli(options: IngestCliOptions): Promise<{
   code: number;
   stdout: string;
@@ -67,9 +112,7 @@ export async function runIngestCli(options: IngestCliOptions): Promise<{
   await fs.access(tsxCli);
 
   const args = [tsxCli, cliTs, 'ingest'];
-  if (options.noLlm) args.push('--no-llm');
-  if (options.translateTranscript === false) args.push('--no-translate-transcript');
-  if (options.translateTranscript === true) args.push('--translate-transcript');
+  if (options.progressJson) args.push('--progress-json');
   args.push(options.url);
 
   const child = spawn(process.execPath, args, {
@@ -77,9 +120,16 @@ export async function runIngestCli(options: IngestCliOptions): Promise<{
     env: { ...process.env, VAULT_ROOT: vaultRoot },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  options.onChild?.(child);
 
   const stdoutP = child.stdout ? collectStream(child.stdout) : Promise.resolve('');
-  const stderrP = child.stderr ? collectStream(child.stderr) : Promise.resolve('');
+  const streamProgress = Boolean(options.progressJson && options.onIngestProgress);
+  const stderrP = streamProgress
+    ? collectStderrWithProgress(child, options.onIngestProgress!)
+    : child.stderr
+      ? collectStream(child.stderr)
+      : Promise.resolve('');
+
   const codeP = new Promise<number>((resolve, reject) => {
     child.once('error', (err) => {
       child.stdout?.destroy();

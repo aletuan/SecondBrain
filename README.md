@@ -18,11 +18,8 @@ touch .env   # create at repo root; add keys from the Environment table (never c
 
 | Command | Description |
 |--------|-------------|
-| `pnpm ingest -- <url>` | Ingest one URL (fetch → normalise → `Captures/…` → optional images → optional LLM sections on `note.md`). |
-| `pnpm ingest -- --no-llm <url>` | Same without OpenAI enrichment. |
-| `pnpm exec tsx src/cli.ts ingest [options] <url>` | **Recommended** when using flags (avoids pnpm injecting an extra `--` into argv). **YouTube:** Vi batch translation runs **by default** if `OPENAI_API_KEY` is set and transcript segments exist. |
-| `pnpm exec tsx src/cli.ts ingest --no-translate-transcript <youtube-url>` | YouTube only: skip Vi transcript translation. |
-| `pnpm exec tsx src/cli.ts ingest --translate-transcript <youtube-url>` | YouTube only: **require** Vi transcript (errors if segments or key missing). |
+| `pnpm ingest -- <url>` | Ingest one URL (fetch → normalise → `Captures/…` → optional images). With `OPENAI_API_KEY`: LLM sections on `note.md`; for **YouTube**, Vi transcript batch runs automatically when transcript segments exist. |
+| `pnpm exec tsx src/cli.ts ingest [options] <url>` | **Recommended** when passing options (avoids pnpm injecting an extra `--` into argv). Use `--progress-json` for machine-readable phase lines on stderr (Reader SSE). |
 | `pnpm translate-transcript -- --capture vault/Captures/…` | Add or replace `## Transcript (vi)` on an existing capture. |
 | `pnpm suggest-milestones -- --capture vault/Captures/… --max-sec 600` | Merge LLM-suggested `milestones.yaml` (YouTube). |
 | `pnpm digest` | Build digest for the current ISO week (UTC) under `vault/Digests/`. |
@@ -60,13 +57,12 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 3. **Ingest thật** — tránh `pnpm run ingest -- --flag1 --flag2 <url>` (pnpm có thể chuyển thêm một `--` xuống argv và làm Commander báo “too many arguments”). Ưu tiên:
 
    ```bash
-   pnpm exec tsx src/cli.ts ingest --no-llm https://example.com
    pnpm exec tsx src/cli.ts ingest https://example.com
    ```
 
-   Hoặc chỉ một cờ sau `run ingest`: `pnpm run ingest -- --no-llm https://example.com`.
+   Hoặc: `pnpm run ingest -- https://example.com`.
 
-4. **OpenAI trong ingest:** bỏ `--no-llm`, đảm bảo `OPENAI_API_KEY` trong `.env`; mở `note.md` của capture xem section LLM. **YouTube:** cùng key đó còn bật dịch transcript Vi theo mặc định (trừ khi `--no-translate-transcript`).
+4. **OpenAI trong ingest:** đặt `OPENAI_API_KEY` trong `.env` để có section LLM trên `note.md`. **YouTube:** cùng key đó, ingest tự dịch transcript sang Vi khi có segment (xem `YT_TRANSLATE_BATCH` / `YT_TRANSLATE_MODEL`).
 
 5. **Apify:** cần URL khớp route `apify` trong `config/routing.yaml` + `actorId` hợp lệ + `APIFY_TOKEN`. Với **`youtube.com` / `youtu.be`**, CLI gọi luồng **YouTube transcript**: actor phải trả về transcript (field dạng `subtitles` / `captions` / `transcript` / `text` — xem `src/adapters/youtube.ts`). Pin actor **YouTube có transcript** trong Apify Console; có thể dùng cùng `actorId` cho cả hai host trong `routing.example.yaml`.
 
