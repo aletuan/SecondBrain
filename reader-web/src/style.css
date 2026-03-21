@@ -1580,7 +1580,7 @@ tr.capture-row:focus-visible {
   margin: 0;
 }
 
-/* —— Digest detail: editorial measure + metadata panel (frontmatter never raw in prose) —— */
+/* —— Digest detail: main body full width like capture note; challenge keeps a reading measure —— */
 .digest-toolbar {
   padding-bottom: 0.85rem;
   margin-bottom: 0;
@@ -1713,13 +1713,16 @@ tr.capture-row:focus-visible {
 
 .digest-body {
   padding-top: 0.35rem;
-  max-width: min(100%, 72ch);
+  max-width: none;
+  width: 100%;
 }
 
 .digest-prose--main {
   font-size: clamp(15px, 0.3vw + 14px, 17px);
   line-height: 1.74;
   color: var(--paper-read);
+  max-width: none;
+  width: 100%;
 }
 
 .digest-prose--main > h2.digest-h2:first-child,
@@ -1938,9 +1941,10 @@ tr.capture-row:focus-visible {
   hanging-punctuation: first last;
 }
 
-/* Capture detail note.md: fill section width (digest/challenge keep .prose measure). */
+/* Capture detail note.md + digest main column: fill available width (challenge keeps 68ch). */
 #cap-note .prose,
-#note-prose {
+#note-prose,
+.digest-prose--main.prose {
   max-width: none;
   width: 100%;
 }
