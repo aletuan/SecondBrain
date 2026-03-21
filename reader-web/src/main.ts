@@ -1281,9 +1281,7 @@ async function route() {
             .filter(Boolean)
             .join(' ');
           st.hidden = false;
-          stMsg.textContent = yt
-            ? 'Đang chạy pipeline ingest (YouTube: transcript + LLM khi có API key)…'
-            : 'Đang chạy pipeline ingest (LLM khi có API key)…';
+          stMsg.textContent = 'Đang chạy pipeline ingest';
           stFoot.innerHTML = '';
           ingestAgentResetSteps(st);
           if (!useSse) {
