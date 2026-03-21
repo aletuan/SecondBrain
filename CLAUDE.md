@@ -13,11 +13,8 @@ pnpm install                          # Install dependencies
 pnpm test                             # Run all tests (vitest)
 pnpm test:watch                       # Watch mode
 pnpm typecheck                        # TypeScript strict check (no emit)
-pnpm ingest <url>                     # Ingest a URL (LLM + YouTube Vi transcript when OPENAI_API_KEY is set)
-pnpm ingest -- --no-llm <url>         # Ingest without LLM
-pnpm ingest -- --skip-translate-transcript <youtube-url>   # YouTube: skip Vi transcript batch
-pnpm ingest -- --translate-transcript <youtube-url>      # YouTube: require Vi transcript (error if missing segments or key)
-pnpm exec tsx src/cli.ts ingest [options] <url>          # Prefer this when passing flags (avoids stray `--` in argv)
+pnpm ingest <url>                     # Ingest (LLM on note.md + YouTube Vi transcript when OPENAI_API_KEY + segments)
+pnpm exec tsx src/cli.ts ingest [options] <url>          # Prefer for options, e.g. --progress-json (avoids stray `--` in argv)
 pnpm translate-transcript -- --capture path/to/Captures/…   # Add/replace ## Transcript (vi) on disk
 pnpm suggest-milestones -- --capture path/to/Captures/… --max-sec 600
 pnpm digest                           # Generate weekly digest (current ISO week)

@@ -35,27 +35,17 @@ const program = new Command()
 program
   .command('ingest')
   .argument('<url>', 'URL to ingest')
-  .option('--no-llm', 'skip OpenAI enrichment even if OPENAI_API_KEY is set')
-  .option(
-    '--skip-translate-transcript',
-    'YouTube only: skip Vietnamese transcript translation (default: auto-translate when OPENAI_API_KEY is set)',
-  )
-  .option(
-    '--translate-transcript',
-    'YouTube only: require transcript translation (error if segments or OPENAI_API_KEY missing)',
-  )
   .option(
     '--progress-json',
     'emit one JSON progress object per line on stderr (v1 schema for Reader SSE)',
   )
-  .description('Ingest a URL into the vault')
+  .description(
+    'Ingest a URL into the vault (YouTube: auto Vi transcript when segments + OPENAI_API_KEY; always enrich note when OPENAI_API_KEY)',
+  )
   .action(
     async (
       url: string,
       opts: {
-        llm?: boolean;
-        translateTranscript?: boolean;
-        skipTranslateTranscript?: boolean;
         progressJson?: boolean;
       },
     ) => {
@@ -63,20 +53,8 @@ program
         process.stderr.write(`${JSON.stringify(ev)}\n`);
       };
       try {
-        if (opts.translateTranscript && opts.skipTranslateTranscript) {
-          throw new Error(
-            'ingest: use only one of --translate-transcript and --skip-translate-transcript',
-          );
-        }
-        const translateTranscriptVi: boolean | undefined = opts.skipTranslateTranscript
-          ? false
-          : opts.translateTranscript
-            ? true
-            : undefined;
         const dir = await runIngest({
           url,
-          noLlm: opts.llm === false,
-          translateTranscriptVi,
           onProgress: opts.progressJson ? (ev) => writeProgress(ev) : undefined,
         });
         if (opts.progressJson) {

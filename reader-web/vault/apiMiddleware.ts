@@ -35,8 +35,6 @@ const MAX_PENDING_INGEST_JOBS = 16;
 
 type IngestJobPayload = {
   url: string;
-  noLlm: boolean;
-  translateTranscript: boolean | undefined;
 };
 
 const pendingIngestJobs = new Map<string, IngestJobPayload>();
@@ -68,9 +66,7 @@ function beginSse(res: ServerResponse) {
   }
 }
 
-type ParsedIngestBody =
-  | { ok: true; url: string; noLlm: boolean; translateTranscript: boolean | undefined }
-  | { ok: false; status: number; error: string };
+type ParsedIngestBody = { ok: true; url: string } | { ok: false; status: number; error: string };
 
 function parseIngestJsonBody(body: unknown): ParsedIngestBody {
   if (!body || typeof body !== 'object') {
@@ -89,10 +85,7 @@ function parseIngestJsonBody(body: unknown): ParsedIngestBody {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { ok: false, status: 400, error: 'only http(s) urls' };
   }
-  const noLlm = Boolean((body as { noLlm?: unknown }).noLlm);
-  const rawTr = (body as { translateTranscript?: unknown }).translateTranscript;
-  const translateTranscript = rawTr === false ? false : rawTr === true ? true : undefined;
-  return { ok: true, url: url.trim(), noLlm, translateTranscript };
+  return { ok: true, url: url.trim() };
 }
 
 function ingestAllowed(): boolean {
@@ -179,8 +172,6 @@ export function vaultApiMiddleware() {
         const jobId = randomUUID();
         pendingIngestJobs.set(jobId, {
           url: parsedBody.url,
-          noLlm: parsedBody.noLlm,
-          translateTranscript: parsedBody.translateTranscript,
         });
         sendJson(res, 200, { ok: true, jobId });
         return;
@@ -225,8 +216,6 @@ export function vaultApiMiddleware() {
         try {
           const { code, stdout, stderr, captureDir } = await runIngestCli({
             url: payload.url,
-            noLlm: payload.noLlm,
-            translateTranscript: payload.translateTranscript,
             progressJson: true,
             onIngestProgress: forward,
             onChild: (c) => {
@@ -280,8 +269,6 @@ export function vaultApiMiddleware() {
         try {
           const { code, stdout, stderr, captureDir } = await runIngestCli({
             url: parsedBody.url,
-            noLlm: parsedBody.noLlm,
-            translateTranscript: parsedBody.translateTranscript,
           });
           if (code !== 0) {
             sendJson(res, 502, {

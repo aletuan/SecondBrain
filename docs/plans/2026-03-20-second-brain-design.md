@@ -55,7 +55,7 @@ flowchart LR
 
 ### Thành phần chính
 
-1. **CLI** (TypeScript / Node — xem implementation plan): `ingest <url>`, `digest --since …`; **Phase 2+:** `challenge --digest …` / `--week …` (sinh câu hỏi từ digest); **YouTube:** tùy chọn `--translate-transcript vi` (hoặc lệnh dịch transcript sau ingest).
+1. **CLI** (TypeScript / Node — xem implementation plan): `ingest <url>`, `digest --since …`; **Phase 2+:** `challenge --digest …` / `--week …` (sinh câu hỏi từ digest); **YouTube:** dịch Vi trong ingest khi có segment + OpenAI, hoặc lệnh `translate-transcript --capture …` sau ingest.
 2. **Router:** map host/path → `strategy` + tham số actor Apify (id, version, input template).
 3. **Normaliser:** đưa mọi nguồn về **schema nội bộ** chung trước khi ghi vault.
 4. **Vault writer:** tạo thư mục theo ingest, ghi file, cập nhật frontmatter.
@@ -89,7 +89,7 @@ flowchart LR
 
 **Dịch Việt**
 
-- Tuỳ chọn CLI sau ingest: ví dụ `ingest … --translate-transcript vi` hoặc lệnh riêng `translate-transcript --capture …` — gọi LLM **chỉ** dựa trên đoạn transcript đã lưu, output vào section / file đã nói ở trên.
+- Trong ingest (YouTube + key): dịch batch tự động; hoặc lệnh riêng `translate-transcript --capture …` — gọi LLM **chỉ** dựa trên đoạn transcript đã lưu, output vào section / file đã nói ở trên.
 
 **Hiển thị trên reader web (theo mock UI)**
 

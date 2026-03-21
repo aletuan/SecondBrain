@@ -57,7 +57,7 @@ Cần thống nhất **một bảng enum** (ví dụ `IngestProgressPhase`) dùn
 
 **Cách A — Một endpoint SSE gắn với job (dễ tách biệt, dễ hủy sau này):**
 
-1. `POST /api/ingest/start` — body: `{ url, noLlm?, translateTranscript? }` — trả `{ jobId }` ngay (202 hoặc 200).
+1. `POST /api/ingest/start` — body: `{ url }` — trả `{ jobId }` ngay (202 hoặc 200).
 2. `GET /api/ingest/stream?jobId=…` — header `Content-Type: text/event-stream`, giữ kết nối mở, gửi các dòng SSE (`data: {JSON}\n\n`).
 3. Server chạy ingest (spawn hoặc in-process) trong background; khi xong gửi sự kiện `done` hoặc `error` rồi đóng stream.
 

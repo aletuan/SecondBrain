@@ -291,7 +291,7 @@ function safeExternalHref(url: string): string | null {
   }
 }
 
-/** Host/path heuristics for --translate-transcript (CLI rejects non-YouTube). */
+/** Host/path heuristics (Reader UI: hide YouTube-only ingest step when not YouTube). */
 function isLikelyYoutubeUrl(url: string): boolean {
   try {
     const u = new URL(url.trim());
@@ -415,7 +415,7 @@ function applyIngestSseToPanel(panel: HTMLElement, ev: IngestSseEvent) {
 }
 
 async function postIngestWithSse(
-  body: { url: string; noLlm?: boolean; translateTranscript?: boolean },
+  body: { url: string },
   onProgress: (ev: IngestSseEvent) => void,
 ): Promise<{ ok: true; captureDir: string; captureId: string }> {
   const r = await fetch('/api/ingest/start', {
@@ -477,11 +477,11 @@ async function postIngestWithSse(
   });
 }
 
-async function postIngest(body: {
-  url: string;
-  noLlm?: boolean;
-  translateTranscript?: boolean;
-}): Promise<{ ok: true; captureDir: string; captureId: string }> {
+async function postIngest(body: { url: string }): Promise<{
+  ok: true;
+  captureDir: string;
+  captureId: string;
+}> {
   const r = await fetch('/api/ingest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -521,20 +521,6 @@ function ingestFailurePresentation(
     friendly = 'Mất kết nối luồng tiến độ với server — thử lại hoặc tải lại trang.';
   } else if (low.includes('invalid sse payload')) {
     friendly = 'Server trả về dữ liệu tiến độ không đọc được — thử lại hoặc cập nhật reader.';
-  } else if (low.includes('only for youtube captures')) {
-    friendly = xUrl
-      ? 'CLI đang bật `--translate-transcript` (chỉ cho YouTube) trong khi URL là X — chạy lại không kèm cờ này (sau bản sửa, `pnpm ingest <url>` mặc định không bật).'
-      : 'Cờ `--translate-transcript` chỉ dùng với URL YouTube — URL hiện tại không phải video YouTube.';
-  } else if (
-    low.includes('ingest: no transcript segments to translate') ||
-    low.includes('ingest: --translate-transcript requires openai_api_key') ||
-    low.includes('ingest: --translate-transcript requires openai')
-  ) {
-    friendly =
-      'YouTube (chế độ bắt buộc dịch): thiếu segment transcript hoặc OPENAI_API_KEY — chỉ áp dụng khi bạn truyền `--translate-transcript` cho URL YouTube.';
-  } else if (low.includes('use only one of --translate-transcript')) {
-    friendly =
-      'Hai cờ dịch transcript mâu thuẫn — chỉ dùng một trong `--translate-transcript` hoặc `--skip-translate-transcript`.';
   } else if (low.includes('apify_token') || /\bapify\b/.test(low)) {
     friendly =
       'URL này cần Apify nhưng thiếu hoặc sai APIFY_TOKEN — thêm vào `.env` của repo Brain và khởi động lại reader.';
@@ -1406,10 +1392,10 @@ async function route() {
           runBtn.classList.add('processing');
           try {
             const out = useSse
-              ? await postIngestWithSse({ url, noLlm: false }, (ev) => {
+              ? await postIngestWithSse({ url }, (ev) => {
                   if (ev.kind === 'phase') applyIngestSseToPanel(st, ev);
                 })
-              : await postIngest({ url, noLlm: false });
+              : await postIngest({ url });
             stopTicker();
             ingestAgentMarkAllDone(st);
             st.className = [

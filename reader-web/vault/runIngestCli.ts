@@ -44,13 +44,6 @@ export async function assertIngestEnvironment(cwd: string = process.cwd()): Prom
 
 export type IngestCliOptions = {
   url: string;
-  noLlm?: boolean;
-  /**
-   * `undefined` — CLI defaults (YouTube + OPENAI_API_KEY → translate transcript).
-   * `true` — `--translate-transcript` (strict errors if translation cannot run).
-   * `false` — `--skip-translate-transcript`.
-   */
-  translateTranscript?: boolean;
   /** Forward v1 JSON lines from CLI stderr (see Brain `ingestProgress`). */
   progressJson?: boolean;
   /** Called for each parsed progress object while the process runs. */
@@ -119,9 +112,6 @@ export async function runIngestCli(options: IngestCliOptions): Promise<{
   await fs.access(tsxCli);
 
   const args = [tsxCli, cliTs, 'ingest'];
-  if (options.noLlm) args.push('--no-llm');
-  if (options.translateTranscript === false) args.push('--skip-translate-transcript');
-  if (options.translateTranscript === true) args.push('--translate-transcript');
   if (options.progressJson) args.push('--progress-json');
   args.push(options.url);
 

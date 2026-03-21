@@ -45,8 +45,8 @@ If neither vault env is set, the app resolves `../vault` from the `reader-web/` 
 ## API (local middleware)
 
 - `GET /api/health` — `vaultRoot`, `brainRoot`, `ingestAvailable`, `ingestSse` (same as `ingestAvailable` when the SSE ingest flow is built in)
-- `POST /api/ingest` — JSON `{ "url": "https://…", "noLlm"?: boolean, "translateTranscript"?: boolean }` → runs the Brain CLI ingest in `READER_BRAIN_ROOT` with `VAULT_ROOT` set to the reader vault. **Local-only**; set `READER_ALLOW_INGEST=0` to turn off. The **web UI** uses SSE (`/start` + `/stream`) when `ingestSse` is true; otherwise it falls back to this endpoint. It always uses LLM enrichment (`noLlm` false) for the button-driven flow.
-- `POST /api/ingest/start` — same JSON body as `/api/ingest` → `{ ok, jobId }`. Open `GET /api/ingest/stream?jobId=…` as **SSE** (`text/event-stream`); each event is `data: <JSON>` with `v:1` and `kind`: `phase` \| `done` \| `error` (CLI `--progress-json` on stderr, forwarded by the server).
+- `POST /api/ingest` — JSON `{ "url": "https://…" }` → runs the Brain CLI ingest in `READER_BRAIN_ROOT` with `VAULT_ROOT` set to the reader vault (same behaviour as CLI: LLM when `OPENAI_API_KEY`; YouTube Vi transcript when segments + key). **Local-only**; set `READER_ALLOW_INGEST=0` to turn off. The **web UI** uses SSE (`/start` + `/stream`) when `ingestSse` is true; otherwise it falls back to this endpoint.
+- `POST /api/ingest/start` — body `{ "url": "https://…" }` → `{ ok, jobId }`. Open `GET /api/ingest/stream?jobId=…` as **SSE** (`text/event-stream`); each event is `data: <JSON>` with `v:1` and `kind`: `phase` \| `done` \| `error` (CLI `--progress-json` on stderr, forwarded by the server).
 - `GET /api/captures` — list captures
 - `GET /api/captures/:id` — capture payload (markdown, frontmatter, YouTube, transcripts, milestones)
 - `GET /api/captures/:id/assets/*` — image files from `assets/`

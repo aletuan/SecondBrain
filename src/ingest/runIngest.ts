@@ -16,10 +16,7 @@ import type { IngestPhaseProgressEvent } from './ingestProgress.js';
 
 export async function runIngest(options: {
   url: string;
-  noLlm?: boolean;
   cwd?: string;
-  /** YouTube: batch-translate transcript segments to Vietnamese (OpenAI). */
-  translateTranscriptVi?: boolean;
   /** Emitted at real pipeline boundaries (Reader SSE / `--progress-json`). */
   onProgress?: (ev: IngestPhaseProgressEvent) => void;
 }): Promise<string> {
@@ -64,30 +61,10 @@ export async function runIngest(options: {
   }
   phase({ v: 1, kind: 'phase', phase: 'fetch', state: 'done' });
 
-  const strictTranslate = options.translateTranscriptVi === true;
-  const skipTranslate = options.translateTranscriptVi === false;
-  const autoTranslate = options.translateTranscriptVi === undefined;
-
-  let doTranslate = false;
-  if (skipTranslate) {
-    doTranslate = false;
-  } else if (strictTranslate) {
-    if (bundle.source !== 'youtube') {
-      throw new Error('ingest: --translate-transcript is only for YouTube captures');
-    }
-    if (!bundle.transcriptSegments?.length) {
-      throw new Error('ingest: no transcript segments to translate');
-    }
-    if (!process.env.OPENAI_API_KEY?.trim()) {
-      throw new Error('ingest: --translate-transcript requires OPENAI_API_KEY');
-    }
-    doTranslate = true;
-  } else if (autoTranslate) {
-    doTranslate =
-      bundle.source === 'youtube' &&
-      Boolean(bundle.transcriptSegments?.length) &&
-      Boolean(process.env.OPENAI_API_KEY?.trim());
-  }
+  const doTranslate =
+    bundle.source === 'youtube' &&
+    Boolean(bundle.transcriptSegments?.length) &&
+    Boolean(process.env.OPENAI_API_KEY?.trim());
 
   if (doTranslate) {
     phase({ v: 1, kind: 'phase', phase: 'translate', state: 'active' });
@@ -110,7 +87,7 @@ export async function runIngest(options: {
   await downloadImagesToAssets(bundle, captureDir);
   phase({ v: 1, kind: 'phase', phase: 'vault', state: 'done' });
   const notePath = path.join(captureDir, 'note.md');
-  const willEnrich = !options.noLlm && Boolean(process.env.OPENAI_API_KEY?.trim());
+  const willEnrich = Boolean(process.env.OPENAI_API_KEY?.trim());
   if (willEnrich) {
     phase({ v: 1, kind: 'phase', phase: 'llm', state: 'active' });
     const raw = await fs.readFile(path.join(captureDir, 'source.md'), 'utf8');
