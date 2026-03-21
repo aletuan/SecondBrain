@@ -12,6 +12,7 @@ import { translateTranscriptSegments } from '../llm/translateTranscript.js';
 import { loadRouting, resolveStrategy } from '../router.js';
 import type { CaptureBundle } from '../types/capture.js';
 import { downloadImagesToAssets, writeCapture } from '../vault/writer.js';
+import type { IngestPhaseProgressEvent } from './ingestProgress.js';
 
 export async function runIngest(options: {
   url: string;
@@ -19,12 +20,20 @@ export async function runIngest(options: {
   cwd?: string;
   /** YouTube: batch-translate transcript segments to Vietnamese (OpenAI). */
   translateTranscriptVi?: boolean;
+  /** Emitted at real pipeline boundaries (Reader SSE / `--progress-json`). */
+  onProgress?: (ev: IngestPhaseProgressEvent) => void;
 }): Promise<string> {
+  const report = options.onProgress;
+  const phase = (ev: IngestPhaseProgressEvent) => {
+    report?.(ev);
+  };
+
   const cwd = options.cwd ?? process.cwd();
   const vaultRoot = path.resolve(cwd, process.env.VAULT_ROOT?.trim() || 'vault');
   const cfg = loadRouting(readRoutingYamlSync(cwd));
   const { strategy, apify } = resolveStrategy(cfg, options.url);
 
+  phase({ v: 1, kind: 'phase', phase: 'fetch', state: 'active' });
   let bundle: CaptureBundle;
   if (strategy === 'http_readability') {
     bundle = await ingestHttpReadability(options.url);
@@ -53,6 +62,7 @@ export async function runIngest(options: {
   } else {
     bundle = await fetchXThread(options.url);
   }
+  phase({ v: 1, kind: 'phase', phase: 'fetch', state: 'done' });
 
   const strictTranslate = options.translateTranscriptVi === true;
   const skipTranslate = options.translateTranscriptVi === false;
@@ -80,6 +90,7 @@ export async function runIngest(options: {
   }
 
   if (doTranslate) {
+    phase({ v: 1, kind: 'phase', phase: 'translate', state: 'active' });
     const key = process.env.OPENAI_API_KEY!.trim();
     const model =
       process.env.YT_TRANSLATE_MODEL?.trim() ||
@@ -91,15 +102,21 @@ export async function runIngest(options: {
       { client, model },
     );
     bundle = { ...bundle, transcriptSegmentsVi };
+    phase({ v: 1, kind: 'phase', phase: 'translate', state: 'done' });
   }
 
+  phase({ v: 1, kind: 'phase', phase: 'vault', state: 'active' });
   const { captureDir } = await writeCapture(vaultRoot, bundle);
   await downloadImagesToAssets(bundle, captureDir);
+  phase({ v: 1, kind: 'phase', phase: 'vault', state: 'done' });
   const notePath = path.join(captureDir, 'note.md');
-  if (!options.noLlm && process.env.OPENAI_API_KEY?.trim()) {
+  const willEnrich = !options.noLlm && Boolean(process.env.OPENAI_API_KEY?.trim());
+  if (willEnrich) {
+    phase({ v: 1, kind: 'phase', phase: 'llm', state: 'active' });
     const raw = await fs.readFile(path.join(captureDir, 'source.md'), 'utf8');
     const excerpt = raw.replace(/^---[\s\S]*?---\s*/, '').slice(0, 12_000);
     await enrichNote({ notePath, sourceExcerpt: excerpt });
+    phase({ v: 1, kind: 'phase', phase: 'llm', state: 'done' });
   }
 
   return captureDir;

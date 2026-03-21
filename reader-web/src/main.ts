@@ -387,7 +387,84 @@ type Health = {
   vaultRoot: string;
   brainRoot: string;
   ingestAvailable: boolean;
+  /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
+  ingestSse?: boolean;
 };
+
+type IngestSseEvent =
+  | { v: 1; kind: 'phase'; phase: 'fetch' | 'translate' | 'vault' | 'llm'; state: 'active' | 'done' }
+  | { v: 1; kind: 'done'; captureDir: string; captureId: string }
+  | { v: 1; kind: 'error'; message: string; phase?: string };
+
+function applyIngestSseToPanel(panel: HTMLElement, ev: IngestSseEvent) {
+  if (ev.kind !== 'phase') return;
+  const step = panel.querySelector<HTMLElement>(`[data-step="${ev.phase}"]`);
+  if (!step) return;
+  ingestAgentSetStep(step, ev.state === 'active' ? 'active' : 'done');
+}
+
+async function postIngestWithSse(
+  body: { url: string; noLlm?: boolean; translateTranscript?: boolean },
+  onProgress: (ev: IngestSseEvent) => void,
+): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  const r = await fetch('/api/ingest/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const data = (await r.json().catch(() => ({}))) as { error?: string; jobId?: string };
+  if (!r.ok) {
+    throw new Error(data.error || `${r.status} /api/ingest/start`);
+  }
+  if (typeof data.jobId !== 'string' || !data.jobId) {
+    throw new Error('ingest/start: missing jobId');
+  }
+  const jobId = data.jobId;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const es = new EventSource(`/api/ingest/stream?jobId=${encodeURIComponent(jobId)}`);
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      try {
+        es.close();
+      } catch {
+        /* ignore */
+      }
+      fn();
+    };
+    es.onmessage = (msg) => {
+      if (settled) return;
+      let ev: unknown;
+      try {
+        ev = JSON.parse(msg.data);
+      } catch {
+        finish(() => reject(new Error('invalid SSE payload')));
+        return;
+      }
+      if (!ev || typeof ev !== 'object') {
+        finish(() => reject(new Error('invalid SSE payload')));
+        return;
+      }
+      const p = ev as IngestSseEvent;
+      if (p.v !== 1) return;
+      if (p.kind === 'phase' || p.kind === 'done' || p.kind === 'error') {
+        onProgress(p);
+      }
+      if (p.kind === 'done') {
+        finish(() => resolve({ ok: true, captureDir: p.captureDir, captureId: p.captureId }));
+        return;
+      }
+      if (p.kind === 'error') {
+        finish(() => reject(new Error(p.message || 'ingest error')));
+      }
+    };
+    es.onerror = () => {
+      if (settled) return;
+      finish(() => reject(new Error('Kết nối tiến trình ingest bị gián đoạn (SSE).')));
+    };
+  });
+}
 
 async function postIngest(body: {
   url: string;
@@ -1194,6 +1271,7 @@ async function route() {
             return;
           }
           const yt = isLikelyYoutubeUrl(url);
+          const useSse = Boolean(h.ingestSse);
           let stopTicker = () => {};
           st.className = [
             'ingest-agent-status',
@@ -1207,11 +1285,18 @@ async function route() {
             ? 'Đang chạy pipeline ingest (YouTube: transcript + LLM khi có API key)…'
             : 'Đang chạy pipeline ingest (LLM khi có API key)…';
           stFoot.innerHTML = '';
-          stopTicker = startIngestAgentStepTicker(st);
+          ingestAgentResetSteps(st);
+          if (!useSse) {
+            stopTicker = startIngestAgentStepTicker(st);
+          }
           runBtn.disabled = true;
           runBtn.classList.add('processing');
           try {
-            const out = await postIngest({ url, noLlm: false });
+            const out = useSse
+              ? await postIngestWithSse({ url, noLlm: false }, (ev) => {
+                  if (ev.kind === 'phase') applyIngestSseToPanel(st, ev);
+                })
+              : await postIngest({ url, noLlm: false });
             stopTicker();
             ingestAgentMarkAllDone(st);
             st.className = [

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -10,6 +11,7 @@ import {
   listDigests,
 } from './service.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
+import type { IngestProgressEvent } from './ingestProgressParse.js';
 import { runIngestCli } from './runIngestCli.js';
 
 type NextFn = (err?: unknown) => void;
@@ -29,6 +31,69 @@ function sendText(res: ServerResponse, status: number, text: string, ct = 'text/
 const ASSET_RE = /^\/api\/captures\/([^/]+)\/assets\/(.+)$/;
 
 const MAX_JSON_BODY = 32_768;
+const MAX_PENDING_INGEST_JOBS = 16;
+
+type IngestJobPayload = {
+  url: string;
+  noLlm: boolean;
+  translateTranscript: boolean | undefined;
+};
+
+const pendingIngestJobs = new Map<string, IngestJobPayload>();
+
+function getQueryParam(req: IncomingMessage, key: string): string | null {
+  const raw = req.url ?? '';
+  const q = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  const params = new URLSearchParams(q);
+  const v = params.get(key);
+  return v?.trim() ? v.trim() : null;
+}
+
+function sendSse(res: ServerResponse, payload: unknown) {
+  try {
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  } catch {
+    /* client disconnected */
+  }
+}
+
+function beginSse(res: ServerResponse) {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof (res as ServerResponse & { flushHeaders?: () => void }).flushHeaders === 'function') {
+    (res as ServerResponse & { flushHeaders: () => void }).flushHeaders();
+  }
+}
+
+type ParsedIngestBody =
+  | { ok: true; url: string; noLlm: boolean; translateTranscript: boolean | undefined }
+  | { ok: false; status: number; error: string };
+
+function parseIngestJsonBody(body: unknown): ParsedIngestBody {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 400, error: 'expected JSON object' };
+  }
+  const url = (body as { url?: unknown }).url;
+  if (typeof url !== 'string' || !url.trim()) {
+    return { ok: false, status: 400, error: 'url required' };
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    return { ok: false, status: 400, error: 'invalid url' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, status: 400, error: 'only http(s) urls' };
+  }
+  const noLlm = Boolean((body as { noLlm?: unknown }).noLlm);
+  const rawTr = (body as { translateTranscript?: unknown }).translateTranscript;
+  const translateTranscript = rawTr === false ? false : rawTr === true ? true : undefined;
+  return { ok: true, url: url.trim(), noLlm, translateTranscript };
+}
 
 function ingestAllowed(): boolean {
   const v = process.env.READER_ALLOW_INGEST?.trim().toLowerCase();
@@ -85,7 +150,113 @@ export function vaultApiMiddleware() {
           vaultRoot,
           brainRoot,
           ingestAvailable,
+          ingestSse: ingestAvailable,
         });
+        return;
+      }
+
+      if (req.method === 'POST' && urlRaw === '/api/ingest/start') {
+        if (!ingestAllowed()) {
+          sendJson(res, 403, { error: 'ingest disabled (READER_ALLOW_INGEST)' });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch (e) {
+          sendJson(res, 400, { error: e instanceof Error ? e.message : 'bad json' });
+          return;
+        }
+        const parsedBody = parseIngestJsonBody(body);
+        if (!parsedBody.ok) {
+          sendJson(res, parsedBody.status, { error: parsedBody.error });
+          return;
+        }
+        if (pendingIngestJobs.size >= MAX_PENDING_INGEST_JOBS) {
+          sendJson(res, 503, { error: 'too many pending ingest jobs; try again later' });
+          return;
+        }
+        const jobId = randomUUID();
+        pendingIngestJobs.set(jobId, {
+          url: parsedBody.url,
+          noLlm: parsedBody.noLlm,
+          translateTranscript: parsedBody.translateTranscript,
+        });
+        sendJson(res, 200, { ok: true, jobId });
+        return;
+      }
+
+      if (req.method === 'GET' && urlRaw === '/api/ingest/stream') {
+        if (!ingestAllowed()) {
+          sendJson(res, 403, { error: 'ingest disabled (READER_ALLOW_INGEST)' });
+          return;
+        }
+        const jobId = getQueryParam(req, 'jobId');
+        if (!jobId) {
+          sendJson(res, 400, { error: 'jobId query required' });
+          return;
+        }
+        const payload = pendingIngestJobs.get(jobId);
+        if (!payload) {
+          sendJson(res, 404, { error: 'unknown or expired jobId' });
+          return;
+        }
+        pendingIngestJobs.delete(jobId);
+
+        beginSse(res);
+        let childRef: { kill: (signal?: NodeJS.Signals) => boolean } | null = null;
+        const onReqClose = () => {
+          try {
+            childRef?.kill('SIGTERM');
+          } catch {
+            /* ignore */
+          }
+        };
+        req.on('close', onReqClose);
+
+        const forward = (ev: IngestProgressEvent) => {
+          try {
+            sendSse(res, ev);
+          } catch {
+            /* client gone */
+          }
+        };
+
+        try {
+          const { code, stdout, stderr, captureDir } = await runIngestCli({
+            url: payload.url,
+            noLlm: payload.noLlm,
+            translateTranscript: payload.translateTranscript,
+            progressJson: true,
+            onIngestProgress: forward,
+            onChild: (c) => {
+              childRef = c;
+            },
+          });
+          if (code !== 0) {
+            sendSse(res, {
+              v: 1,
+              kind: 'error',
+              message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
+            });
+          } else if (!captureDir) {
+            sendSse(res, {
+              v: 1,
+              kind: 'error',
+              message: `capture path missing in stdout: ${stdout.slice(-2000)}`,
+            });
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          sendSse(res, { v: 1, kind: 'error', message: msg });
+        } finally {
+          req.off('close', onReqClose);
+          try {
+            res.end();
+          } catch {
+            /* ignore */
+          }
+        }
         return;
       }
 
@@ -101,35 +272,16 @@ export function vaultApiMiddleware() {
           sendJson(res, 400, { error: e instanceof Error ? e.message : 'bad json' });
           return;
         }
-        if (!body || typeof body !== 'object') {
-          sendJson(res, 400, { error: 'expected JSON object' });
+        const parsedBody = parseIngestJsonBody(body);
+        if (!parsedBody.ok) {
+          sendJson(res, parsedBody.status, { error: parsedBody.error });
           return;
         }
-        const url = (body as { url?: unknown }).url;
-        if (typeof url !== 'string' || !url.trim()) {
-          sendJson(res, 400, { error: 'url required' });
-          return;
-        }
-        let parsed: URL;
-        try {
-          parsed = new URL(url.trim());
-        } catch {
-          sendJson(res, 400, { error: 'invalid url' });
-          return;
-        }
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          sendJson(res, 400, { error: 'only http(s) urls' });
-          return;
-        }
-        const noLlm = Boolean((body as { noLlm?: unknown }).noLlm);
-        const rawTr = (body as { translateTranscript?: unknown }).translateTranscript;
-        const translateTranscript =
-          rawTr === false ? false : rawTr === true ? true : undefined;
         try {
           const { code, stdout, stderr, captureDir } = await runIngestCli({
-            url: url.trim(),
-            noLlm,
-            translateTranscript,
+            url: parsedBody.url,
+            noLlm: parsedBody.noLlm,
+            translateTranscript: parsedBody.translateTranscript,
           });
           if (code !== 0) {
             sendJson(res, 502, {
