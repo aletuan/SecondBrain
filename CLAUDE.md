@@ -53,12 +53,12 @@ Run a single test file: `pnpm vitest run tests/path/to/file.test.ts`
 - **Conventional commits**: `fix:`, `feat:`, `docs:`, `chore:` prefixes
 - **LLM prompts are in Vietnamese** — summaries, insights, questions all use Vietnamese headings
 - **Mock interfaces** for testing: adapters expose `*ClientLike` interfaces (e.g., `ApifyClientLike`, `OpenAIClientLike`) for dependency injection in tests
-- **Config files**: `.env` and `config/routing.yaml` are gitignored; `.env.example` and `config/routing.example.yaml` are committed templates
+- **Config files**: `.env` and `config/routing.yaml` are gitignored; `config/routing.example.yaml` is the committed routing template — create `.env` locally (see README Environment table; no committed `.env.example`)
 - **Vault directory** (`vault/`) is gitignored — local Obsidian data stays local
 
 ## Environment Variables
 
-Set in `.env` (copy from `.env.example`):
+Set in `.env` at repo root (create the file; variables below):
 
 | Variable | Purpose |
 |----------|---------|

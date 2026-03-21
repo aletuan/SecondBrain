@@ -14,7 +14,7 @@ Layout and tokens follow [`docs/visualizations/second-brain-mock-ui.html`](../do
 ```bash
 cd reader-web
 pnpm install
-cp .env.example .env   # optional; edit READER_VAULT_ROOT if vault is not ../vault
+# optional: touch .env and set READER_VAULT_ROOT / READER_BRAIN_ROOT (see Environment below)
 ```
 
 ## Commands

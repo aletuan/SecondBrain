@@ -7,12 +7,12 @@ TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`), op
 ```bash
 pnpm install
 cp config/routing.example.yaml config/routing.yaml   # adjust routes / actor IDs
-cp .env.example .env   # first time only; then edit **.env** with real keys
+touch .env   # create at repo root; add keys from the Environment table (never commit .env)
 ```
 
 - **Vault root:** `VAULT_ROOT` (default `./vault` relative to the current working directory when you run the CLI).
 - **Routing:** the CLI loads `config/routing.yaml` if present, otherwise `config/routing.example.yaml`.
-- **Secrets:** chỉ điền key thật trong **`.env`** ở root repo (file này **đã `.gitignore`**, không lên git). CLI tự load `.env` qua `dotenv`. File **`.env.example`** chỉ là mẫu trống, được commit — không dán secret vào đó.
+- **Secrets:** chỉ điền key thật trong **`.env`** ở root repo (file này **đã `.gitignore`**, không lên git). CLI tự load `.env` qua `dotenv`. Không commit file env mẫu — khai báo biến theo bảng **Environment** bên dưới.
 
 ## Commands
 
