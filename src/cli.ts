@@ -37,8 +37,8 @@ program
   .argument('<url>', 'URL to ingest')
   .option('--no-llm', 'skip OpenAI enrichment even if OPENAI_API_KEY is set')
   .option(
-    '--no-translate-transcript',
-    'YouTube only: skip Vietnamese transcript translation (default: translate when OPENAI_API_KEY is set)',
+    '--skip-translate-transcript',
+    'YouTube only: skip Vietnamese transcript translation (default: auto-translate when OPENAI_API_KEY is set)',
   )
   .option(
     '--translate-transcript',
@@ -55,7 +55,7 @@ program
       opts: {
         llm?: boolean;
         translateTranscript?: boolean;
-        noTranslateTranscript?: boolean;
+        skipTranslateTranscript?: boolean;
         progressJson?: boolean;
       },
     ) => {
@@ -63,10 +63,12 @@ program
         process.stderr.write(`${JSON.stringify(ev)}\n`);
       };
       try {
-        if (opts.translateTranscript && opts.noTranslateTranscript) {
-          throw new Error('ingest: use only one of --translate-transcript and --no-translate-transcript');
+        if (opts.translateTranscript && opts.skipTranslateTranscript) {
+          throw new Error(
+            'ingest: use only one of --translate-transcript and --skip-translate-transcript',
+          );
         }
-        const translateTranscriptVi: boolean | undefined = opts.noTranslateTranscript
+        const translateTranscriptVi: boolean | undefined = opts.skipTranslateTranscript
           ? false
           : opts.translateTranscript
             ? true

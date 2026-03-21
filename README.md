@@ -21,7 +21,7 @@ touch .env   # create at repo root; add keys from the Environment table (never c
 | `pnpm ingest -- <url>` | Ingest one URL (fetch → normalise → `Captures/…` → optional images → optional LLM sections on `note.md`). |
 | `pnpm ingest -- --no-llm <url>` | Same without OpenAI enrichment. |
 | `pnpm exec tsx src/cli.ts ingest [options] <url>` | **Recommended** when using flags (avoids pnpm injecting an extra `--` into argv). **YouTube:** Vi batch translation runs **by default** if `OPENAI_API_KEY` is set and transcript segments exist. |
-| `pnpm exec tsx src/cli.ts ingest --no-translate-transcript <youtube-url>` | YouTube only: skip Vi transcript translation. |
+| `pnpm exec tsx src/cli.ts ingest --skip-translate-transcript <youtube-url>` | YouTube only: skip Vi transcript translation. |
 | `pnpm exec tsx src/cli.ts ingest --translate-transcript <youtube-url>` | YouTube only: **require** Vi transcript (errors if segments or key missing). |
 | `pnpm translate-transcript -- --capture vault/Captures/…` | Add or replace `## Transcript (vi)` on an existing capture. |
 | `pnpm suggest-milestones -- --capture vault/Captures/… --max-sec 600` | Merge LLM-suggested `milestones.yaml` (YouTube). |
@@ -66,7 +66,7 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 
    Hoặc chỉ một cờ sau `run ingest`: `pnpm run ingest -- --no-llm https://example.com`.
 
-4. **OpenAI trong ingest:** bỏ `--no-llm`, đảm bảo `OPENAI_API_KEY` trong `.env`; mở `note.md` của capture xem section LLM. **YouTube:** cùng key đó còn bật dịch transcript Vi theo mặc định (trừ khi `--no-translate-transcript`).
+4. **OpenAI trong ingest:** bỏ `--no-llm`, đảm bảo `OPENAI_API_KEY` trong `.env`; mở `note.md` của capture xem section LLM. **YouTube:** cùng key đó còn bật dịch transcript Vi theo mặc định (trừ khi `--skip-translate-transcript`).
 
 5. **Apify:** cần URL khớp route `apify` trong `config/routing.yaml` + `actorId` hợp lệ + `APIFY_TOKEN`. Với **`youtube.com` / `youtu.be`**, CLI gọi luồng **YouTube transcript**: actor phải trả về transcript (field dạng `subtitles` / `captions` / `transcript` / `text` — xem `src/adapters/youtube.ts`). Pin actor **YouTube có transcript** trong Apify Console; có thể dùng cùng `actorId` cho cả hai host trong `routing.example.yaml`.
 

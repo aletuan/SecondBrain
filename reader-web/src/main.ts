@@ -305,6 +305,17 @@ function isLikelyYoutubeUrl(url: string): boolean {
   }
 }
 
+function isLikelyXOrTwitterUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    if (!/^https?:$/i.test(u.protocol)) return false;
+    const h = u.hostname.toLowerCase().replace(/^www\./, '');
+    return h === 'x.com' || h === 'twitter.com';
+  } catch {
+    return false;
+  }
+}
+
 const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method']);
 
 function setSideInner(html: string) {
@@ -488,6 +499,108 @@ async function postIngest(body: {
     throw new Error((data.error || `${r.status}`) + tail);
   }
   return data as { ok: true; captureDir: string; captureId: string };
+}
+
+/** Maps CLI/API error text to a short Vietnamese explanation for `#ingest-status-msg`. */
+function ingestFailurePresentation(
+  raw: string,
+  context?: { ingestUrl?: string },
+): { friendly: string; detail: string } {
+  const s = raw.trim();
+  const low = s.toLowerCase();
+  const xUrl = context?.ingestUrl ? isLikelyXOrTwitterUrl(context.ingestUrl) : false;
+  let friendly =
+    'Không ingest được. Xem thêm dòng chi tiết phía dưới (log/terminal) để xử lý.';
+  if (low.includes('reader_allow_ingest') || low.includes('ingest disabled')) {
+    friendly = 'Ingest qua web đang tắt (READER_ALLOW_INGEST). Bật lại hoặc chạy `pnpm ingest` trong terminal.';
+  } else if (low.includes('too many pending')) {
+    friendly = 'Có quá nhiều lệnh ingest đang chờ — đợi vài giây rồi thử lại.';
+  } else if (low.includes('unknown or expired jobid') || low.includes('missing jobid')) {
+    friendly = 'Phiên ingest đã hết hạn hoặc không hợp lệ — thử chạy lại từ đầu.';
+  } else if (low.includes('kết nối tiến trình ingest') || low.includes('(sse)')) {
+    friendly = 'Mất kết nối luồng tiến độ với server — thử lại hoặc tải lại trang.';
+  } else if (low.includes('invalid sse payload')) {
+    friendly = 'Server trả về dữ liệu tiến độ không đọc được — thử lại hoặc cập nhật reader.';
+  } else if (low.includes('only for youtube captures')) {
+    friendly = xUrl
+      ? 'CLI đang bật `--translate-transcript` (chỉ cho YouTube) trong khi URL là X — chạy lại không kèm cờ này (sau bản sửa, `pnpm ingest <url>` mặc định không bật).'
+      : 'Cờ `--translate-transcript` chỉ dùng với URL YouTube — URL hiện tại không phải video YouTube.';
+  } else if (
+    low.includes('ingest: no transcript segments to translate') ||
+    low.includes('ingest: --translate-transcript requires openai_api_key') ||
+    low.includes('ingest: --translate-transcript requires openai')
+  ) {
+    friendly =
+      'YouTube (chế độ bắt buộc dịch): thiếu segment transcript hoặc OPENAI_API_KEY — chỉ áp dụng khi bạn truyền `--translate-transcript` cho URL YouTube.';
+  } else if (low.includes('use only one of --translate-transcript')) {
+    friendly =
+      'Hai cờ dịch transcript mâu thuẫn — chỉ dùng một trong `--translate-transcript` hoặc `--skip-translate-transcript`.';
+  } else if (low.includes('apify_token') || /\bapify\b/.test(low)) {
+    friendly =
+      'URL này cần Apify nhưng thiếu hoặc sai APIFY_TOKEN — thêm vào `.env` của repo Brain và khởi động lại reader.';
+  } else if (
+    low.includes('configure x api') ||
+    low.includes('x_bearer_token') ||
+    (low.includes('x_bearer') && low.includes('twitter'))
+  ) {
+    friendly =
+      'Thiếu X_BEARER_TOKEN — đặt trong `.env` của repo Brain (token App chỉ đọc từ developer.x.com).';
+  } else if (
+    low.includes('x api:') ||
+    low.includes('x_linked_article:') ||
+    low.includes('tweet links to') ||
+    low.includes('article could not be loaded') ||
+    low.includes('bot/error page') ||
+    low.includes('open graph has no usable')
+  ) {
+    if (xUrl && (/\b401\b/.test(low) || /\b403\b/.test(low))) {
+      friendly =
+        'X API trả 401/403 — Bearer token có thể hết hạn, bị thu hồi hoặc không đủ quyền đọc tweet. Tạo lại token trên https://developer.x.com và cập nhật X_BEARER_TOKEN.';
+    } else if (xUrl && (low.includes('empty response') || low.includes('tweet missing'))) {
+      friendly =
+        'Tweet không tồn tại, đã xóa, tài khoản khóa, hoặc token không xem được — thử URL khác hoặc kiểm tra quyền app.';
+    } else if (xUrl) {
+      friendly =
+        'Lỗi pipeline X: lookup tweet, tải article nối từ tweet, hoặc HTML trả về trang lỗi/bot của X (giống “Something went wrong” trên trình duyệt). Xem chi tiết dưới.';
+    } else {
+      friendly = 'Lỗi nguồn X/Twitter trong ingest — xem chi tiết dưới.';
+    }
+  } else if (low.includes('openai_api_key') || /\bopenai\b/.test(low)) {
+    friendly = xUrl
+      ? 'Cần OPENAI_API_KEY cho bước enrich note (Tóm tắt/Insight). Ingest link X không liên quan transcript YouTube.'
+      : 'Cần OPENAI_API_KEY hợp lệ cho dịch transcript YouTube hoặc enrich note — kiểm tra `.env` Brain.';
+  } else if (low.includes('capture path not detected') || low.includes('capture path missing')) {
+    friendly =
+      'Ingest có vẻ chạy xong nhưng không lấy được đường dẫn capture từ output — xem log CLI bên dưới.';
+  } else if (low.includes('routing') && (low.includes('yaml') || low.includes('config'))) {
+    friendly = 'Lỗi đọc cấu hình routing (`config/routing.yaml`) — kiểm tra file tồn tại và hợp lệ.';
+  } else if (low.includes(' 401 ') || low.includes(' 403 ') || /\b401\b/.test(low) || /\b403\b/.test(low)) {
+    friendly = 'Dịch vụ từ chối truy cập (401/403) — token, quyền hoặc giới hạn gọi API.';
+  } else if (low.includes(' 404 ') || /\b404\b/.test(low)) {
+    friendly = 'Không tìm thấy tài nguyên (404) — URL sai, đã gỡ hoặc không công khai.';
+  } else if (low.includes('timeout') || low.includes('etimedout')) {
+    friendly = 'Hết thời gian chờ — nguồn chậm, mạng không ổn định hoặc dịch vụ bận.';
+  } else if (
+    low.includes('econnrefused') ||
+    low.includes('enotfound') ||
+    low.includes('network') ||
+    low.includes('fetch failed')
+  ) {
+    friendly = 'Lỗi mạng khi tải URL — kiểm tra Internet, VPN hoặc URL.';
+  } else if (low.includes('ingest failed') || low.includes('ingest exited') || low.includes('exit code')) {
+    friendly = 'Lệnh ingest trong CLI dừng với lỗi — đọc phần stderr/log ngắn bên dưới.';
+  }
+  if (
+    xUrl &&
+    friendly.startsWith('Không ingest được.') &&
+    !friendly.includes('X') &&
+    !friendly.includes('Twitter')
+  ) {
+    friendly =
+      'Không ingest được link X — thường do X_BEARER_TOKEN, tweet không tồn tại/khóa, hoặc giới hạn API. Xem chi tiết bên dưới.';
+  }
+  const detail = s.length > 1400 ? `${s.slice(0, 1400)}…` : s;
+  return { friendly, detail };
 }
 
 function navKey(view: string): string {
@@ -1268,6 +1381,7 @@ async function route() {
               'ingest-agent-status ingest-agent-status--compact ingest-agent-status--err';
             stMsg.textContent = 'Nhập URL.';
             stFoot.textContent = '';
+            stFoot.style.whiteSpace = '';
             return;
           }
           const yt = isLikelyYoutubeUrl(url);
@@ -1283,6 +1397,7 @@ async function route() {
           st.hidden = false;
           stMsg.textContent = 'Đang chạy pipeline ingest';
           stFoot.innerHTML = '';
+          stFoot.style.whiteSpace = '';
           ingestAgentResetSteps(st);
           if (!useSse) {
             stopTicker = startIngestAgentStepTicker(st);
@@ -1305,6 +1420,7 @@ async function route() {
               .filter(Boolean)
               .join(' ');
             stMsg.textContent = 'Hoàn tất · capture đã ghi.';
+            stFoot.style.whiteSpace = '';
             stFoot.innerHTML = `<button type="button" class="btn-link" id="ingest-open-cap">${esc(out.captureId)}</button><span class="ingest-agent-status__path mono-sm">${esc(out.captureDir)}</span>`;
             main.querySelector('#ingest-open-cap')?.addEventListener('click', () => setHash('capture', out.captureId));
           } catch (e) {
@@ -1317,8 +1433,11 @@ async function route() {
             ]
               .filter(Boolean)
               .join(' ');
-            stMsg.textContent = 'Ingest thất bại.';
-            stFoot.textContent = e instanceof Error ? e.message : String(e);
+            const raw = e instanceof Error ? e.message : String(e);
+            const { friendly, detail } = ingestFailurePresentation(raw, { ingestUrl: url });
+            stMsg.textContent = friendly;
+            stFoot.textContent = detail;
+            stFoot.style.whiteSpace = 'pre-wrap';
           } finally {
             runBtn.disabled = false;
             runBtn.classList.remove('processing');
