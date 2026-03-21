@@ -12,6 +12,7 @@ import {
 } from './service.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
 import type { IngestProgressEvent } from './ingestProgressParse.js';
+import { runDigestCli } from './runDigestCli.js';
 import { runIngestCli } from './runIngestCli.js';
 
 type NextFn = (err?: unknown) => void;
@@ -67,6 +68,30 @@ function beginSse(res: ServerResponse) {
 }
 
 type ParsedIngestBody = { ok: true; url: string } | { ok: false; status: number; error: string };
+
+type ParsedDigestBody =
+  | { ok: true; since: string; noLlm: boolean }
+  | { ok: false; status: number; error: string };
+
+function parseDigestJsonBody(body: unknown): ParsedDigestBody {
+  const sinceDefault = '7d';
+  if (body == null || body === '') {
+    return { ok: true, since: sinceDefault, noLlm: false };
+  }
+  if (typeof body !== 'object') {
+    return { ok: false, status: 400, error: 'expected JSON object' };
+  }
+  const o = body as { since?: unknown; noLlm?: unknown };
+  let since = sinceDefault;
+  if (o.since !== undefined && o.since !== null) {
+    if (typeof o.since !== 'string' || !/^\d+d$/.test(o.since.trim())) {
+      return { ok: false, status: 400, error: 'since must match Nd e.g. 7d' };
+    }
+    since = o.since.trim();
+  }
+  const noLlm = o.noLlm === true;
+  return { ok: true, since, noLlm };
+}
 
 function parseIngestJsonBody(body: unknown): ParsedIngestBody {
   if (!body || typeof body !== 'object') {
@@ -143,6 +168,7 @@ export function vaultApiMiddleware() {
           vaultRoot,
           brainRoot,
           ingestAvailable,
+          digestAvailable: ingestAvailable,
           ingestSse: ingestAvailable,
         });
         return;
@@ -288,6 +314,52 @@ export function vaultApiMiddleware() {
           }
           const captureId = path.basename(captureDir);
           sendJson(res, 200, { ok: true, captureDir, captureId });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          sendJson(res, 500, { error: msg });
+        }
+        return;
+      }
+
+      if (req.method === 'POST' && urlRaw === '/api/digest') {
+        if (!ingestAllowed()) {
+          sendJson(res, 403, { error: 'digest disabled (READER_ALLOW_INGEST)' });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch (e) {
+          sendJson(res, 400, { error: e instanceof Error ? e.message : 'bad json' });
+          return;
+        }
+        const parsed = parseDigestJsonBody(body);
+        if (!parsed.ok) {
+          sendJson(res, parsed.status, { error: parsed.error });
+          return;
+        }
+        try {
+          const { code, stdout, stderr, weekId } = await runDigestCli({
+            since: parsed.since,
+            noLlm: parsed.noLlm,
+          });
+          if (code !== 0) {
+            sendJson(res, 502, {
+              error: 'digest failed',
+              stderr: stderr.slice(-8000),
+              stdout: stdout.slice(-2000),
+            });
+            return;
+          }
+          if (!weekId) {
+            sendJson(res, 502, {
+              error: 'digest finished but week id not detected in stdout',
+              stderr: stderr.slice(-8000),
+              stdout: stdout.slice(-4000),
+            });
+            return;
+          }
+          sendJson(res, 200, { ok: true, weekId, digestPath: stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? '' });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           sendJson(res, 500, { error: msg });

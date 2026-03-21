@@ -1157,6 +1157,25 @@ main {
   flex: 1 1 auto;
 }
 
+.digest-list-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.digest-run-hint.digest-run-hint--ok {
+  color: color-mix(in srgb, var(--signal) 85%, var(--paper));
+}
+
+.digest-run-hint.digest-run-hint--err {
+  color: color-mix(in srgb, var(--accent) 90%, var(--paper));
+}
+
+.digest-run-hint.digest-run-hint--pending {
+  color: var(--muted);
+}
+
 .search-wrap {
   flex: 1 1 220px;
   max-width: 320px;
