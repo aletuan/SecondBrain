@@ -1,0 +1,38 @@
+{
+  "name": "second-brain-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "ingest": "tsx src/cli.ts ingest",
+    "digest": "tsx src/cli.ts digest",
+    "challenge": "tsx src/cli.ts challenge",
+    "translate-transcript": "tsx src/cli.ts translate-transcript",
+    "suggest-milestones": "tsx src/cli.ts suggest-milestones",
+    "verify-keys": "tsx scripts/verify-keys.ts",
+    "verify-apify-youtube": "tsx scripts/verify-apify-youtube.ts",
+    "verify-x-tweet": "tsx scripts/verify-x-tweet.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "apify-client": "^2.12.0",
+    "commander": "^13.1.0",
+    "dotenv": "^16.4.7",
+    "jsdom": "^26.0.0",
+    "openai": "^4.86.2",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}

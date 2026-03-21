@@ -1,0 +1,35 @@
+# Copy to config/routing.yaml and adjust. Pin Apify actor builds in Apify Console when you need stability.
+
+version: 1
+
+# Optional default when no route matches
+defaultStrategy: http_readability
+
+# Fallback for rich crawl when http_readability is insufficient (set per-route or use apifyDefaults)
+apifyDefaults:
+  # Replace with your pinned Actor ID from Apify Console (may be username~actor-name)
+  actorId: apify/website-content-crawler
+  # build: "optional-build-tag"
+
+routes:
+  - match:
+      hostSuffix: x.com
+    strategy: x_api
+  - match:
+      hostSuffix: twitter.com
+    strategy: x_api
+  # YouTube transcript (Apify Store): pay-per-use — see https://apify.com/automation-lab/youtube-transcript
+  - match:
+      hostSuffix: youtube.com
+    strategy: apify
+    apify:
+      actorId: automation-lab/youtube-transcript
+      youtubeInput: urls
+      inputFromUrl: true
+  - match:
+      hostSuffix: youtu.be
+    strategy: apify
+    apify:
+      actorId: automation-lab/youtube-transcript
+      youtubeInput: urls
+      inputFromUrl: true

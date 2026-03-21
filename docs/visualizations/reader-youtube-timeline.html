@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reader web — YouTube + milestones (prototype)</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #1a1d24;
+        --text: #e8eaed;
+        --accent: #7dd3fc;
+        --muted: #9aa0a6;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 0;
+      }
+      @media (max-width: 900px) {
+        body {
+          grid-template-columns: 1fr;
+        }
+      }
+      main {
+        padding: 1.25rem;
+      }
+      aside {
+        background: var(--panel);
+        border-left: 1px solid #2a2f3a;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      h1 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem;
+      }
+      p.hint {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin: 0 0 1rem;
+        line-height: 1.45;
+      }
+      .frame-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #2a2f3a;
+      }
+      iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+      .track {
+        position: relative;
+        height: 10px;
+        background: #2a2f3a;
+        border-radius: 999px;
+        margin-top: 0.75rem;
+      }
+      .tick {
+        position: absolute;
+        top: 0;
+        width: 3px;
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+        transform: translateX(-50%);
+        cursor: pointer;
+      }
+      .tick.highlight {
+        background: #fbbf24;
+      }
+      ul.milestones {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        max-height: 55vh;
+        overflow: auto;
+      }
+      ul.milestones button {
+        width: 100%;
+        text-align: left;
+        background: #232730;
+        color: var(--text);
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 0.5rem 0.6rem;
+        cursor: pointer;
+        font-size: 0.88rem;
+      }
+      ul.milestones button:hover {
+        border-color: var(--accent);
+      }
+      code {
+        font-size: 0.78rem;
+        color: #c4b5fd;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>YouTube reader prototype</h1>
+      <p class="hint">
+        Demo: timeline + nút seek dùng <code>?start=</code> (đơn giản, reload iframe). Capture thật: đọc
+        <code>milestones.yaml</code> + <code>youtube_video_id</code> từ vault.
+      </p>
+      <div class="frame-wrap">
+        <iframe
+          id="player"
+          title="YouTube"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+        ></iframe>
+      </div>
+      <div class="track" id="track" aria-hidden="true"></div>
+    </main>
+    <aside>
+      <div><strong>Mốc</strong> <span style="color: var(--muted); font-size: 0.8rem">(click → seek)</span></div>
+      <ul class="milestones" id="list"></ul>
+      <p class="hint" style="margin: 0">
+        URL mẫu: thêm <code>?v=VIDEO_ID</code> để đổi video. JSON mốc sửa trong <code>const SAMPLE</code> trong file này.
+      </p>
+    </aside>
+    <script>
+      const SAMPLE = {
+        videoId: "dQw4w9WgXcQ",
+        milestones: [
+          { t: 0, label: "Mở đầu", kind: "chapter" },
+          { t: 42, label: "Đoạn chú ý", kind: "highlight" },
+          { t: 120, label: "Tiếp theo", kind: "chapter" },
+        ],
+      };
+
+      const params = new URLSearchParams(location.search);
+      const vid = params.get("v") || SAMPLE.videoId;
+      const iframe = document.getElementById("player");
+      const list = document.getElementById("list");
+      const track = document.getElementById("track");
+
+      function embedUrl(seconds) {
+        const s = Math.max(0, Math.floor(seconds || 0));
+        return `https://www.youtube.com/embed/${vid}?start=${s}&autoplay=1&rel=0`;
+      }
+
+      function seekTo(seconds) {
+        iframe.src = embedUrl(seconds);
+      }
+
+      seekTo(0);
+
+      const maxT = Math.max(...SAMPLE.milestones.map((m) => m.t), 1);
+      for (const m of SAMPLE.milestones) {
+        const tick = document.createElement("div");
+        tick.className = "tick" + (m.kind === "highlight" ? " highlight" : "");
+        tick.style.left = `${(m.t / maxT) * 100}%`;
+        tick.title = m.label;
+        tick.addEventListener("click", () => seekTo(m.t));
+        track.appendChild(tick);
+
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const mm = Math.floor(m.t / 60);
+        const ss = String(m.t % 60).padStart(2, "0");
+        btn.textContent = `${mm}:${ss} — ${m.label}`;
+        btn.addEventListener("click", () => seekTo(m.t));
+        li.appendChild(btn);
+        list.appendChild(li);
+      }
+    </script>
+  </body>
+</html>

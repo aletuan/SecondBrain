@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Second brain — Solution map (brainstorm → design)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,8..144,400;0,8..144,600;1,8..144,400&family=Syne:wght@500;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0c0f0e;
+      --surface: #141a18;
+      --surface2: #1c2421;
+      --stroke: #2d3834;
+      --text: #e6e2d8;
+      --muted: #8f968f;
+      --accent: #d4a574;
+      --accent2: #7eb8a8;
+      --danger: #c17b7b;
+      --font-display: "Syne", system-ui, sans-serif;
+      --font-body: "Newsreader", Georgia, serif;
+      --radius: 12px;
+      --shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      font-size: 1.125rem;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 120% 80% at 10% -20%, rgba(212, 165, 116, 0.12), transparent 50%),
+        radial-gradient(ellipse 80% 60% at 100% 0%, rgba(126, 184, 168, 0.08), transparent 45%),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    }
+
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 5rem;
+    }
+
+    header {
+      margin-bottom: 3rem;
+      position: relative;
+    }
+
+    header::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -1.25rem;
+      width: 4rem;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+    }
+
+    .eyebrow {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 0.75rem;
+      animation: fadeUp 0.7s ease-out both;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(2rem, 5vw, 3rem);
+      line-height: 1.1;
+      margin: 0 0 1rem;
+      letter-spacing: -0.02em;
+      animation: fadeUp 0.7s ease-out 0.08s both;
+    }
+
+    .lede {
+      max-width: 38ch;
+      color: var(--muted);
+      font-size: 1.15rem;
+      margin: 0;
+      animation: fadeUp 0.7s ease-out 0.16s both;
+    }
+
+    .superpower-note {
+      margin-top: 1.75rem;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      border-left: 3px solid var(--accent);
+      font-size: 0.98rem;
+      color: var(--muted);
+      animation: fadeUp 0.7s ease-out 0.24s both;
+    }
+
+    .superpower-note strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    section {
+      margin-top: 3.5rem;
+    }
+
+    h2 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 1.25rem;
+    }
+
+    .cards {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.35rem;
+      box-shadow: var(--shadow);
+      transition: transform 0.25s ease, border-color 0.25s ease;
+      animation: fadeUp 0.6s ease-out both;
+    }
+
+    .card:nth-child(1) { animation-delay: 0.05s; }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.15s; }
+    .card:nth-child(4) { animation-delay: 0.2s; }
+    .card:nth-child(5) { animation-delay: 0.25s; }
+    .card:nth-child(6) { animation-delay: 0.3s; }
+    .card:nth-child(7) { animation-delay: 0.35s; }
+    .card:nth-child(8) { animation-delay: 0.4s; }
+
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent2);
+    }
+
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent2);
+      margin: 0 0 0.5rem;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--text);
+    }
+
+    .diagram {
+      background: var(--surface2);
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      overflow-x: auto;
+      box-shadow: var(--shadow);
+    }
+
+    .diagram .mermaid {
+      display: flex;
+      justify-content: center;
+      min-height: 200px;
+    }
+
+    .fetch-ladder {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .fetch-ladder span {
+      background: var(--surface);
+      border: 1px solid var(--stroke);
+      padding: 0.45rem 0.85rem;
+      border-radius: 999px;
+      color: var(--text);
+    }
+
+    .fetch-ladder .arrow {
+      color: var(--muted);
+      border: none;
+      background: none;
+      padding: 0 0.15rem;
+    }
+
+    pre.vault {
+      margin: 0;
+      padding: 1.25rem 1.5rem;
+      background: #080a09;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: var(--accent2);
+      overflow-x: auto;
+    }
+
+    footer {
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--stroke);
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 640px) {
+      .wrap {
+        padding: 1.5rem 1rem 3rem;
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+        padding-bottom: max(3rem, env(safe-area-inset-bottom));
+      }
+
+      header {
+        margin-bottom: 2rem;
+      }
+
+      .eyebrow {
+        letter-spacing: 0.14em;
+      }
+
+      .lede {
+        max-width: none;
+        font-size: 1.05rem;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .diagram {
+        padding: 0.85rem;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      pre.vault {
+        font-size: 0.72rem;
+        padding: 1rem;
+      }
+
+      section {
+        margin-top: 2.5rem;
+      }
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">Brainstorm → design validation</p>
+      <h1>Second brain: solution map</h1>
+      <p class="lede">
+        Obsidian vault là nguồn sự thật; CLI ingest URL; Apify &amp; X API ưu tiên ổn định;
+        LLM tách evidence và suy luận; digest định kỳ; tùy chọn <strong>challenge</strong> từ digest; YouTube Phase 2+ có <strong>embed + transcript</strong> trên <strong>reader web</strong> (theo mock); <strong>Obsidian</strong> giữ vault &amp; chi tiết.
+      </p>
+      <div class="superpower-note">
+        <strong>Superpowers (brainstorming):</strong> đây là bản <em>visualize để duyệt</em> — cùng cấu trúc với bước “present design / incremental validation”.
+        Nếu sơ đồ lệch với ý bạn, chỉnh design doc gốc rồi cập nhật file HTML này cho khớp.
+      </div>
+    </header>
+
+    <section aria-labelledby="decisions">
+      <h2 id="decisions">Quyết định đã chốt</h2>
+      <div class="cards">
+        <article class="card">
+          <h3>Vận hành</h3>
+          <p>Solo, kích hoạt thủ công: dán URL hoặc chạy CLI khi cần.</p>
+        </article>
+        <article class="card">
+          <h3>Trending</h3>
+          <p>Digest định kỳ (văn bản), mặc định gợi ý hàng tuần — cấu hình được.</p>
+        </article>
+        <article class="card">
+          <h3>Obsidian + reader web</h3>
+          <p><strong>Vault</strong> trong Obsidian là SSoT. <strong>Web</strong> xây theo mock <code style="color:var(--accent2)">docs/visualizations/</code> để đọc tổng hợp — không Quartz.</p>
+        </article>
+        <article class="card">
+          <h3>LLM</h3>
+          <p>API cloud cho tóm tắt, insight và digest — tách rõ trích dẫn vs suy luận.</p>
+        </article>
+        <article class="card">
+          <h3>Thu thập</h3>
+          <p>Ổn định trước: X API khi đủ quyền; Apify (actor pin version); HTTP Readability cho web đơn giản.</p>
+        </article>
+        <article class="card">
+          <h3>Độ đầy đủ</h3>
+          <p>Evidence: text đầy đủ, ảnh tải về <code style="color:var(--accent)">assets/</code>, code inline hoặc <code style="color:var(--accent)">snippets/</code>.</p>
+        </article>
+        <article class="card">
+          <h3>Challenge (Phase 2+)</h3>
+          <p>LLM sinh câu hỏi <strong>chỉ từ nội dung digest</strong> — kiểm tra đọc hiểu chủ đề; lưu <code style="color:var(--accent2)">Challenges/</code>, tùy chọn chấm / tự đối chiếu đáp án.</p>
+        </article>
+        <article class="card">
+          <h3>YouTube + web (Phase 2+)</h3>
+          <p>Transcript trong <code style="color:var(--accent)">source.md</code>; bản <strong>Việt</strong> gắn nhãn dịch LLM; <strong>timeline + mốc chú ý</strong> (click → seek). <strong>Reader web:</strong> iframe + tab EN/VI hoặc hai cột. <strong>Bản quyền:</strong> cân nhắc transcript đầy đủ — thường <code style="color:var(--accent2)">publish: false</code> trong vault.</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="approach">
+      <h2 id="approach">Approach — kiến trúc logic</h2>
+      <div class="diagram">
+        <div class="mermaid">
+flowchart LR
+  subgraph ingest [Ingest]
+    URL[URL_input]
+    Router[URL_router]
+    XAPI[X_API_adapter]
+    Apify[Apify_adapter]
+    HTTP[HTTP_Readability]
+    URL --> Router
+    Router --> XAPI
+    Router --> Apify
+    Router --> HTTP
+  end
+  subgraph vault [Vault]
+    Raw[Raw_bundle]
+    Assets[assets]
+    Snip[snippets]
+    Note[note_md]
+    Raw --> Note
+    Assets --> Note
+    Snip --> Note
+  end
+  subgraph llm [LLM_cloud]
+    Sum[Summary_insights]
+    Dig[Periodic_digest]
+    Chal[Digest_challenge]
+  end
+  XAPI --> Raw
+  Apify --> Raw
+  HTTP --> Raw
+  Note --> Sum
+  Note --> Dig
+  Dig --> Chal
+  subgraph reader [Reader_web]
+    WebUI[Web_app_mock_spec]
+  end
+  Note --> WebUI
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="fetch">
+      <h2 id="fetch">Thứ tự ưu tiên fetch</h2>
+      <p style="color:var(--muted); margin-top:0;">Ưu tiên đường chính thức / ổn định; Apify khi cần độ đầy đủ; fallback từ từ.</p>
+      <div class="fetch-ladder" style="margin-top:1rem;">
+        <span>Official_API</span><span class="arrow">→</span>
+        <span>Apify_pinned</span><span class="arrow">→</span>
+        <span>HTTP_Readability</span><span class="arrow">→</span>
+        <span>Manual_fallback</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="vault-layout">
+      <h2 id="vault-layout">Cấu trúc vault (đề xuất)</h2>
+      <pre class="vault">vault/
+  Captures/
+    YYYY-MM-DD--slug--shortid/
+      source.md          # full text / thread
+      note.md            # đọc + LLM + wikilinks
+      assets/
+      snippets/
+  Digests/
+  Challenges/          # câu hỏi từ digest (Phase 2+)
+  Reviews/               # tùy chọn: bài làm / phản hồi LLM</pre>
+    </section>
+
+    <footer>
+      <p>
+        Nguồn chi tiết:
+        <a href="../plans/2026-03-20-second-brain-design.md">2026-03-20-second-brain-design.md</a>
+        ·
+        <a href="../plans/2026-03-20-second-brain-implementation-plan.md">implementation plan</a>
+      </p>
+      <p style="margin-top:0.5rem;">Mở file này trực tiếp trong trình duyệt (double-click hoặc “Open with Live Server”).</p>
+    </footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      themeVariables: {
+        primaryColor: "#1c2421",
+        primaryTextColor: "#e6e2d8",
+        primaryBorderColor: "#d4a574",
+        lineColor: "#7eb8a8",
+        secondaryColor: "#141a18",
+        tertiaryColor: "#0c0f0e",
+        fontFamily: "Newsreader, Georgia, serif"
+      },
+      flowchart: {
+        curve: "basis",
+        padding: 12,
+        nodeSpacing: 28,
+        rankSpacing: 36
+      }
+    });
+  </script>
+</body>
+</html>

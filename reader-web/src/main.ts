@@ -1,0 +1,1378 @@
+import './style.css';
+import { marked, Renderer } from 'marked';
+import type { Tokens } from 'marked';
+import type { CaptureDetail, CaptureListItem } from './types.js';
+import {
+  findActiveSegmentIndex,
+  mergeTranscriptsForUi,
+  type MergedTranscriptLine,
+} from './transcriptParse.js';
+
+/** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
+type YtPlayerApi = {
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  playVideo(): void;
+  getCurrentTime(): number;
+  destroy(): void;
+};
+
+let ytCaptureCleanup: (() => void) | null = null;
+
+function loadYoutubeIframeApi(): Promise<void> {
+  const w = window as unknown as {
+    YT?: { Player?: new (id: string, opts: object) => YtPlayerApi };
+    onYouTubeIframeAPIReady?: () => void;
+  };
+  if (w.YT?.Player) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const prev = w.onYouTubeIframeAPIReady;
+    w.onYouTubeIframeAPIReady = () => {
+      prev?.();
+      resolve();
+    };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      s.async = true;
+      document.head.appendChild(s);
+    }
+  });
+}
+
+const app = document.querySelector<HTMLDivElement>('#app')!;
+
+marked.setOptions({ gfm: true, breaks: true });
+
+function esc(s: string): string {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/** Staggered step highlights while waiting on `postIngest` (cosmetic; API is single round-trip). */
+const INGEST_AGENT_STEP_MS = 1050;
+
+function ingestAgentVisibleSteps(panel: HTMLElement): HTMLElement[] {
+  const noYt = panel.classList.contains('ingest-agent-status--no-yt');
+  return [...panel.querySelectorAll<HTMLElement>('.ingest-agent-step')].filter(
+    (el) => !noYt || !el.classList.contains('ingest-agent-step--yt-only'),
+  );
+}
+
+function ingestAgentResetSteps(panel: HTMLElement) {
+  panel.querySelectorAll('.ingest-agent-step').forEach((el) => {
+    el.classList.remove('is-active', 'is-done', 'is-error');
+    el.classList.add('is-pending');
+  });
+}
+
+function ingestAgentSetStep(step: HTMLElement, state: 'pending' | 'active' | 'done' | 'error') {
+  step.classList.remove('is-pending', 'is-active', 'is-done', 'is-error');
+  step.classList.add(`is-${state}`);
+}
+
+function ingestAgentMarkAllDone(panel: HTMLElement) {
+  ingestAgentVisibleSteps(panel).forEach((el) => ingestAgentSetStep(el, 'done'));
+}
+
+function ingestAgentMarkActiveError(panel: HTMLElement) {
+  const vis = ingestAgentVisibleSteps(panel);
+  const active = vis.find((el) => el.classList.contains('is-active'));
+  const target = active ?? vis[vis.length - 1];
+  if (target) ingestAgentSetStep(target, 'error');
+}
+
+function startIngestAgentStepTicker(panel: HTMLElement): () => void {
+  const steps = ingestAgentVisibleSteps(panel);
+  ingestAgentResetSteps(panel);
+  if (steps.length === 0) return () => {};
+  let idx = 0;
+  ingestAgentSetStep(steps[0]!, 'active');
+  const id = window.setInterval(() => {
+    if (idx >= steps.length - 1) {
+      window.clearInterval(id);
+      return;
+    }
+    ingestAgentSetStep(steps[idx]!, 'done');
+    idx += 1;
+    ingestAgentSetStep(steps[idx]!, 'active');
+  }, INGEST_AGENT_STEP_MS);
+  return () => window.clearInterval(id);
+}
+
+type NoteToHtmlOpts = { omitImages?: boolean };
+
+/**
+ * Reader-only rendering. `omitImages` drops figures from markdown/HTML output (vault files unchanged).
+ */
+function noteToHtml(markdown: string, captureId: string, opts?: NoteToHtmlOpts): string {
+  let md = markdown;
+  const omit = Boolean(opts?.omitImages);
+
+  if (omit) {
+    md = md.replace(/!\[\[assets\/[^|\]]+(?:\|[^\]]*)?\]\]\s*/g, '');
+    md = md.replace(/!\[[^\]]*\]\([^)]+\)\s*/g, '');
+    md = md.replace(/<img\b[^>]*>\s*/gi, '');
+    md = stripImageSectionHeadings(md);
+  } else {
+    md = md.replace(
+      /!\[\[assets\/([^|\]]+)(?:\|[^\]]*)?\]\]/g,
+      (_, name: string) =>
+        `![](/api/captures/${encodeURIComponent(captureId)}/assets/${encodeURIComponent(name.trim())})`,
+    );
+  }
+
+  let html = marked.parse(md) as string;
+  if (omit) {
+    html = html.replace(/<img\b[^>]*>/gi, '');
+    html = html.replace(/<picture\b[^>]*>[\s\S]*?<\/picture>/gi, '');
+  }
+  return html;
+}
+
+/** Drop “images” section + body until next ATX heading (YouTube: redundant vs embed). */
+function stripImageSectionHeadings(md: string): string {
+  const lines = md.split(/\r?\n/);
+  const out: string[] = [];
+  const imageSectionTitle = /^#{2,6}\s+(Hình ảnh|Images|Ảnh)\s*$/;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    if (imageSectionTitle.test(line)) {
+      i += 1;
+      while (i < lines.length && !/^#{1,6}\s+/.test(lines[i]!)) {
+        i += 1;
+      }
+      i -= 1;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+function escAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+}
+
+/** Middle segment of `YYYY-MM-DD--slug--hash` for compact toolbar label. */
+function captureBreadcrumbLabel(id: string): string {
+  const m = /^[\d]{4}-[\d]{2}-[\d]{2}--(.+)--[a-f0-9]{6}$/.exec(id);
+  const slug = m?.[1] ?? id;
+  if (slug.length <= 42) return slug;
+  return `${slug.slice(0, 38)}…`;
+}
+
+function formatIngestedVi(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso.trim() || '—';
+  return new Date(t).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/** Obsidian-style YAML frontmatter (single-line scalar values only). */
+function parseSimpleYamlFrontmatter(md: string): { front: Record<string, string>; body: string } | null {
+  const lines = md.replace(/^\uFEFF?/, '').split(/\r?\n/);
+  if (lines[0]?.trim() !== '---') return null;
+  const front: Record<string, string> = {};
+  let i = 1;
+  let closed = false;
+  for (; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    if (line.trim() === '---') {
+      closed = true;
+      i += 1;
+      break;
+    }
+    const kv = /^([\w-]+):\s*(.*)$/.exec(line);
+    if (kv) {
+      let v = kv[2]!.trim();
+      if (
+        (v.startsWith('"') && v.endsWith('"')) ||
+        (v.startsWith("'") && v.endsWith("'"))
+      ) {
+        v = v.slice(1, -1);
+      }
+      front[kv[1]!] = v;
+    }
+  }
+  if (!closed) return null;
+  const body = lines.slice(i).join('\n');
+  return { front, body };
+}
+
+function stripDigestBodyLeadingH1(md: string, week: string): string {
+  const w = week.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^#\\s+Digest\\s+${w}\\s*(?:\\r?\\n)+`, 'im');
+  return md.trimStart().replace(re, '');
+}
+
+function slugifyDigestHeading(text: string): string {
+  const t = text
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return t || 'section';
+}
+
+/**
+ * Marked requires a full Renderer (incl. `text`, `link`, …). A plain `{ heading }` object
+ * replaces the default and breaks inline parsing → "renderer.text is not a function".
+ */
+class DigestHeadingRenderer extends Renderer {
+  constructor(private readonly h2IdPrefix: string) {
+    super();
+  }
+
+  override heading(token: Tokens.Heading): string {
+    if (token.depth === 2) {
+      const inner = this.parser.parseInline(token.tokens);
+      const slug = slugifyDigestHeading(token.text);
+      return `<h2 id="${this.h2IdPrefix}-${slug}" class="digest-h2">${inner}</h2>\n`;
+    }
+    return super.heading(token);
+  }
+}
+
+function markdownToProseHtml(markdown: string, opts?: { h2IdPrefix?: string }): string {
+  const pfx = opts?.h2IdPrefix;
+  if (!pfx) return marked.parse(markdown) as string;
+
+  return marked.parse(markdown, { renderer: new DigestHeadingRenderer(pfx) }) as string;
+}
+
+function renderDigestMetaPanel(front: Record<string, string>): string {
+  const rows: { k: string; v: string }[] = [];
+  if (front.type) rows.push({ k: 'Loại', v: front.type });
+  if (front.week) rows.push({ k: 'Tuần', v: front.week });
+  if (front.since) rows.push({ k: 'Khung', v: front.since });
+  if (front.generated_at) rows.push({ k: 'Sinh', v: formatIngestedVi(front.generated_at) });
+  if (rows.length === 0) return '';
+  const cells = rows
+    .map(
+      (r) =>
+        `<div class="digest-meta__cell"><dt>${esc(r.k)}</dt><dd>${esc(r.v)}</dd></div>`,
+    )
+    .join('');
+  return `<aside class="digest-meta" aria-label="Siêu dữ liệu digest"><div class="digest-meta__grid">${cells}</div></aside>`;
+}
+
+function renderDigestToc(bodyMd: string): string {
+  const hasCaptures = /^##\s+Captures\s*$/im.test(bodyMd);
+  const hasTongQuan = /^##\s+Tổng quan\s*$/im.test(bodyMd);
+  if (!hasCaptures && !hasTongQuan) return '';
+  const links: string[] = [];
+  if (hasCaptures) links.push(`<a href="#digest-captures">Captures</a>`);
+  if (hasTongQuan) links.push(`<a href="#digest-tong-quan">Tổng quan</a>`);
+  return `<nav class="digest-toc" aria-label="Mục lục trong trang">${links.join('')}</nav>`;
+}
+
+/** Avoid repeating the same H1 under the hero title. */
+function stripLeadingH1IfMatches(markdown: string, title: string): string {
+  const trimmed = markdown.trimStart();
+  const m = /^#\s+(.+)\s*$/m.exec(trimmed);
+  if (!m) return markdown;
+  const h1 = m[1]!.trim();
+  if (h1 === title.trim() || h1.toLowerCase() === title.trim().toLowerCase()) {
+    return trimmed.replace(/^#\s+[^\n\r]*(?:\r\n|\n|\r|$)/, '').trimStart();
+  }
+  return markdown;
+}
+
+function safeExternalHref(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Host/path heuristics for --translate-transcript (CLI rejects non-YouTube). */
+function isLikelyYoutubeUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    if (!/^https?:$/i.test(u.protocol)) return false;
+    const h = u.hostname.toLowerCase();
+    if (h === 'youtu.be' || h.endsWith('.youtube.com') || h === 'youtube.com') return true;
+    if (h.endsWith('.youtube-nocookie.com') || h === 'youtube-nocookie.com') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method']);
+
+function setSideInner(html: string) {
+  const el = document.querySelector('#side-inner');
+  if (el) el.innerHTML = html;
+}
+
+function layoutShell(): string {
+  return `
+  <header class="mobile-topbar">
+    <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Mở menu điều hướng">
+      <span class="burger" aria-hidden="true"></span>
+    </button>
+    <span class="mobile-brand">Second brain</span>
+  </header>
+  <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" aria-hidden="true"></div>
+  <nav id="nav-drawer" class="nav-drawer" aria-label="Menu điều hướng" aria-hidden="true">
+    <div class="drawer-header">
+      <span>Điều hướng</span>
+      <button type="button" class="drawer-close" id="drawer-close" aria-label="Đóng menu">×</button>
+    </div>
+    <div class="drawer-links">
+      <button type="button" class="drawer-link active" data-route="home">Ingest</button>
+      <button type="button" class="drawer-link" data-route="captures">Captures</button>
+      <button type="button" class="drawer-link" data-route="digests">Digests</button>
+    </div>
+  </nav>
+  <div class="app">
+    <aside class="rail" aria-label="Chuyển view">
+      <div class="rail-inner">
+        <div class="mark" title="Second brain reader"></div>
+        <button type="button" class="nav-dot active" data-route="home" aria-label="Ingest" title="Ingest"></button>
+        <button type="button" class="nav-dot" data-route="captures" aria-label="Captures" title="Captures"></button>
+        <button type="button" class="nav-dot" data-route="digests" aria-label="Digests" title="Digests"></button>
+      </div>
+    </aside>
+    <main id="main"></main>
+    <aside class="side" aria-label="Bảng phụ theo view">
+      <div id="side-inner"></div>
+    </aside>
+  </div>
+  `;
+}
+
+function parseHash(): { view: string; id?: string } {
+  const h = (location.hash.slice(1) || '/').replace(/^\/+/, '');
+  const parts = h.split('/').filter(Boolean);
+  if (parts[0] === 'capture' && parts[1]) return { view: 'capture', id: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'digest' && parts[1]) return { view: 'digest', id: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'captures') return { view: 'captures' };
+  if (parts[0] === 'digests') return { view: 'digests' };
+  return { view: 'home' };
+}
+
+function setHash(view: string, id?: string) {
+  if (view === 'home') location.hash = '#/';
+  else if (view === 'captures') location.hash = '#/captures';
+  else if (view === 'digests') location.hash = '#/digests';
+  else if (view === 'capture' && id) location.hash = `#/capture/${encodeURIComponent(id)}`;
+  else if (view === 'digest' && id) location.hash = `#/digest/${encodeURIComponent(id)}`;
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${r.status} ${path}`);
+  return r.json() as Promise<T>;
+}
+
+/** Challenge file is optional; 404 → null without failing digest load. */
+async function fetchChallengeMarkdown(week: string): Promise<string | null> {
+  const r = await fetch(`/api/challenges/${encodeURIComponent(week)}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`${r.status} /api/challenges/${week}`);
+  const j = (await r.json()) as { markdown?: string };
+  return typeof j.markdown === 'string' ? j.markdown : null;
+}
+
+type Health = {
+  ok: boolean;
+  vaultRoot: string;
+  brainRoot: string;
+  ingestAvailable: boolean;
+};
+
+async function postIngest(body: {
+  url: string;
+  noLlm?: boolean;
+  translateTranscript?: boolean;
+}): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  const r = await fetch('/api/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const data = (await r.json().catch(() => ({}))) as {
+    error?: string;
+    stderr?: string;
+    ok?: boolean;
+    captureId?: string;
+    captureDir?: string;
+  };
+  if (!r.ok) {
+    const tail = data.stderr ? `\n${data.stderr.slice(0, 1200)}` : '';
+    throw new Error((data.error || `${r.status}`) + tail);
+  }
+  return data as { ok: true; captureDir: string; captureId: string };
+}
+
+function navKey(view: string): string {
+  if (view === 'capture') return 'captures';
+  if (view === 'digest') return 'digests';
+  return view;
+}
+
+function updateNavActive(view: string) {
+  const key = navKey(view);
+  document.querySelectorAll('.nav-dot').forEach((btn) => {
+    const r = (btn as HTMLElement).dataset.route;
+    btn.classList.toggle('active', r === key);
+  });
+  document.querySelectorAll('.drawer-link').forEach((btn) => {
+    const r = (btn as HTMLElement).dataset.route;
+    btn.classList.toggle('active', r === key);
+  });
+}
+
+function closeMobileNav() {
+  document.getElementById('nav-drawer')?.classList.remove('is-open');
+  document.getElementById('nav-drawer-backdrop')?.classList.remove('is-open');
+  document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'false');
+}
+
+function openMobileNav() {
+  document.getElementById('nav-drawer')?.classList.add('is-open');
+  document.getElementById('nav-drawer-backdrop')?.classList.add('is-open');
+  document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'true');
+}
+
+function bindMobileNav() {
+  const drawer = document.getElementById('nav-drawer');
+  const backdrop = document.getElementById('nav-drawer-backdrop');
+  const toggle = document.getElementById('menu-toggle');
+  toggle?.addEventListener('click', () => {
+    if (drawer?.classList.contains('is-open')) closeMobileNav();
+    else openMobileNav();
+  });
+  backdrop?.addEventListener('click', closeMobileNav);
+  document.getElementById('drawer-close')?.addEventListener('click', closeMobileNav);
+  document.querySelectorAll('.drawer-link').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = (btn as HTMLElement).dataset.route;
+      if (r === 'home') setHash('home');
+      if (r === 'captures') setHash('captures');
+      if (r === 'digests') setHash('digests');
+      closeMobileNav();
+    });
+  });
+}
+
+function sideHome(h: Health, recentCount: number): string {
+  return `
+    <div>
+      <div class="ingest-label" style="margin-bottom:0.5rem">Digest &amp; vault</div>
+      <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.5">Cùng thư mục với Obsidian · <code style="color:var(--signal)">READER_VAULT_ROOT</code></p>
+    </div>
+    <div class="digest-block">
+      <h4>Trạng thái</h4>
+      <ul>
+        <li><strong>Vault</strong> — đường dẫn tuyệt đối trong status strip</li>
+        <li>Ingest web ${h.ingestAvailable ? '<strong>bật</strong> (CLI Brain)' : '<strong>tắt</strong> hoặc thiếu repo'}</li>
+        <li>Captures gần đây: <strong>${recentCount}</strong> hiển thị dưới dạng thẻ</li>
+      </ul>
+    </div>
+    <div class="digest-block">
+      <h4>Link nhanh</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.6">
+        → <code style="color:var(--signal)">Captures/…</code> trong vault<br />
+        → <code style="color:var(--signal)">Digests/YYYY-Www</code>
+      </p>
+    </div>
+    <p class="footer-mock">Reader · mock-aligned UI</p>
+  `;
+}
+
+function sideCaptures(rows: CaptureListItem[]): string {
+  const n = rows.length;
+  const yt = rows.filter((r) => r.youtube_video_id).length;
+  return `
+    <div class="ingest-label" style="margin-bottom:0.5rem">Tổng quan</div>
+    <div class="stat-block">
+      <div class="stat"><b>${n}</b><span>Captures</span></div>
+      <div class="stat"><b>${yt}</b><span>YouTube</span></div>
+    </div>
+    <div class="digest-block">
+      <h4>Gợi ý</h4>
+      <ul>
+        <li>Kiểm tra <strong>publish:false</strong> trước khi chia sẻ</li>
+        <li>Mở note trong Obsidian, refresh reader để xem thay đổi</li>
+      </ul>
+    </div>
+    <p class="footer-mock">Thư viện captures</p>
+  `;
+}
+
+function sideCapture(d: CaptureDetail): string {
+  return `
+    <div class="ingest-label" style="margin-bottom:0.5rem">Capture</div>
+    <div class="digest-block">
+      <h4>${esc(d.id)}</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">Folder trong <code style="color:var(--signal)">Captures/</code> — chỉnh <code style="color:var(--signal)">note.md</code> trong Obsidian.</p>
+    </div>
+    <p class="footer-mock">Chi tiết</p>
+  `;
+}
+
+function sideDigests(items: { week: string }[]): string {
+  return `
+    <div class="ingest-label" style="margin-bottom:0.5rem">Lịch digest</div>
+    <div class="digest-block">
+      <h4>Tạo digest</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted)">Terminal: <code style="color:var(--signal)">pnpm digest</code></p>
+    </div>
+    <div class="digest-block">
+      <h4>Đang có</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted)">${items.length} file · click thẻ để đọc</p>
+    </div>
+    <p class="footer-mock">Digests</p>
+  `;
+}
+
+function sideDigestDetail(week: string, hasChallenge: boolean): string {
+  const challengeHint = hasChallenge
+    ? `Đã tải <code style="color:var(--signal)">Challenges/${esc(week)}.md</code> — kéo xuống dưới digest.`
+    : `Chưa có file challenge — chạy <code style="color:var(--signal)">pnpm challenge --week ${esc(week)}</code> rồi refresh.`;
+  return `
+    <div class="ingest-label" style="margin-bottom:0.5rem">Tuần</div>
+    <div class="stat-block">
+      <div class="stat" style="grid-column:1/-1"><b style="font-size:1.1rem">${esc(week)}</b><span>Digests/${esc(week)}.md</span></div>
+    </div>
+    <div class="digest-block">
+      <h4>Challenge</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">${challengeHint}</p>
+    </div>
+    <p class="footer-mock">Chi tiết digest</p>
+  `;
+}
+
+function renderHome(h: Health, recent: CaptureListItem[]): string {
+  const ingestShellClass = h.ingestAvailable ? 'ingest-shell' : 'ingest-shell ingest-shell-muted';
+  const ingestInner = h.ingestAvailable
+    ? `
+    <div class="ingest-inner">
+      <div class="ingest-inner__row">
+        <div class="ingest-input-wrap">
+          <input type="url" id="ingest-url" placeholder="https://www.youtube.com/watch?v=… hoặc https://x.com/…/status/…" autocomplete="url" />
+        </div>
+        <button type="button" class="btn-ingest" id="ingest-run">Chạy ingest</button>
+      </div>
+      <div
+        class="ingest-agent-status"
+        id="ingest-status"
+        hidden
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="ingest-agent-status__head">
+          <span class="ingest-agent-status__badge" aria-hidden="true">Agent</span>
+          <div class="ingest-agent-status__head-text">
+            <p class="ingest-agent-status__msg" id="ingest-status-msg"></p>
+            <div class="ingest-agent-status__scan" aria-hidden="true"></div>
+          </div>
+        </div>
+        <ol class="ingest-agent-status__steps" id="ingest-status-steps" aria-label="Tiến trình ingest">
+          <li class="ingest-agent-step" data-step="fetch">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Fetch &amp; chuẩn hoá</span>
+              <span class="ingest-agent-step__hint">Adapter · routing</span>
+            </span>
+          </li>
+          <li class="ingest-agent-step" data-step="vault">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Ghi vault</span>
+              <span class="ingest-agent-step__hint">Captures/… · assets</span>
+            </span>
+          </li>
+          <li class="ingest-agent-step ingest-agent-step--yt-only" data-step="translate">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Dịch transcript</span>
+              <span class="ingest-agent-step__hint">YouTube · EN → VI (batch)</span>
+            </span>
+          </li>
+          <li class="ingest-agent-step" data-step="llm">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Enrich note</span>
+              <span class="ingest-agent-step__hint">Tóm tắt · insight (LLM)</span>
+            </span>
+          </li>
+        </ol>
+        <div class="ingest-agent-status__footer" id="ingest-status-footer"></div>
+      </div>
+    </div>`
+    : `<div class="ingest-inner">
+      <p class="hint" style="margin:0">Không khả dụng: <code>READER_BRAIN_ROOT</code> hoặc <code>READER_ALLOW_INGEST=0</code>. Dùng <code>pnpm ingest</code> trong terminal.</p>
+    </div>`;
+
+  const cards =
+    recent.length === 0
+      ? '<p class="hint">Chưa có capture — nhập URL phía trên hoặc ingest từ CLI.</p>'
+      : recent
+          .map((r) => {
+            const pub = r.publish ? 'publish' : 'private';
+            return `
+        <button type="button" class="card" data-card-id="${esc(r.id)}">
+          <div class="card-meta">
+            <span>${esc(r.source)}</span>
+            <span>${esc(r.fetch_method || '—')}</span>
+          </div>
+          <h3>${esc(r.title)}</h3>
+          <p>${esc(r.url ? r.url.slice(0, 96) + (r.url.length > 96 ? '…' : '') : r.id)}</p>
+          <div class="tag-row">
+            <span class="tag">${esc(pub)}</span>
+            ${r.youtube_video_id ? '<span class="tag">youtube</span>' : ''}
+          </div>
+        </button>`;
+          })
+          .join('');
+
+  const n = recent.length;
+  return `
+    <header class="masthead">
+      <h1><span>Bộ nhớ</span><br /><em>thứ hai.</em></h1>
+      <div class="status-strip">
+        <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest sẵn sàng' : 'Ingest · kiểm tra CLI'}</div>
+        <div>Obsidian · local reader</div>
+        <div style="margin-top:0.35rem"><span style="color:var(--warn)">vault</span> · ${esc(h.vaultRoot)}</div>
+      </div>
+    </header>
+    <div class="view view-ingest active">
+      <section class="ingest-zone" aria-label="Nhập URL">
+        <div class="ingest-label">Luồng ingest</div>
+        <div class="${ingestShellClass}">${ingestInner}</div>
+      </section>
+      <div class="sources" aria-label="Nguồn đã cấu hình">
+        <span class="chip on">X API</span>
+        <span class="chip on">Apify</span>
+        <span class="chip on">Readability</span>
+        <span class="chip on">YouTube</span>
+      </div>
+      <h2 class="section-title">Captures gần đây <span>${String(n).padStart(2, '0')}</span></h2>
+      <div class="cards">${cards}</div>
+      <p class="hint">Click thẻ để mở chi tiết · điều hướng đầy đủ qua rail hoặc Captures.</p>
+    </div>
+  `;
+}
+
+function renderCapturesTable(rows: CaptureListItem[]): string {
+  const body = rows
+    .map(
+      (r) => `
+    <tr class="capture-row" tabindex="0" data-id="${esc(r.id)}">
+      <td><span class="mono-sm">${esc(r.id)}</span></td>
+      <td>${esc(r.source)}</td>
+      <td><span class="pill">${esc(r.fetch_method || '—')}</span></td>
+      <td><span class="pill${r.publish ? '' : ' warn'}">${r.publish ? 'publish' : 'private'}</span></td>
+      <td><span style="color:var(--signal);font-size:11px">Mở →</span></td>
+    </tr>`,
+    )
+    .join('');
+  return `
+    <header class="masthead">
+      <h1>Thư viện<br /><em>captures.</em></h1>
+      <div class="status-strip">
+        <div class="pulse">${rows.length} mục trong vault</div>
+        <div>Click hàng để chi tiết</div>
+      </div>
+    </header>
+    <div class="view active">
+      <div class="toolbar">
+        <span class="ingest-label">Thư viện captures</span>
+        <div class="search-wrap">
+          <input type="search" id="lib-search" placeholder="Tìm theo slug, URL, nguồn…" aria-label="Tìm captures" />
+        </div>
+        <button type="button" class="btn-ghost" id="back-home">← Ingest</button>
+      </div>
+      ${
+        rows.length === 0
+          ? '<p class="hint">Chưa có capture.</p>'
+          : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
+            <th>Slug / thư mục</th><th>Nguồn</th><th>Fetch</th><th>Trạng thái</th><th></th>
+          </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`
+      }
+      <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · hàng có thể mở bằng Enter khi focus.</p>
+    </div>
+  `;
+}
+
+function bindLibrarySearch() {
+  const input = document.querySelector<HTMLInputElement>('#lib-search');
+  const tbody = document.getElementById('lib-tbody');
+  if (!input || !tbody) return;
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    tbody.querySelectorAll('tr').forEach((tr) => {
+      const t = tr.textContent?.toLowerCase() ?? '';
+      (tr as HTMLElement).style.display = !q || t.includes(q) ? '' : 'none';
+    });
+  });
+}
+
+function renderSubRows(lines: MergedTranscriptLine[]): string {
+  return lines
+    .map(
+      (L, i) => `
+    <button type="button" class="yt-sub-row" role="listitem" data-start="${L.startSec}" data-i="${i}">
+      <span class="yt-sub-ts">${esc(L.stamp)}</span>
+      <span class="yt-sub-lines">
+        <span class="yt-sub-line yt-sub-en">${esc(L.en || '—')}</span>
+        <span class="yt-sub-line yt-sub-vi">${esc(L.vi || '—')}</span>
+      </span>
+    </button>`,
+    )
+    .join('');
+}
+
+/**
+ * Scroll only `#yt-sub-list` (never the page): keep the active row in a comfortable reading position.
+ * — Start: scrollTop stays 0 until centering would need to scroll up (row climbs from top toward middle).
+ * — Middle: vertical center of the row ≈ vertical center of the list viewport.
+ * — End: `ideal` hits maxScroll; the row naturally sits lower toward the bottom (no empty padding below).
+ */
+function scrollSubRowToReadingPosition(list: HTMLElement, row: HTMLElement) {
+  if (row.hidden || row.offsetParent === null) return;
+  const listRect = list.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  if (rowRect.height <= 0) return;
+  const maxScroll = list.scrollHeight - list.clientHeight;
+  if (maxScroll <= 0) return;
+
+  const rowTopInContent = list.scrollTop + (rowRect.top - listRect.top);
+  const rowCenterInContent = rowTopInContent + rowRect.height / 2;
+  const ideal = rowCenterInContent - list.clientHeight / 2;
+  list.scrollTop = Math.max(0, Math.min(ideal, maxScroll));
+}
+
+/**
+ * Segmented transcript UI: YT IFrame API player, click row / milestone to seek, live highlight.
+ * Returns cleanup (interval + player.destroy).
+ */
+function bindYoutubeSubPanel(
+  videoId: string,
+  lines: MergedTranscriptLine[],
+  mainEl: HTMLElement,
+): () => void {
+  const panel = mainEl.querySelector<HTMLElement>('#yt-sub-panel');
+  const list = mainEl.querySelector<HTMLElement>('#yt-sub-list');
+  const search = mainEl.querySelector<HTMLInputElement>('#yt-sub-search');
+
+  let pollId = 0;
+  let playerReady = false;
+  let player: YtPlayerApi | null = null;
+  let pendingSeek: number | null = null;
+  let lastIdx = -1;
+
+  const seek = (t: number) => {
+    if (playerReady && player) {
+      player.seekTo(Math.floor(t), true);
+      player.playVideo();
+    } else {
+      pendingSeek = t;
+    }
+  };
+
+  const syncHighlight = () => {
+    if (!playerReady || !player || !list) return;
+    const idx = findActiveSegmentIndex(lines, player.getCurrentTime());
+    if (idx === lastIdx) return;
+    lastIdx = idx;
+    list.querySelectorAll('.yt-sub-row').forEach((row, i) => {
+      row.classList.toggle('is-current', i === idx);
+    });
+    const currentRow = list.querySelector<HTMLElement>(`.yt-sub-row[data-i="${idx}"]`);
+    if (currentRow) scrollSubRowToReadingPosition(list, currentRow);
+  };
+
+  mainEl.querySelectorAll('.yt-tick').forEach((el) => {
+    el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.t)));
+  });
+  mainEl.querySelectorAll('.yt-ms button').forEach((el) => {
+    el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.seek)));
+  });
+
+  list?.querySelectorAll('.yt-sub-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      seek(Number((row as HTMLElement).dataset.start));
+      if (list) scrollSubRowToReadingPosition(list, row as HTMLElement);
+    });
+  });
+
+  panel?.querySelectorAll('.yt-sub-mode').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = (btn as HTMLElement).dataset.subMode;
+      if (!mode || !panel) return;
+      panel.dataset.mode = mode;
+      panel.querySelectorAll('.yt-sub-mode').forEach((b) =>
+        b.classList.toggle('active', (b as HTMLElement).dataset.subMode === mode),
+      );
+    });
+  });
+
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    list?.querySelectorAll('.yt-sub-row').forEach((row) => {
+      const text = row.textContent?.toLowerCase() ?? '';
+      (row as HTMLElement).hidden = Boolean(q && !text.includes(q));
+    });
+  });
+
+  void loadYoutubeIframeApi().then(() => {
+    const YT = (window as unknown as { YT: { Player: new (id: string, opts: object) => unknown } }).YT;
+    if (!YT?.Player) return;
+    new YT.Player('yt-player-root', {
+      videoId,
+      playerVars: { enablejsapi: 1, modestbranding: 1, rel: 0 },
+      events: {
+        onReady: (ev: { target: YtPlayerApi }) => {
+          player = ev.target;
+          playerReady = true;
+          if (pendingSeek != null) {
+            player.seekTo(Math.floor(pendingSeek), true);
+            player.playVideo();
+            pendingSeek = null;
+          }
+          pollId = window.setInterval(syncHighlight, 280);
+        },
+      },
+    });
+  });
+
+  return () => {
+    window.clearInterval(pollId);
+    playerReady = false;
+    lastIdx = -1;
+    try {
+      player?.destroy();
+    } catch {
+      /* YouTube API may throw if iframe already gone */
+    }
+    player = null;
+  };
+}
+
+function renderCaptureDetail(d: CaptureDetail): string {
+  const yt = d.youtubeVideoId;
+  const maxT =
+    d.milestones && d.milestones.length > 0
+      ? Math.max(...d.milestones.map((m) => m.t), 1)
+      : 1;
+  const ticks =
+    d.milestones
+      ?.map((m) => {
+        const left = `${(m.t / maxT) * 100}%`;
+        const hl = m.kind === 'highlight' ? ' hl' : '';
+        return `<div class="yt-tick${hl}" style="left:${left}" data-t="${m.t}" title="${esc(m.label)}"></div>`;
+      })
+      .join('') ?? '';
+  const msBtns =
+    d.milestones
+      ?.map((m) => {
+        const mm = Math.floor(m.t / 60);
+        const ss = String(m.t % 60).padStart(2, '0');
+        return `<button type="button" data-seek="${m.t}">${mm}:${ss} — ${esc(m.label)}</button>`;
+      })
+      .join('') ?? '';
+
+  const subLines = yt ? mergeTranscriptsForUi(d.transcriptEn ?? '', d.transcriptVi ?? '') : [];
+  const useSubPanel = Boolean(yt && subLines.length > 0);
+
+  const ytMilestonesBlock =
+    d.milestones?.length
+      ? `
+      <span class="ingest-label">Mốc · click để tua</span>
+      <div class="yt-track" id="yt-track">${ticks}</div>
+      <div class="yt-ms" id="yt-ms">${msBtns}</div>`
+      : '';
+
+  const ytHint = useSubPanel
+    ? 'Click dòng phụ đề hoặc mốc để tua. Dòng đang phát được làm nổi bật.'
+    : 'Seek: <code>?start=</code> trên embed YouTube.';
+
+  const ytVideoBlock = useSubPanel
+    ? `<div id="yt-player-root" class="yt-player-root" title="YouTube"></div>`
+    : `<iframe id="yt-iframe" title="YouTube" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" src="https://www.youtube.com/embed/${esc(yt!)}?enablejsapi=1"></iframe>`;
+
+  /** Collapsible markdown transcript: full-width row below the split (same width as #cap-note), not inside the video column. */
+  const ytSubRawUnderVideo = useSubPanel
+    ? `
+      <details class="yt-sub-raw source-details" id="yt-sub-raw">
+        <summary class="source-details-summary yt-sub-raw-summary">Transcript gốc (markdown)</summary>
+        <div class="yt-sub-raw-grid">
+          <div><span class="tr-col-label">English</span><pre class="transcript-pre">${esc(d.transcriptEn || '(Không có)')}</pre></div>
+          <div><span class="tr-col-label">Tiếng Việt (LLM)</span><pre class="transcript-pre">${esc(d.transcriptVi || '(Không có)')}</pre></div>
+        </div>
+      </details>`
+    : '';
+
+  const ytTranscriptBlock = useSubPanel
+    ? `
+      <div class="yt-sub-panel" id="yt-sub-panel" data-mode="bilingual">
+        <div class="yt-sub-list" id="yt-sub-list" role="list">${renderSubRows(subLines)}</div>
+        <div class="yt-sub-toolbar">
+          <label class="yt-sub-search-wrap">
+            <span class="visually-hidden">Tìm trong phụ đề</span>
+            <input type="search" id="yt-sub-search" class="yt-sub-search" placeholder="Tìm trong phụ đề…" autocomplete="off" />
+          </label>
+          <div class="yt-sub-modes" role="group" aria-label="Chế độ hiển thị">
+            <button type="button" class="yt-sub-mode active" data-sub-mode="bilingual">Song ngữ</button>
+            <button type="button" class="yt-sub-mode" data-sub-mode="en">EN</button>
+            <button type="button" class="yt-sub-mode" data-sub-mode="vi">VI</button>
+          </div>
+        </div>
+      </div>`
+    : `
+      <div class="transcript-tabs" role="tablist" aria-label="Ngôn ngữ transcript">
+        <button type="button" class="tr-tab active" data-tab="en">English</button>
+        <button type="button" class="tr-tab" data-tab="vi">Tiếng Việt</button>
+        <button type="button" class="tr-tab" data-tab="both">Song song</button>
+      </div>
+      <div class="tr-pane active" data-pane="en">
+        <pre class="transcript-pre">${esc(d.transcriptEn || '(Không có)')}</pre>
+      </div>
+      <div class="tr-pane" data-pane="vi">
+        <pre class="transcript-pre">${esc(d.transcriptVi || '(Không có)')}</pre>
+      </div>
+      <div class="tr-pane tr-split" data-pane="both">
+        <div><span class="tr-col-label">EN</span><pre class="transcript-pre">${esc(d.transcriptEn || '—')}</pre></div>
+        <div><span class="tr-col-label">VI (LLM)</span><pre class="transcript-pre">${esc(d.transcriptVi || '—')}</pre></div>
+      </div>`;
+
+  const fmNote = Object.entries(d.noteFm)
+    .filter(([k]) => !FM_SKIP_IN_GRID.has(k))
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`)
+    .join('');
+
+  const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
+    .trim();
+  const fetchDisplay = fetchMethod || '—';
+  const fetchTitle =
+    'Chiến lược ingest (fetch_method). Capture cũ có thể chỉ khai báo trong source.md — đã gộp từ note + source.';
+
+  const title = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
+  const ingestedRaw = String(d.noteFm.ingested_at ?? d.sourceFm.ingested_at ?? '').trim();
+  const publish = d.noteFm.publish === true;
+  const rawUrl = String(d.noteFm.url ?? '').trim();
+  const href = rawUrl ? safeExternalHref(rawUrl) : null;
+  const sourceKind = String(d.noteFm.source ?? d.sourceFm.source ?? '').trim();
+
+  const metaParts: string[] = [];
+  if (ingestedRaw) {
+    metaParts.push(
+      `<time class="detail-meta-time" datetime="${escAttr(ingestedRaw)}">${esc(formatIngestedVi(ingestedRaw))}</time>`,
+    );
+  }
+  metaParts.push(
+    `<span class="pill${publish ? '' : ' warn'}">${publish ? 'publish' : 'private'}</span>`,
+  );
+  if (sourceKind) {
+    metaParts.push(`<span class="mono-sm" title="source (frontmatter)">${esc(sourceKind)}</span>`);
+  }
+  metaParts.push(
+    `<span class="mono-sm" title="${esc(fetchTitle)}">${esc(fetchDisplay)}</span>`,
+  );
+  if (href) {
+    metaParts.push(
+      `<a href="${escAttr(href)}" target="_blank" rel="noopener noreferrer" class="detail-meta-link">Mở nguồn ↗</a>`,
+    );
+  }
+  const metaLine = metaParts.join('<span class="detail-meta-sep" aria-hidden="true">·</span>');
+
+  const vaultPath = `${d.vaultRoot.replace(/\/+$/, '')}/Captures/${d.id}`;
+  const bc = captureBreadcrumbLabel(d.id);
+
+  const tocLinks = [
+    `<a href="#cap-frontmatter">Frontmatter</a>`,
+    ...(yt ? [`<a href="#cap-youtube">Video</a>`] : []),
+    `<a href="#cap-note">Ghi chú</a>`,
+    `<a href="#cap-source">Source</a>`,
+  ].join('');
+
+  const sourceExcerpt = d.sourceBody;
+  const sourceTooLong = sourceExcerpt.length > 12000;
+
+  return `
+    <div class="toolbar detail-toolbar">
+      <button type="button" class="btn-ghost" id="cap-back">← Thư viện</button>
+      <span class="detail-breadcrumb" title="${escAttr(d.id)}">Captures / ${esc(bc)}</span>
+      <button type="button" class="btn-ghost btn-tiny" id="cap-copy-path" data-path="${escAttr(vaultPath)}">Copy path</button>
+    </div>
+    <div class="view active">
+    <nav class="detail-toc" aria-label="Trên trang này">${tocLinks}</nav>
+    <div class="detail-hero">
+      <h2 id="cap-title">${esc(title)}</h2>
+      <div class="detail-meta-line" aria-label="Tóm tắt metadata">${metaLine}</div>
+    </div>
+    <div class="section cap-anchor" id="cap-frontmatter">
+      <h3>Frontmatter (note)</h3>
+      <p class="hint" style="margin-top:0"><code>url</code> và <code>fetch_method</code> hiển thị ở dòng meta phía trên (nếu có).</p>
+      <dl class="fm-grid">${fmNote || '<dd>(empty)</dd>'}</dl>
+    </div>
+    ${
+      yt
+        ? `
+    <div class="section cap-anchor" id="cap-youtube">
+      <h3>Video &amp; transcript</h3>
+      <p class="hint" style="margin-top:0">${ytHint}</p>
+      <div class="yt-split">
+        <div class="yt-split__media">
+          <div class="yt-iframe-wrap">
+            ${ytVideoBlock}
+          </div>
+          ${ytMilestonesBlock}
+        </div>
+        <div class="yt-split__transcript">
+          ${ytTranscriptBlock}
+        </div>
+        ${ytSubRawUnderVideo}
+      </div>
+    </div>`
+        : ''
+    }
+    <div class="section cap-anchor" id="cap-note">
+      <h3>note.md</h3>
+      <div class="prose" id="note-prose"></div>
+    </div>
+    <div class="section cap-anchor" id="cap-source">
+      <h3>source.md</h3>
+      <details class="source-details">
+        <summary class="source-details-summary">Đầy đủ · mặc định đóng${
+          sourceTooLong ? ` · ${sourceExcerpt.length.toLocaleString('vi-VN')} ký tự` : ''
+        }</summary>
+        <pre class="transcript-pre source-details-pre">${esc(sourceExcerpt)}</pre>
+      </details>
+    </div>
+    </div>
+  `;
+}
+
+function renderDigestsList(items: { id: string; week: string }[]): string {
+  const cards = items
+    .map(
+      (x) => `
+    <button type="button" class="digest-card interactive" data-week="${esc(x.week)}">
+      <div class="meta">${esc(x.week)}</div>
+      <h3>Digest — ${esc(x.week)}</h3>
+      <p>Markdown trong vault tại <code style="color:var(--signal)">Digests/${esc(x.week)}.md</code></p>
+      <div class="tag-row" style="margin-top:1rem">
+        <span class="tag">[[Digests/${esc(x.week)}]]</span>
+      </div>
+    </button>`,
+    )
+    .join('');
+  return `
+    <header class="masthead">
+      <h1>Lịch sử<br /><em>digest.</em></h1>
+      <div class="status-strip">
+        <div class="pulse">${items.length} tuần</div>
+        <div>Click thẻ để đọc</div>
+      </div>
+    </header>
+    <div class="view active">
+      <div class="toolbar">
+        <span class="ingest-label">Lịch sử digest</span>
+        <button type="button" class="btn-ghost" id="back-home-d">← Ingest</button>
+      </div>
+      ${
+        items.length === 0
+          ? '<p class="hint">Chưa có digest — chạy <code>pnpm digest</code>.</p>'
+          : `<div class="digest-timeline">${cards}</div>`
+      }
+      <p class="hint lib-toolbar-hint">Tạo digest mới từ terminal trong repo CLI.</p>
+    </div>
+  `;
+}
+
+function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: string | null): string {
+  const parsed = parseSimpleYamlFrontmatter(markdown);
+  const bodyMd = stripDigestBodyLeadingH1(parsed?.body ?? markdown, week);
+  const metaPanel = parsed?.front ? renderDigestMetaPanel(parsed.front) : '';
+  const toc = renderDigestToc(bodyMd);
+  const bodyHtml = markdownToProseHtml(bodyMd, { h2IdPrefix: 'digest' });
+
+  const ch = challengeMarkdown?.trim();
+  const challengeBlock =
+    ch && ch.length > 0
+      ? `
+      <section class="digest-challenge" aria-label="Reading challenge">
+        <div class="digest-challenge__head">
+          <span class="digest-challenge__badge" aria-hidden="true">Challenge</span>
+          <h3 class="digest-challenge-title">${esc(week)}</h3>
+          <p class="digest-challenge-path"><code>Challenges/${esc(week)}.md</code></p>
+        </div>
+        <div class="prose digest-prose digest-prose--challenge">${markdownToProseHtml(ch, { h2IdPrefix: 'challenge' })}</div>
+      </section>`
+      : '';
+  return `
+    <header class="masthead">
+      <h1>Digest<br /><em>${esc(week)}</em></h1>
+      <div class="status-strip">
+        <div class="pulse">Chi tiết digest</div>
+        <div class="status-strip-mono"><code style="color:var(--signal)">Digests/${esc(week)}.md</code></div>
+      </div>
+    </header>
+    <div class="view active digest-view">
+      <div class="toolbar detail-toolbar digest-toolbar">
+        <button type="button" class="btn-ghost" id="dig-back">← Danh sách digest</button>
+        <span class="ingest-label digest-toolbar__file">Digests/${esc(week)}.md</span>
+      </div>
+      <article class="digest-article" lang="vi">
+        ${metaPanel ? `<div class="digest-detail-meta-band">${metaPanel}</div>` : ''}
+        ${toc}
+        <div class="digest-body">
+          <div class="prose digest-prose digest-prose--main">${bodyHtml}</div>
+        </div>
+        ${challengeBlock}
+      </article>
+    </div>
+  `;
+}
+
+function bindRail() {
+  document.querySelectorAll('.nav-dot').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = (btn as HTMLElement).dataset.route;
+      if (r === 'home') setHash('home');
+      if (r === 'captures') setHash('captures');
+      if (r === 'digests') setHash('digests');
+    });
+  });
+}
+
+async function route() {
+  ytCaptureCleanup?.();
+  ytCaptureCleanup = null;
+
+  const main = document.querySelector<HTMLElement>('#main')!;
+  const { view, id } = parseHash();
+  updateNavActive(view);
+
+  try {
+    if (view === 'home') {
+      const [h, capData] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
+      ]);
+      const recent = capData.captures.slice(0, 3);
+      main.innerHTML = renderHome(h, recent);
+      setSideInner(sideHome(h, recent.length));
+
+      main.querySelectorAll('.card[data-card-id]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const cid = (el as HTMLElement).dataset.cardId;
+          if (cid) setHash('capture', cid);
+        });
+      });
+
+      const runBtn = main.querySelector<HTMLButtonElement>('#ingest-run');
+      const urlIn = main.querySelector<HTMLInputElement>('#ingest-url');
+      const st = main.querySelector<HTMLElement>('#ingest-status');
+      const stMsg = main.querySelector<HTMLElement>('#ingest-status-msg');
+      const stFoot = main.querySelector<HTMLElement>('#ingest-status-footer');
+      if (runBtn && urlIn && st && stMsg && stFoot && h.ingestAvailable) {
+        runBtn.addEventListener('click', async () => {
+          const url = urlIn.value.trim();
+          if (!url) {
+            st.hidden = false;
+            st.className =
+              'ingest-agent-status ingest-agent-status--compact ingest-agent-status--err';
+            stMsg.textContent = 'Nhập URL.';
+            stFoot.textContent = '';
+            return;
+          }
+          const yt = isLikelyYoutubeUrl(url);
+          let stopTicker = () => {};
+          st.className = [
+            'ingest-agent-status',
+            'ingest-agent-status--running',
+            yt ? '' : 'ingest-agent-status--no-yt',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          st.hidden = false;
+          stMsg.textContent = yt
+            ? 'Đang chạy pipeline ingest (YouTube: transcript + LLM khi có API key)…'
+            : 'Đang chạy pipeline ingest (LLM khi có API key)…';
+          stFoot.innerHTML = '';
+          stopTicker = startIngestAgentStepTicker(st);
+          runBtn.disabled = true;
+          runBtn.classList.add('processing');
+          try {
+            const out = await postIngest({ url, noLlm: false });
+            stopTicker();
+            ingestAgentMarkAllDone(st);
+            st.className = [
+              'ingest-agent-status',
+              'ingest-agent-status--ok',
+              yt ? '' : 'ingest-agent-status--no-yt',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            stMsg.textContent = 'Hoàn tất · capture đã ghi.';
+            stFoot.innerHTML = `<button type="button" class="btn-link" id="ingest-open-cap">${esc(out.captureId)}</button><span class="ingest-agent-status__path mono-sm">${esc(out.captureDir)}</span>`;
+            main.querySelector('#ingest-open-cap')?.addEventListener('click', () => setHash('capture', out.captureId));
+          } catch (e) {
+            stopTicker();
+            ingestAgentMarkActiveError(st);
+            st.className = [
+              'ingest-agent-status',
+              'ingest-agent-status--err',
+              yt ? '' : 'ingest-agent-status--no-yt',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            stMsg.textContent = 'Ingest thất bại.';
+            stFoot.textContent = e instanceof Error ? e.message : String(e);
+          } finally {
+            runBtn.disabled = false;
+            runBtn.classList.remove('processing');
+          }
+        });
+      }
+      return;
+    }
+    if (view === 'captures') {
+      const { captures } = await fetchJson<{ captures: CaptureListItem[] }>('/api/captures');
+      main.innerHTML = renderCapturesTable(captures);
+      setSideInner(sideCaptures(captures));
+      document.querySelector('#back-home')?.addEventListener('click', () => setHash('home'));
+      bindLibrarySearch();
+      const openRow = (tr: HTMLElement) => {
+        const cid = tr.dataset.id;
+        if (cid) setHash('capture', cid);
+      };
+      main.querySelectorAll('tr.capture-row').forEach((tr) => {
+        tr.addEventListener('click', () => openRow(tr as HTMLElement));
+        tr.addEventListener('keydown', (ev: Event) => {
+          const ke = ev as KeyboardEvent;
+          if (ke.key === 'Enter' || ke.key === ' ') {
+            ke.preventDefault();
+            openRow(tr as HTMLElement);
+          }
+        });
+      });
+      return;
+    }
+    if (view === 'capture' && id) {
+      const d = await fetchJson<CaptureDetail>(`/api/captures/${encodeURIComponent(id)}`);
+      main.innerHTML = renderCaptureDetail(d);
+      setSideInner(sideCapture(d));
+      document.querySelector('#cap-back')?.addEventListener('click', () => setHash('captures'));
+      const titleLine = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
+      const isYoutubeCapture =
+        Boolean(d.youtubeVideoId) ||
+        d.noteFm.source === 'youtube' ||
+        d.sourceFm.source === 'youtube';
+      const noteHtml = noteToHtml(stripLeadingH1IfMatches(d.noteBody, titleLine), d.id, {
+        omitImages: isYoutubeCapture,
+      });
+      const prose = document.querySelector('#note-prose');
+
+      const copyBtn = document.querySelector<HTMLButtonElement>('#cap-copy-path');
+      copyBtn?.addEventListener('click', async () => {
+        const p = copyBtn.dataset.path ?? copyBtn.getAttribute('data-path');
+        if (!p) return;
+        const label = copyBtn.textContent;
+        try {
+          await navigator.clipboard.writeText(p);
+          copyBtn.textContent = 'Đã copy';
+          window.setTimeout(() => {
+            copyBtn.textContent = label ?? 'Copy path';
+          }, 1600);
+        } catch {
+          copyBtn.textContent = 'Lỗi copy';
+          window.setTimeout(() => {
+            copyBtn.textContent = label ?? 'Copy path';
+          }, 2000);
+        }
+      });
+      if (prose) prose.innerHTML = noteHtml;
+
+      const mergedSub = d.youtubeVideoId
+        ? mergeTranscriptsForUi(d.transcriptEn ?? '', d.transcriptVi ?? '')
+        : [];
+      const useSubPanel = Boolean(d.youtubeVideoId && mergedSub.length > 0);
+
+      if (useSubPanel && d.youtubeVideoId) {
+        ytCaptureCleanup = bindYoutubeSubPanel(d.youtubeVideoId, mergedSub, main);
+      } else {
+        const iframe = document.querySelector<HTMLIFrameElement>('#yt-iframe');
+        const seek = (t: number) => {
+          if (!iframe || !d.youtubeVideoId) return;
+          iframe.src = `https://www.youtube.com/embed/${d.youtubeVideoId}?start=${Math.floor(t)}&autoplay=1&enablejsapi=1`;
+        };
+        document.querySelectorAll('.yt-tick').forEach((el) => {
+          el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.t)));
+        });
+        document.querySelectorAll('.yt-ms button').forEach((el) => {
+          el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.seek)));
+        });
+
+        main.querySelectorAll('.tr-tab').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tab = (btn as HTMLElement).dataset.tab!;
+            main.querySelectorAll('.tr-tab').forEach((b) =>
+              b.classList.toggle('active', (b as HTMLElement).dataset.tab === tab),
+            );
+            main.querySelectorAll('.tr-pane').forEach((p) =>
+              p.classList.toggle('active', (p as HTMLElement).dataset.pane === tab),
+            );
+          });
+        });
+      }
+      return;
+    }
+    if (view === 'digests') {
+      const { digests } = await fetchJson<{ digests: { id: string; week: string }[] }>('/api/digests');
+      main.innerHTML = renderDigestsList(digests);
+      setSideInner(sideDigests(digests));
+      document.querySelector('#back-home-d')?.addEventListener('click', () => setHash('home'));
+      main.querySelectorAll('.digest-card[data-week]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const w = (el as HTMLElement).dataset.week;
+          if (w) setHash('digest', w);
+        });
+      });
+      return;
+    }
+    if (view === 'digest' && id) {
+      const [data, challengeMd] = await Promise.all([
+        fetchJson<{ week: string; markdown: string }>(
+          `/api/digests/${encodeURIComponent(id)}`,
+        ),
+        fetchChallengeMarkdown(id),
+      ]);
+      main.innerHTML = renderDigestDetail(data.week, data.markdown, challengeMd);
+      setSideInner(sideDigestDetail(data.week, challengeMd !== null));
+      document.querySelector('#dig-back')?.addEventListener('click', () => setHash('digests'));
+      return;
+    }
+  } catch (e) {
+    main.innerHTML = `<div class="err">${esc(e instanceof Error ? e.message : String(e))}</div>`;
+    setSideInner('<p class="footer-mock">Lỗi tải</p>');
+  }
+}
+
+export function initApp() {
+  app.innerHTML = layoutShell();
+  bindRail();
+  bindMobileNav();
+  window.addEventListener('hashchange', () => route());
+  void route();
+}
+
+initApp();

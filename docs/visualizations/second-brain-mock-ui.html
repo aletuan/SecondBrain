@@ -1,0 +1,3196 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Second brain — Mock console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #070809;
+      --panel: #0e1014;
+      --elevated: #151820;
+      --line: #2a303c;
+      --muted: #6b7287;
+      --paper: #e8e4dc;
+      --accent: #e85d4c;
+      --accent-dim: rgba(232, 93, 76, 0.15);
+      --signal: #3d9a7a;
+      --signal-dim: rgba(61, 154, 122, 0.12);
+      --warn: #c9a227;
+      --nav-settings: #8b9dc9;
+      --nav-digest-detail: #b87fd9;
+      --font-display: "DM Serif Display", Georgia, serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --radius: 2px;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      font-weight: 400;
+    }
+
+    .noise {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      opacity: 0.04;
+      z-index: 9999;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .grid-bg {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.12;
+      mask-image: radial-gradient(ellipse 70% 55% at 30% 20%, black, transparent 75%);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 52px 1fr minmax(280px, 320px);
+      min-height: 100vh;
+      max-width: 1440px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .mobile-topbar,
+    .nav-drawer,
+    .nav-drawer-backdrop {
+      display: none;
+    }
+
+    @media (max-width: 960px) {
+      .app {
+        grid-template-columns: 1fr;
+        padding-top: calc(3.25rem + env(safe-area-inset-top));
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      .rail {
+        display: none !important;
+      }
+      .mobile-topbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        min-height: 3.25rem;
+        padding: 0.35rem 1rem;
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+        padding-top: max(0.35rem, env(safe-area-inset-top));
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        z-index: 10000;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      }
+      .menu-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid var(--line);
+        background: var(--elevated);
+        color: var(--paper);
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .menu-toggle:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .burger {
+        display: block;
+        width: 18px;
+        height: 2px;
+        background: var(--paper);
+        box-shadow: 0 6px 0 var(--paper), 0 -6px 0 var(--paper);
+      }
+      .mobile-brand {
+        font-family: var(--font-display);
+        font-size: 1rem;
+        color: var(--paper);
+        letter-spacing: -0.02em;
+      }
+      .nav-drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10001;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s var(--ease-out);
+      }
+      .nav-drawer-backdrop.is-open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .nav-drawer {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(17.5rem, 86vw);
+        max-width: 100%;
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        z-index: 10002;
+        transform: translateX(-100%);
+        transition: transform 0.3s var(--ease-out);
+        padding-top: env(safe-area-inset-top);
+        box-shadow: 8px 0 40px rgba(0, 0, 0, 0.35);
+      }
+      .nav-drawer.is-open {
+        transform: translateX(0);
+      }
+      .drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .drawer-close {
+        min-width: 44px;
+        min-height: 44px;
+        border: none;
+        background: transparent;
+        color: var(--paper);
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .drawer-close:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .drawer-links {
+        display: flex;
+        flex-direction: column;
+        padding: 0.5rem 0;
+        overflow-y: auto;
+      }
+      .drawer-link {
+        --dot: var(--accent);
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 0.95rem 1.25rem;
+        border: none;
+        border-left: 3px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+      }
+      .drawer-link[data-view="ingest"] {
+        --dot: var(--accent);
+      }
+      .drawer-link[data-view="captures"] {
+        --dot: var(--signal);
+      }
+      .drawer-link[data-view="digests"] {
+        --dot: var(--warn);
+      }
+      .drawer-link[data-view="settings"] {
+        --dot: var(--nav-settings);
+      }
+      .drawer-link[data-view="digest-detail"] {
+        --dot: var(--nav-digest-detail);
+      }
+      .drawer-link:hover,
+      .drawer-link:focus-visible {
+        color: var(--paper);
+        background: var(--elevated);
+      }
+      .drawer-link:focus-visible {
+        outline: none;
+        border-left-color: var(--dot);
+      }
+      .drawer-link.active {
+        color: var(--paper);
+        border-left-color: var(--dot);
+        background: color-mix(in srgb, var(--dot) 14%, transparent);
+      }
+      .drawer-divider {
+        height: 1px;
+        margin: 0.5rem 1rem;
+        background: var(--line);
+      }
+      .side {
+        border-left: none;
+        border-top: 1px solid var(--line);
+        max-height: none;
+        position: relative;
+        min-height: auto;
+        padding: 1.5rem max(1rem, env(safe-area-inset-left)) 2rem max(1rem, env(safe-area-inset-right));
+      }
+      main {
+        padding: 1rem max(1rem, env(safe-area-inset-left)) 2rem max(1rem, env(safe-area-inset-right));
+      }
+      .masthead {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+      }
+      .status-strip {
+        text-align: left;
+      }
+      .masthead h1 {
+        max-width: none;
+      }
+      .detail-toolbar .ingest-label {
+        margin-left: 0;
+        flex: 1 1 100%;
+        text-align: left;
+      }
+      .ingest-inner {
+        flex-direction: column;
+      }
+      .btn-ingest {
+        width: 100%;
+        padding: 0.9rem 1rem;
+      }
+      .mock-table-wrap {
+        -webkit-overflow-scrolling: touch;
+      }
+      .btn-ghost,
+      .btn-ingest {
+        min-height: 44px;
+      }
+
+    }
+
+    @media (max-width: 480px) {
+      body {
+        font-size: 12px;
+      }
+    }
+
+    .rail {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.25rem 0;
+    }
+
+    .rail-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .mark {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      transform: rotate(45deg);
+      animation: markSpin 12s linear infinite;
+    }
+
+    @keyframes markSpin {
+      to {
+        transform: rotate(405deg);
+      }
+    }
+
+    .nav-dot {
+      --dot: var(--muted);
+      width: 10px;
+      height: 10px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--dot) 32%, var(--line));
+      transition:
+        background 0.25s var(--ease-out),
+        transform 0.25s var(--ease-out),
+        box-shadow 0.25s var(--ease-out);
+      cursor: pointer;
+    }
+
+    .nav-dot[data-view="ingest"] {
+      --dot: var(--accent);
+    }
+
+    .nav-dot[data-view="captures"] {
+      --dot: var(--signal);
+    }
+
+    .nav-dot[data-view="digests"] {
+      --dot: var(--warn);
+    }
+
+    .nav-dot[data-view="settings"] {
+      --dot: var(--nav-settings);
+    }
+
+    .nav-dot[data-view="digest-detail"] {
+      --dot: var(--nav-digest-detail);
+    }
+
+    .nav-dot:hover,
+    .nav-dot:focus-visible {
+      background: var(--dot);
+      transform: scale(1.2);
+      outline: none;
+      box-shadow:
+        0 0 0 2px var(--ink),
+        0 0 0 4px color-mix(in srgb, var(--dot) 38%, transparent);
+    }
+
+    .nav-dot.active {
+      background: var(--dot);
+      transform: scale(1.2);
+      box-shadow: 0 0 16px color-mix(in srgb, var(--dot) 55%, transparent);
+    }
+
+    main {
+      padding: 2rem 2.5rem 3rem;
+      overflow-x: hidden;
+    }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2rem;
+      align-items: end;
+      margin-bottom: 2.75rem;
+    }
+
+    .masthead h1 {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      line-height: 0.95;
+      margin: 0;
+      letter-spacing: -0.02em;
+      max-width: 14ch;
+    }
+
+    .masthead h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .status-strip {
+      text-align: right;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .status-strip .pulse {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--signal);
+      margin-bottom: 0.35rem;
+    }
+
+    .status-strip .pulse::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: var(--signal);
+      border-radius: 50%;
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .status-strip .pulse.warn {
+      color: var(--warn);
+    }
+
+    .status-strip .pulse.warn::before {
+      background: var(--warn);
+      animation: none;
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0.35;
+      }
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+      animation: viewEnter 0.55s var(--ease-out) both;
+    }
+
+    @keyframes viewEnter {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .ingest-zone {
+      position: relative;
+      margin-bottom: 3rem;
+    }
+
+    .ingest-zone::before {
+      content: "";
+      position: absolute;
+      left: -100vw;
+      top: 50%;
+      width: 200vw;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--line) 20%, var(--line) 80%, transparent);
+      pointer-events: none;
+    }
+
+    .ingest-shell {
+      position: relative;
+      background: var(--elevated);
+      border: 1px solid var(--line);
+      padding: 1.25rem 1.5rem;
+      transform: skewY(-0.4deg);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+    }
+
+    .ingest-inner {
+      transform: skewY(0.4deg);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: stretch;
+    }
+
+    .ingest-label {
+      flex: 0 0 100%;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .ingest-zone > .ingest-label {
+      display: block;
+      margin-bottom: 0.85rem;
+    }
+
+    .ingest-input-wrap {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    input[type="url"],
+    input[type="text"] {
+      width: 100%;
+      background: var(--ink);
+      border: 1px solid var(--line);
+      color: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 0.85rem 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    input::placeholder {
+      color: var(--muted);
+    }
+
+    .btn-ingest {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: var(--ink);
+      border: none;
+      padding: 0 1.75rem;
+      cursor: pointer;
+      transition: transform 0.2s var(--ease-out), filter 0.2s;
+    }
+
+    .btn-ingest:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .btn-ingest:active {
+      transform: translateY(0);
+    }
+
+    .btn-ingest.processing {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    .hint {
+      margin-top: 0.75rem;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.65rem;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .chip.on {
+      border-color: var(--signal);
+      color: var(--paper);
+      background: var(--signal-dim);
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 400;
+      margin: 0 0 1.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 0.55em;
+      vertical-align: super;
+      margin-left: 0.25rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+      align-items: stretch;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s, transform 0.25s var(--ease-out);
+    }
+
+    @media (max-width: 900px) {
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, transparent 50%, var(--accent-dim) 50%);
+      opacity: 0.6;
+    }
+
+    .card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 400;
+      margin: 0 0 0.5rem;
+      line-height: 1.2;
+    }
+
+    .card p {
+      flex: 1 1 auto;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: auto;
+      padding-top: 1rem;
+    }
+
+    .tag {
+      font-size: 10px;
+      padding: 0.2rem 0.45rem;
+      background: var(--elevated);
+      border: 1px solid var(--line);
+      color: var(--warn);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .toolbar .ingest-label {
+      margin: 0;
+      flex: 1 1 auto;
+    }
+
+    .search-wrap {
+      flex: 1 1 220px;
+      max-width: 320px;
+    }
+
+    .btn-ghost {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--paper);
+      padding: 0.5rem 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .mock-table-wrap {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      overflow-x: auto;
+    }
+
+    .mock-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .mock-table th {
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--line);
+      background: var(--elevated);
+    }
+
+    .mock-table td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--line);
+      color: var(--paper);
+      vertical-align: top;
+    }
+
+    .mock-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .mock-table tr:hover td {
+      background: rgba(232, 93, 76, 0.04);
+    }
+
+    tr.capture-row {
+      cursor: pointer;
+    }
+
+    tr.capture-row:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    tr.capture-row .row-actions {
+      cursor: default;
+    }
+
+    tr.capture-row .row-actions .btn-ghost {
+      cursor: pointer;
+    }
+
+    .source-item.interactive {
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .source-item.interactive:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .fm-grid {
+      display: grid;
+      grid-template-columns: minmax(100px, 140px) 1fr;
+      gap: 0.35rem 1rem;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      padding: 1rem;
+      background: var(--panel);
+    }
+
+    .fm-grid dt {
+      margin: 0;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .fm-grid dd {
+      margin: 0;
+      color: var(--paper);
+    }
+
+    .mono-sm {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.45rem;
+      border: 1px solid var(--line);
+      color: var(--signal);
+    }
+
+    .pill.warn {
+      color: var(--warn);
+      border-color: var(--warn);
+    }
+
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .digest-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .digest-card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 1.25rem 1.35rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s;
+    }
+
+    .digest-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--accent);
+      opacity: 0.7;
+    }
+
+    .digest-card:hover {
+      border-color: var(--accent);
+    }
+
+    .digest-card.interactive {
+      cursor: pointer;
+    }
+
+    .digest-card.interactive:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .digest-card h3 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 400;
+      margin: 0 0 0.5rem;
+    }
+
+    .digest-card .meta {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .digest-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .settings-stack {
+      max-width: 560px;
+    }
+
+    .settings-field {
+      margin-bottom: 1.35rem;
+    }
+
+    .settings-field > label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    select.mock-select {
+      width: 100%;
+      background: var(--ink);
+      border: 1px solid var(--line);
+      color: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border: 1px solid var(--line);
+      padding: 0.85rem 1rem;
+      background: var(--elevated);
+      margin-bottom: 0.5rem;
+    }
+
+    .toggle-row span {
+      font-size: 12px;
+      color: var(--paper);
+    }
+
+    .toggle-row small {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    .fake-switch {
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--line);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .fake-switch.on {
+      background: var(--signal);
+    }
+
+    .fake-switch::after {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--paper);
+      top: 2px;
+      left: 2px;
+      transition: transform 0.25s var(--ease-out);
+    }
+
+    .fake-switch.on::after {
+      transform: translateX(18px);
+    }
+
+    pre.routing-snippet {
+      margin: 0;
+      padding: 1rem 1.15rem;
+      background: var(--ink);
+      border: 1px solid var(--line);
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--signal);
+      overflow-x: auto;
+    }
+
+    .side {
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      position: sticky;
+      top: 0;
+      align-self: start;
+      min-height: 100vh;
+    }
+
+    .side-view {
+      display: none;
+      flex-direction: column;
+      gap: 1.5rem;
+      flex: 1;
+    }
+
+    .side-view.active {
+      display: flex;
+    }
+
+    .digest-block {
+      border: 1px dashed var(--line);
+      padding: 1rem;
+      background: var(--ink);
+    }
+
+    .digest-block h4 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 400;
+      margin: 0 0 0.75rem;
+      color: var(--paper);
+    }
+
+    .digest-block ul {
+      margin: 0;
+      padding-left: 1rem;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .digest-block li {
+      margin-bottom: 0.4rem;
+    }
+
+    .digest-block li strong {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .challenge-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+
+    .challenge-preview-box {
+      border: 1px solid var(--line);
+      padding: 0.85rem 1rem;
+      background: var(--ink);
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--paper);
+    }
+
+    .challenge-preview-box ol {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+
+    .challenge-preview-box li {
+      margin-bottom: 0.35rem;
+    }
+
+    .yt-embed-mock {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      max-width: 720px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: linear-gradient(145deg, #1a1512 0%, #0d0c0b 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 0.85rem;
+    }
+
+    .yt-embed-mock .play {
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      border: 2px solid var(--signal);
+      color: var(--signal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      padding-left: 3px;
+    }
+
+    .yt-embed-stack {
+      max-width: 720px;
+      margin-bottom: 0.35rem;
+    }
+
+    .yt-iframe-wrap {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .yt-iframe-wrap iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .yt-timeline-block {
+      margin: 0.85rem 0 1rem;
+      max-width: 720px;
+    }
+
+    .yt-timeline {
+      position: relative;
+      padding: 0.25rem 0 0.5rem;
+    }
+
+    .yt-timeline-inner {
+      position: relative;
+      height: 6px;
+      background: var(--line);
+      border-radius: 3px;
+      margin-top: 0.5rem;
+    }
+
+    .yt-timeline-tick {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid var(--muted);
+      background: var(--ink);
+      cursor: pointer;
+      z-index: 2;
+    }
+
+    .yt-timeline-tick:hover {
+      border-color: var(--paper);
+    }
+
+    .yt-timeline-tick.highlight {
+      border-color: var(--signal);
+      background: rgba(126, 184, 168, 0.35);
+      box-shadow: 0 0 0 3px rgba(126, 184, 168, 0.12);
+    }
+
+    .yt-timeline-tick.active {
+      border-color: var(--signal);
+      background: var(--signal);
+    }
+
+    .yt-milestone-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+      width: 100%;
+      max-width: 720px;
+    }
+
+    @keyframes yt-milestone-reveal {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .yt-milestone-chip {
+      --yt-chip-accent: var(--line);
+      width: 100%;
+      min-height: 3.25rem;
+      display: grid;
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+      align-items: center;
+      gap: 1rem;
+      padding: 0.65rem 1rem 0.65rem 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(105deg, var(--elevated) 0%, rgba(21, 24, 32, 0.65) 100%);
+      color: var(--muted);
+      cursor: pointer;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+      transition:
+        border-color 0.22s var(--ease-out),
+        background 0.22s var(--ease-out),
+        transform 0.22s var(--ease-out),
+        box-shadow 0.22s var(--ease-out);
+      animation: yt-milestone-reveal 0.48s var(--ease-out) backwards;
+    }
+
+    .yt-milestone-chip::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--yt-chip-accent);
+      border-radius: var(--radius) 0 0 var(--radius);
+      transition: width 0.22s var(--ease-out), background 0.22s var(--ease-out);
+    }
+
+    .yt-milestone-chip:nth-child(1) {
+      animation-delay: 0.04s;
+    }
+    .yt-milestone-chip:nth-child(2) {
+      animation-delay: 0.09s;
+    }
+    .yt-milestone-chip:nth-child(3) {
+      animation-delay: 0.14s;
+    }
+    .yt-milestone-chip:nth-child(4) {
+      animation-delay: 0.19s;
+    }
+    .yt-milestone-chip:nth-child(5) {
+      animation-delay: 0.24s;
+    }
+    .yt-milestone-chip:nth-child(6) {
+      animation-delay: 0.29s;
+    }
+
+    .yt-milestone-chip:hover {
+      color: var(--paper);
+      border-color: #3d4454;
+      transform: translateX(3px);
+      box-shadow: -6px 0 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .yt-milestone-chip:hover::before {
+      width: 4px;
+    }
+
+    .yt-milestone-chip:focus-visible {
+      outline: 2px solid var(--signal);
+      outline-offset: 2px;
+    }
+
+    .yt-milestone-chip .t {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--signal);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .yt-milestone-label {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 400;
+      font-style: italic;
+      line-height: 1.35;
+      color: var(--muted);
+      letter-spacing: 0.01em;
+      transition: color 0.2s var(--ease-out);
+    }
+
+    .yt-milestone-chip:hover .yt-milestone-label {
+      color: var(--paper);
+    }
+
+    .yt-milestone-chip.highlight {
+      --yt-chip-accent: var(--signal);
+      border-color: rgba(61, 154, 122, 0.35);
+      background: linear-gradient(105deg, var(--signal-dim) 0%, var(--elevated) 55%);
+    }
+
+    .yt-milestone-chip.highlight .yt-milestone-label {
+      color: rgba(232, 228, 220, 0.92);
+    }
+
+    .yt-milestone-chip.active {
+      --yt-chip-accent: var(--accent);
+      border-color: rgba(232, 93, 76, 0.45);
+      background: linear-gradient(105deg, var(--accent-dim) 0%, var(--elevated) 50%);
+      box-shadow: 0 0 0 1px rgba(232, 93, 76, 0.2);
+    }
+
+    .yt-milestone-chip.active .t {
+      color: var(--accent);
+    }
+
+    .yt-milestone-chip.active .yt-milestone-label {
+      color: var(--paper);
+    }
+
+    .yt-milestone-chip.active::before {
+      background: linear-gradient(180deg, var(--accent), var(--signal));
+    }
+
+    .transcript-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .tr-tab {
+      font-family: var(--font-body, inherit);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .tr-tab:hover {
+      color: var(--paper);
+      border-color: var(--muted);
+    }
+
+    .tr-tab.active {
+      color: var(--signal);
+      border-color: var(--signal);
+      background: rgba(126, 184, 168, 0.08);
+    }
+
+    .transcript-pane {
+      display: none;
+      margin-top: 0.35rem;
+    }
+
+    .transcript-pane.active {
+      display: block;
+    }
+
+    .transcript-pane.transcript-split.active {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .transcript-col-label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--signal);
+      margin-bottom: 0.35rem;
+    }
+
+    .transcript-pane pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      max-height: 200px;
+      overflow: auto;
+      padding: 0.75rem;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      border-radius: 4px;
+    }
+
+    @media (max-width: 640px) {
+      .transcript-pane.transcript-split.active {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .mock-link {
+      color: var(--signal);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: default;
+    }
+
+    .stat-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      padding: 0.75rem;
+      background: var(--ink);
+    }
+
+    .stat b {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 400;
+      color: var(--paper);
+    }
+
+    .stat span {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .footer-mock {
+      margin-top: auto;
+      padding-top: 2rem;
+      border-top: 1px solid var(--line);
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120px);
+      background: var(--elevated);
+      border: 1px solid var(--signal);
+      color: var(--paper);
+      padding: 0.65rem 1.25rem;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      z-index: 10000;
+      opacity: 0;
+      transition: transform 0.45s var(--ease-out), opacity 0.35s;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .detail-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .detail-toolbar .ingest-label {
+      margin: 0;
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .digest-detail-hero {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .digest-detail-hero h2 {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: clamp(1.55rem, 3.2vw, 2.25rem);
+      line-height: 1.15;
+      margin: 0 0 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .detail-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .detail-lede {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--muted);
+      max-width: 58ch;
+    }
+
+    .detail-section {
+      margin-bottom: 2rem;
+    }
+
+    .detail-section h3 {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.65rem;
+    }
+
+    .detail-section .body {
+      margin: 0;
+      color: var(--paper);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .detail-section.inference .body {
+      border-left: 2px solid var(--accent);
+      padding-left: 1rem;
+      color: var(--muted);
+    }
+
+    .detail-list {
+      margin: 0;
+      padding-left: 1.15rem;
+      color: var(--paper);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .detail-list li {
+      margin-bottom: 0.45rem;
+    }
+
+    .detail-list li strong {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .source-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .source-item {
+      border: 1px solid var(--line);
+      padding: 0.85rem 1rem;
+      background: var(--panel);
+      transition: border-color 0.2s;
+      text-align: left;
+    }
+
+    .source-item:hover {
+      border-color: var(--signal);
+    }
+
+    .source-item .path {
+      font-size: 11px;
+      color: var(--signal);
+      margin-bottom: 0.35rem;
+      letter-spacing: 0.04em;
+    }
+
+    .source-item .st {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      color: var(--paper);
+      margin-bottom: 0.35rem;
+    }
+
+    .source-item .excerpt {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .detail-meta-row {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px dashed var(--line);
+    }
+
+    .detail-meta-row code {
+      color: var(--warn);
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <header class="mobile-topbar">
+    <button
+      type="button"
+      class="menu-toggle"
+      id="menu-toggle"
+      aria-expanded="false"
+      aria-controls="nav-drawer"
+      aria-label="Mở menu điều hướng"
+    >
+      <span class="burger" aria-hidden="true"></span>
+    </button>
+    <span class="mobile-brand">Second brain</span>
+  </header>
+  <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" aria-hidden="true"></div>
+  <nav id="nav-drawer" class="nav-drawer" aria-label="Menu điều hướng" aria-hidden="true">
+    <div class="drawer-header">
+      <span>Điều hướng</span>
+      <button type="button" class="drawer-close" id="drawer-close" aria-label="Đóng menu">×</button>
+    </div>
+    <div class="drawer-links">
+      <button type="button" class="drawer-link active" data-view="ingest">Ingest</button>
+      <button type="button" class="drawer-link" data-view="captures">Captures</button>
+      <button type="button" class="drawer-link" data-view="digests">Digests</button>
+      <button type="button" class="drawer-link" data-view="settings">Cài đặt</button>
+      <div class="drawer-divider" aria-hidden="true"></div>
+      <button type="button" class="drawer-link" data-view="digest-detail">Chi tiết digest</button>
+    </div>
+  </nav>
+
+  <div class="app">
+    <aside class="rail" aria-label="Chuyển view">
+      <div class="rail-inner">
+        <div class="mark" title="Logo giả lập"></div>
+        <button type="button" class="nav-dot active" data-view="ingest" aria-label="Ingest" title="Ingest"></button>
+        <button type="button" class="nav-dot" data-view="captures" aria-label="Captures" title="Captures"></button>
+        <button type="button" class="nav-dot" data-view="digests" aria-label="Digests" title="Digests"></button>
+        <button type="button" class="nav-dot" data-view="settings" aria-label="Settings" title="Settings"></button>
+        <button type="button" class="nav-dot" data-view="digest-detail" aria-label="Chi tiết digest" title="Chi tiết digest"></button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="masthead" id="masthead">
+        <h1 id="masthead-heading"><span id="mh-plain">Bộ nhớ</span><br /><em id="mh-em">thứ hai.</em></h1>
+        <div class="status-strip" id="status-strip">
+          <div class="pulse">Vault đồng bộ</div>
+          <div>Obsidian · local</div>
+          <div style="margin-top:0.35rem">Router v1 · Apify pinned</div>
+        </div>
+      </header>
+
+      <!-- VIEW: Ingest -->
+      <div class="view view-ingest active" id="view-ingest" data-view="ingest" role="tabpanel">
+        <section class="ingest-zone" aria-label="Nhập URL">
+          <div class="ingest-label">Ingest từ URL</div>
+          <div class="ingest-shell">
+            <div class="ingest-inner">
+              <div class="ingest-input-wrap">
+                <input
+                  type="url"
+                  id="url"
+                  placeholder="https://…"
+                  value="https://x.com/user/status/0000000000000"
+                  autocomplete="off"
+                />
+              </div>
+              <button type="button" class="btn-ingest" id="go">Chạy ingest</button>
+            </div>
+          </div>
+          <p class="hint">Mock UI — không gọi API thật. Nút mô phỏng trạng thái xử lý.</p>
+        </section>
+
+        <div class="sources" aria-label="Nguồn đã cấu hình">
+          <span class="chip on">X API</span>
+          <span class="chip on">Apify</span>
+          <span class="chip on">Readability</span>
+          <span class="chip on">YouTube</span>
+        </div>
+
+        <h2 class="section-title">Captures gần đây <span>03</span></h2>
+
+        <div class="cards">
+          <article class="card">
+            <div class="card-meta">
+              <span>Web</span>
+              <span>http_readability</span>
+            </div>
+            <h3>Long-form bài phân tích LLM</h3>
+            <p>Đã tách source.md đầy đủ; ảnh trong assets/; insight LLM có nhãn suy luận.</p>
+            <div class="tag-row">
+              <span class="tag">#ml</span>
+              <span class="tag">#draft</span>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-meta">
+              <span>X.com</span>
+              <span>x_api</span>
+            </div>
+            <h3>Thread về infra Apify</h3>
+            <p>Bundle evidence + note.md có wikilink sang digest tuần trước.</p>
+            <div class="tag-row">
+              <span class="tag">#infra</span>
+              <span class="tag">publish:false</span>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-meta">
+              <span>Apify</span>
+              <span>actor pinned</span>
+            </div>
+            <h3>Trang động · crawl</h3>
+            <p>incomplete: false · 4 ảnh · 1 snippet trong snippets/</p>
+            <div class="tag-row">
+              <span class="tag">#capture</span>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <!-- VIEW: Captures (library) -->
+      <div class="view view-captures" id="view-captures" data-view="captures" role="tabpanel" hidden>
+        <div class="toolbar">
+          <span class="ingest-label">Thư viện captures</span>
+          <div class="search-wrap">
+            <input type="text" placeholder="Tìm theo slug, tag, URL…" aria-label="Tìm kiếm mock" />
+          </div>
+          <button type="button" class="btn-ghost">Lọc nguồn</button>
+          <button type="button" class="btn-ghost">Xuất danh sách</button>
+        </div>
+
+        <div class="mock-table-wrap">
+          <table class="mock-table">
+            <thead>
+              <tr>
+                <th>Slug / thư mục</th>
+                <th>Nguồn</th>
+                <th>Fetch</th>
+                <th>Trạng thái</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                class="capture-row"
+                tabindex="0"
+                data-capture="a3f2"
+                aria-label="Chi tiết capture llm-longform"
+              >
+                <td>
+                  <span class="mono-sm">2026-03-20--llm-longform--a3f2</span>
+                </td>
+                <td>Web</td>
+                <td><span class="pill">readability</span></td>
+                <td><span class="pill">ok</span></td>
+                <td>
+                  <div class="row-actions">
+                    <button type="button" class="btn-ghost">Mở vault</button>
+                    <button type="button" class="btn-ghost">Re-ingest</button>
+                  </div>
+                </td>
+              </tr>
+              <tr
+                class="capture-row"
+                tabindex="0"
+                data-capture="91bc"
+                aria-label="Chi tiết capture apify crawl"
+              >
+                <td><span class="mono-sm">2026-03-19--apify-crawl--91bc</span></td>
+                <td>Apify</td>
+                <td><span class="pill">actor pin</span></td>
+                <td><span class="pill">ok</span></td>
+                <td>
+                  <div class="row-actions">
+                    <button type="button" class="btn-ghost">Mở vault</button>
+                    <button type="button" class="btn-ghost">Raw JSON</button>
+                  </div>
+                </td>
+              </tr>
+              <tr
+                class="capture-row"
+                tabindex="0"
+                data-capture="c801"
+                aria-label="Chi tiết capture X thread"
+              >
+                <td><span class="mono-sm">2026-03-19--x-thread--c801</span></td>
+                <td>X</td>
+                <td><span class="pill">x_api</span></td>
+                <td><span class="pill">ok</span></td>
+                <td>
+                  <div class="row-actions">
+                    <button type="button" class="btn-ghost">Mở vault</button>
+                  </div>
+                </td>
+              </tr>
+              <tr
+                class="capture-row"
+                tabindex="0"
+                data-capture="yt7f"
+                aria-label="Chi tiết capture YouTube transcript"
+              >
+                <td><span class="mono-sm">2026-03-21--youtube-pkm--yt7f</span></td>
+                <td>YouTube</td>
+                <td><span class="pill">apify</span></td>
+                <td><span class="pill">ok · EN+VI</span></td>
+                <td>
+                  <div class="row-actions">
+                    <button type="button" class="btn-ghost">Mở vault</button>
+                    <button type="button" class="btn-ghost">Xem web</button>
+                  </div>
+                </td>
+              </tr>
+              <tr
+                class="capture-row"
+                tabindex="0"
+                data-capture="pending"
+                aria-label="Chi tiết capture YouTube pending"
+              >
+                <td><span class="mono-sm">2026-03-18--youtube--pending</span></td>
+                <td>YouTube</td>
+                <td><span class="pill warn">phase 2</span></td>
+                <td><span class="pill warn">queued</span></td>
+                <td>
+                  <div class="row-actions">
+                    <button type="button" class="btn-ghost">Cấu hình</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="hint" style="margin-top:1rem">Click một hàng để xem chi tiết capture (mock). Nút trên hàng không mở detail.</p>
+      </div>
+
+      <!-- VIEW: Digests -->
+      <div class="view view-digests" id="view-digests" data-view="digests" role="tabpanel" hidden>
+        <div class="toolbar">
+          <span class="ingest-label">Lịch sử digest</span>
+          <button type="button" class="btn-ghost">Tạo digest tuần</button>
+          <button type="button" class="btn-ghost">Soạn lại W11</button>
+        </div>
+
+        <div class="digest-timeline">
+          <article
+            class="digest-card interactive"
+            tabindex="0"
+            role="button"
+            data-digest="w12"
+            aria-label="Mở chi tiết digest tuần 12"
+          >
+            <div class="meta">2026 · tuần 12 · nháp</div>
+            <h3>Digest — chủ đề kỹ thuật</h3>
+            <p>
+              Tổng hợp 6 captures: lặp lại mối quan tâm về Apify actor pin, evidence-first workflow, và giới hạn context LLM khi viết digest dài.
+            </p>
+            <div class="tag-row" style="margin-top:1rem">
+              <span class="tag">6 nguồn</span>
+              <span class="tag">[[Digests/2026-W12]]</span>
+            </div>
+          </article>
+          <article
+            class="digest-card interactive"
+            tabindex="0"
+            role="button"
+            data-digest="w11"
+            aria-label="Mở chi tiết digest tuần 11"
+          >
+            <div class="meta">2026 · tuần 11 · đã lưu</div>
+            <h3>Digest — sản phẩm & PKM</h3>
+            <p>Chốt stack đọc: Obsidian vault (SSoT) + reader web theo mock <code style="color:var(--signal)">docs/visualizations/</code> — không Quartz.</p>
+            <div class="tag-row" style="margin-top:1rem">
+              <span class="tag">4 nguồn</span>
+              <span class="tag">reader:mock</span>
+            </div>
+          </article>
+          <article
+            class="digest-card interactive"
+            tabindex="0"
+            role="button"
+            data-digest="w10"
+            aria-label="Mở chi tiết digest tuần 10"
+          >
+            <div class="meta">2026 · tuần 10 · đã lưu</div>
+            <h3>Digest — thử nghiệm router</h3>
+            <p>Bản đầu tiên: chỉ http_readability + mock X route.</p>
+            <div class="tag-row" style="margin-top:1rem">
+              <span class="tag">2 nguồn</span>
+            </div>
+          </article>
+        </div>
+        <p class="hint">Click một thẻ digest để mở view chi tiết (mock).</p>
+      </div>
+
+      <!-- VIEW: Digest detail (5) -->
+      <div class="view view-digest-detail" id="view-digest-detail" data-view="digest-detail" role="tabpanel" hidden>
+        <div class="toolbar detail-toolbar">
+          <button type="button" class="btn-ghost" id="digest-back">← Danh sách digest</button>
+          <span class="ingest-label" id="dd-vault-path">Digests/2026-W12.md</span>
+        </div>
+
+        <header class="digest-detail-hero">
+          <div class="detail-pills" id="dd-pills"></div>
+          <h2 id="dd-title">Digest — chủ đề kỹ thuật</h2>
+          <p class="detail-lede" id="dd-lede"></p>
+        </header>
+
+        <section class="detail-section">
+          <h3>Tóm tắt nhanh</h3>
+          <p class="body" id="dd-summary"></p>
+        </section>
+
+        <section class="detail-section">
+          <h3>Chủ đề lặp</h3>
+          <ul class="detail-list" id="dd-themes"></ul>
+        </section>
+
+        <section class="detail-section inference">
+          <h3>Suy luận &amp; căng thẳng (LLM)</h3>
+          <p class="body" id="dd-inference"></p>
+        </section>
+
+        <section class="detail-section">
+          <h3>Câu hỏi mở</h3>
+          <ul class="detail-list" id="dd-questions"></ul>
+        </section>
+
+        <section class="detail-section inference">
+          <h3>Challenge — kiểm tra đọc hiểu (từ digest)</h3>
+          <p class="hint" style="margin: 0 0 0.75rem">
+            LLM chỉ được căn cứ vào văn bản digest — lớp luyện tập; đáp án gợi ý có thể tách file hoặc callout ẩn.
+          </p>
+          <div class="challenge-toolbar">
+            <button type="button" class="btn-ghost" id="dd-challenge-gen">Tạo / làm mới challenge</button>
+            <span class="mono-sm" id="dd-challenge-file" style="color: var(--muted)">—</span>
+          </div>
+          <div class="challenge-preview-box" id="dd-challenge-preview" aria-live="polite"></div>
+        </section>
+
+        <section class="detail-section">
+          <h3>Capture nguồn · liên kết vault</h3>
+          <p class="hint" style="margin:0 0 0.75rem">Click một nguồn để mở chi tiết capture.</p>
+          <div class="source-list" id="dd-sources"></div>
+        </section>
+
+        <section class="detail-section inference">
+          <h3>Publish &amp; bản quyền</h3>
+          <p class="body" id="dd-publish"></p>
+        </section>
+
+        <p class="detail-meta-row" id="dd-meta"></p>
+      </div>
+
+      <!-- VIEW: Capture detail -->
+      <div class="view view-capture-detail" id="view-capture-detail" data-view="capture-detail" role="tabpanel" hidden>
+        <div class="toolbar detail-toolbar">
+          <button type="button" class="btn-ghost" id="capture-back">← Thư viện captures</button>
+          <span class="ingest-label" id="cd-folder">Captures/…</span>
+        </div>
+
+        <header class="digest-detail-hero">
+          <div class="detail-pills" id="cd-pills"></div>
+          <h2 id="cd-title">Capture</h2>
+          <p class="detail-lede mono-sm" id="cd-url" style="word-break:break-all"></p>
+        </header>
+
+        <section class="detail-section">
+          <h3>Frontmatter (mock)</h3>
+          <dl class="fm-grid" id="cd-fm"></dl>
+        </section>
+
+        <section class="detail-section">
+          <h3>note.md · đọc nhanh</h3>
+          <p class="body" id="cd-note-lead"></p>
+        </section>
+
+        <section class="detail-section inference">
+          <h3>Insight (LLM) · suy luận</h3>
+          <p class="body" id="cd-llm"></p>
+        </section>
+
+        <section class="detail-section" id="cd-video-panel" hidden>
+          <h3>Video &amp; transcript (reader web)</h3>
+          <p class="hint" style="margin: 0 0 0.85rem">
+            Phase 2+: iframe + transcript; <strong>timeline &amp; mốc chú ý</strong> (highlight) — click mốc hoặc tick → <strong>seek</strong> video (mock dùng <code style="color: var(--signal)">embed ?start=</code>; production có thể dùng IFrame API). Tab
+            <strong>EN</strong> / <strong>VI</strong> / <strong>Song song</strong>. Bản Việt = dịch LLM; đối chiếu <code style="color: var(--signal)">source.md</code>.
+          </p>
+          <div class="yt-embed-stack">
+            <div id="cd-yt-iframe-wrap" class="yt-iframe-wrap" hidden>
+              <iframe
+                id="cd-yt-iframe"
+                title="YouTube embed (mock seek)"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+              ></iframe>
+            </div>
+            <div class="yt-embed-mock" id="cd-yt-embed-placeholder" aria-hidden="true">
+              <span class="play">▶</span>
+              <span class="mono-sm" id="cd-yt-embed-label" style="text-align: center; padding: 0 1rem"></span>
+            </div>
+          </div>
+          <div class="yt-timeline-block" id="cd-yt-timeline-block" hidden>
+            <span class="ingest-label" style="display: block; margin-bottom: 0.35rem; font-size: 10px; letter-spacing: 0.12em"
+              >Mốc thời gian · click để tua</span
+            >
+            <div class="yt-timeline" id="cd-yt-timeline" aria-label="Timeline video">
+              <div class="yt-timeline-inner" id="cd-yt-timeline-inner"></div>
+            </div>
+            <div class="yt-milestone-list" id="cd-yt-milestone-list" aria-label="Mốc thời gian"></div>
+          </div>
+          <div class="transcript-tabs" role="tablist" aria-label="Ngôn ngữ transcript">
+            <button type="button" class="tr-tab active" data-tr-tab="en" role="tab" aria-selected="true">English</button>
+            <button type="button" class="tr-tab" data-tr-tab="vi" role="tab" aria-selected="false">Tiếng Việt</button>
+            <button type="button" class="tr-tab" data-tr-tab="both" role="tab" aria-selected="false">Song song</button>
+          </div>
+          <div class="transcript-pane active" data-tr-pane="en" role="tabpanel">
+            <pre id="cd-transcript-en"></pre>
+          </div>
+          <div class="transcript-pane" data-tr-pane="vi" role="tabpanel">
+            <pre id="cd-transcript-vi"></pre>
+          </div>
+          <div class="transcript-pane transcript-split" data-tr-pane="both" role="tabpanel">
+            <div>
+              <span class="transcript-col-label">English (gốc)</span>
+              <pre id="cd-transcript-en-split"></pre>
+            </div>
+            <div>
+              <span class="transcript-col-label">Tiếng Việt (LLM)</span>
+              <pre id="cd-transcript-vi-split"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <h3>source.md · evidence (trích)</h3>
+          <pre class="routing-snippet" id="cd-source" style="white-space:pre-wrap;color:var(--muted);max-height:220px;overflow:auto"></pre>
+        </section>
+
+        <section class="detail-section">
+          <h3>assets / snippets</h3>
+          <p class="body" id="cd-assets"></p>
+        </section>
+
+        <section class="detail-section">
+          <h3>Liên kết</h3>
+          <p class="body" id="cd-links"></p>
+        </section>
+
+        <p class="detail-meta-row" id="cd-meta"></p>
+      </div>
+
+      <!-- VIEW: Settings -->
+      <div class="view view-settings" id="view-settings" data-view="settings" role="tabpanel" hidden>
+        <p class="ingest-label" style="margin-bottom:1rem">Cấu hình mock</p>
+        <div class="settings-stack">
+          <div class="settings-field">
+            <label for="vault-path">VAULT_ROOT</label>
+            <input type="text" id="vault-path" value="~/Workspace/Brain/vault" readonly />
+          </div>
+          <div class="settings-field">
+            <label for="model">OPENAI_MODEL</label>
+            <select class="mock-select" id="model">
+              <option>gpt-4o-mini</option>
+              <option>gpt-4o</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label>API keys (env)</label>
+            <input type="text" value="APIFY_TOKEN ·•••••••••••••••" readonly />
+          </div>
+          <div class="settings-field">
+            <label>routing.yaml</label>
+            <pre class="routing-snippet">defaultStrategy: http_readability
+apifyDefaults:
+  actorId: apify/website-content-crawler
+routes:
+  - match: { hostSuffix: youtube.com }
+    strategy: apify
+    apify: { actorId: YOUR_YOUTUBE_ACTOR, inputFromUrl: true }
+  - match: { hostSuffix: x.com }
+    strategy: x_api</pre>
+          </div>
+          <div class="settings-field">
+            <label>Hành vi ingest</label>
+            <div class="toggle-row">
+              <div>
+                <span>Tải ảnh vào assets/</span>
+                <small>Ưu tiên bền cho reader web / Obsidian</small>
+              </div>
+              <div class="fake-switch on" aria-hidden="true"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <span>Tách snippet code dài ra snippets/</span>
+                <small>Ngưỡng ký tự (mock)</small>
+              </div>
+              <div class="fake-switch on" aria-hidden="true"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <span>Gọi LLM ngay sau ingest</span>
+              </div>
+              <div class="fake-switch on" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="side" aria-label="Bảng phụ theo view">
+      <div class="side-view active" data-side="ingest">
+        <div>
+          <div class="ingest-label" style="margin-bottom:0.5rem">Digest</div>
+          <p style="margin:0;color:var(--muted);font-size:12px">Tuần 2026-W12 · bản nháp</p>
+        </div>
+        <div class="digest-block">
+          <h4>Chủ đề lặp</h4>
+          <ul>
+            <li><strong>Ổn định fetch</strong> — X API vs Apify actor pin</li>
+            <li>Evidence-first trước khi LLM suy diễn</li>
+            <li>Reader web đọc vault · spec <code style="color:var(--signal)">docs/visualizations/</code></li>
+          </ul>
+        </div>
+        <div class="digest-block">
+          <h4>Link nhanh</h4>
+          <p style="margin:0;font-size:12px;color:var(--muted)">
+            → <span class="mock-link">Captures/2026-03-18--slug</span><br />
+            → <span class="mock-link">Digests/2026-W11</span>
+          </p>
+        </div>
+        <p class="footer-mock">Prototype · frontend-design skill</p>
+      </div>
+
+      <div class="side-view" data-side="captures">
+        <div class="ingest-label" style="margin-bottom:0.5rem">Tổng quan</div>
+        <div class="stat-block">
+          <div class="stat">
+            <b>24</b>
+            <span>Captures</span>
+          </div>
+          <div class="stat">
+            <b>7</b>
+            <span>Tuần này</span>
+          </div>
+          <div class="stat">
+            <b>3</b>
+            <span>Apify</span>
+          </div>
+          <div class="stat">
+            <b>1</b>
+            <span>Lỗi</span>
+          </div>
+        </div>
+        <div class="digest-block">
+          <h4>Gợi ý</h4>
+          <ul>
+            <li>Gộp tag <strong>#draft</strong> trước digest</li>
+            <li>Kiểm tra <strong>publish:false</strong> trước khi build public</li>
+          </ul>
+        </div>
+        <p class="footer-mock">Thống kê mock</p>
+      </div>
+
+      <div class="side-view" data-side="digests">
+        <div class="ingest-label" style="margin-bottom:0.5rem">Lịch chạy</div>
+        <div class="digest-block">
+          <h4>Tự động (mock)</h4>
+          <p style="margin:0;font-size:12px;color:var(--muted)">Chủ nhật · 09:00 · cron local</p>
+        </div>
+        <div class="digest-block">
+          <h4>Context window</h4>
+          <ul>
+            <li>Ưu tiên <strong>metadata + excerpt</strong></li>
+            <li>Mở rộng chunk khi cần</li>
+          </ul>
+        </div>
+        <p class="footer-mock">Pipeline digest</p>
+      </div>
+
+      <div class="side-view" data-side="settings">
+        <div class="ingest-label" style="margin-bottom:0.5rem">An toàn</div>
+        <div class="digest-block">
+          <h4>Nhắc nhở</h4>
+          <ul>
+            <li>Không commit <strong>.env</strong></li>
+            <li>Pin <strong>Apify build</strong> khi ổn định</li>
+          </ul>
+        </div>
+        <div class="digest-block">
+          <h4>Tài liệu</h4>
+          <p style="margin:0;font-size:12px;color:var(--muted)">
+            → <span class="mock-link">docs/plans/…-design.md</span><br />
+            → <span class="mock-link">docs/plans/…-implementation-plan.md</span>
+          </p>
+        </div>
+        <p class="footer-mock">Settings sidebar</p>
+      </div>
+
+      <div class="side-view" data-side="digest-detail">
+        <div class="ingest-label" style="margin-bottom:0.5rem">Trong tuần này</div>
+        <div class="stat-block" id="dd-side-stats">
+          <div class="stat">
+            <b id="dd-stat-captures">6</b>
+            <span>Captures</span>
+          </div>
+          <div class="stat">
+            <b id="dd-stat-sources">3</b>
+            <span>Nguồn</span>
+          </div>
+        </div>
+        <div class="digest-block">
+          <h4>Hành động (mock)</h4>
+          <ul>
+            <li><strong>Regenerate</strong> — chạy lại LLM</li>
+            <li><strong>Tạo challenge</strong> — <code style="color:var(--signal)">pnpm challenge</code> từ digest (Phase 2+)</li>
+            <li><strong>Mở Obsidian</strong> — note digest</li>
+            <li><strong>Xuất PDF</strong> — tuỳ plugin</li>
+          </ul>
+        </div>
+        <div class="digest-block">
+          <h4>TOC</h4>
+          <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.65">
+            Tóm tắt · Chủ đề · Suy luận · Câu hỏi · Challenge · Nguồn · Publish
+          </p>
+        </div>
+        <p class="footer-mock">Chi tiết digest</p>
+      </div>
+
+      <div class="side-view" data-side="capture-detail">
+        <div class="ingest-label" style="margin-bottom:0.5rem">Bundle</div>
+        <div class="stat-block">
+          <div class="stat">
+            <b id="cd-side-imgs">0</b>
+            <span>Ảnh</span>
+          </div>
+          <div class="stat">
+            <b id="cd-side-snips">0</b>
+            <span>Snippet</span>
+          </div>
+        </div>
+        <div class="digest-block">
+          <h4>Hành động (mock)</h4>
+          <ul>
+            <li><strong>Mở Obsidian</strong> — thư mục capture</li>
+            <li><strong>Re-ingest</strong> — ghi đè evidence</li>
+            <li><strong>Mở URL gốc</strong></li>
+            <li><strong>YouTube</strong> — timeline + mốc seek · transcript EN/VI (Phase 2+)</li>
+          </ul>
+        </div>
+        <div class="digest-block">
+          <h4>Cấu trúc</h4>
+          <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.65">
+            source.md · note.md · assets/ · snippets/<br />
+            <span style="opacity:0.85">YouTube: + embed + transcript (reader web)</span>
+          </p>
+        </div>
+        <p class="footer-mock">Chi tiết capture</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status">Đã đưa vào hàng đợi ingest (mock)</div>
+
+  <script>
+    (function () {
+      var views = {
+        ingest: {
+          plain: "Bộ nhớ",
+          em: "thứ hai.",
+          statusHtml:
+            '<div class="pulse">Vault đồng bộ</div><div>Obsidian · local</div><div style="margin-top:0.35rem">Router v1 · Apify pinned</div>',
+        },
+        captures: {
+          plain: "Thư viện",
+          em: "captures.",
+          statusHtml:
+            '<div class="pulse">Đã lập chỉ mục mock</div><div>24 mục · vault/Captures</div><div style="margin-top:0.35rem">Sắp xếp theo ngày ingest</div>',
+        },
+        digests: {
+          plain: "Tổng hợp",
+          em: "digest.",
+          statusHtml:
+            '<div class="pulse">Tuần 12 nháp</div><div>3 bản đã lưu</div><div style="margin-top:0.35rem">LLM cloud · chunking</div>',
+        },
+        settings: {
+          plain: "Cấu hình",
+          em: "hệ thống.",
+          statusHtml:
+            '<div class="pulse warn">Kiểm tra env</div><div>routing.yaml hoạt động</div><div style="margin-top:0.35rem">Không ghi secret vào vault</div>',
+        },
+      };
+
+      var currentDigestId = "w12";
+
+      var digestDetails = {
+        w12: {
+          file: "Digests/2026-W12.md",
+          plain: "Chi tiết",
+          em: "digest.",
+          statusHtml:
+            '<div class="pulse">Bản nháp</div><div>6 captures · metadata+excerpt</div><div style="margin-top:0.35rem">gpt-4o-mini · chunking</div>',
+          title: "Digest — chủ đề kỹ thuật",
+          lede: "Khoảng 17–23 Mar 2026 · ISO week 2026-W12",
+          pills: [
+            { text: "nháp", warn: false },
+            { text: "6 captures", warn: false },
+            { text: "LLM", warn: false },
+          ],
+          summary:
+            "Tuần này lặp lại ba xu hướng: (1) pin version actor Apify để fetch ổn định, (2) tách evidence trong source.md trước khi ghi insight LLM vào note.md, (3) digest dài cần chiến lược excerpt trước khi nhét full context.",
+          themes: [
+            "<strong>Actor pin</strong> — giảm gãy khi Apify đổi output.",
+            "<strong>Evidence-first</strong> — mọi suy luận có thể truy về capture.",
+            "<strong>Context budget</strong> — ưu tiên metadata + excerpt cho digest.",
+          ],
+          inference:
+            "Có vẻ bạn đang ưu tiên độ tin cậy pipeline hơn tốc độ thử nghiệm nguồn mới. Điểm căng: X API đủ quyền vs Apify cho cùng một URL — nên ghi rõ policy trong routing.yaml để sau này không tự hỏi lại.",
+          questions: [
+            "Có cần metric định lượng (số lần hashtag/topic) trong digest không, hay chỉ prose?",
+            "Digest tuần sau có nên tự pull thêm capture 'incomplete' không?",
+          ],
+          sources: [
+            {
+              captureId: "a3f2",
+              path: "Captures/2026-03-20--llm-longform--a3f2",
+              title: "Long-form · phân tích LLM",
+              excerpt: "Trích: benchmark context window; ảnh trong assets/.",
+            },
+            {
+              captureId: "c801",
+              path: "Captures/2026-03-19--x-thread--c801",
+              title: "X thread · infra Apify",
+              excerpt: "Trích: so sánh actor pin vs latest; publish:false.",
+            },
+            {
+              captureId: "91bc",
+              path: "Captures/2026-03-19--apify-crawl--91bc",
+              title: "Apify crawl · trang động",
+              excerpt: "4 ảnh, 1 snippet; fetch_method apify.",
+            },
+          ],
+          publish:
+            "Mặc định digest có thể publish: false nếu trích dẫn nhiều capture private. Reader web đọc cá nhân: vẫn nên tag / filter nếu sau này expose ngoài máy local.",
+          meta:
+            'Tạo lúc <code>2026-03-23 10:42</code> · Model <code>gpt-4o-mini</code> · Input: metadata+excerpt (hierarchical mock)',
+          statCaptures: 6,
+          statSourceKinds: 3,
+          challenge: {
+            file: "Challenges/2026-W12.md",
+            previewHtml:
+              "<ol><li>Vì sao nên <strong>pin version</strong> actor Apify trong pipeline ingest? (trắc nghiệm)</li><li>Giải thích <em>evidence-first</em> bằng lời bạn, chỉ dựa trên digest.</li></ol><p class=\"hint\" style=\"margin:0.6rem 0 0\">Gợi ý đáp án: callout collapsed hoặc file <span class=\"mono-sm\">.answers.md</span> — không kéo thêm fact ngoài digest.</p>",
+          },
+        },
+        w11: {
+          file: "Digests/2026-W11.md",
+          plain: "Chi tiết",
+          em: "W11.",
+          statusHtml:
+            '<div class="pulse">Đã lưu</div><div>4 captures</div><div style="margin-top:0.35rem">Reader web + vault</div>',
+          title: "Digest — sản phẩm & PKM",
+          lede: "Khoảng 10–16 Mar 2026 · ISO week 2026-W11",
+          pills: [
+            { text: "đã lưu", warn: false },
+            { text: "4 captures", warn: false },
+            { text: "reader:mock", warn: false },
+          ],
+          summary:
+            "Khối quyết định: Obsidian vault làm SSoT cho ingest + digest + evidence; tổng hợp / điều hướng trên **reader web** xây theo mock `docs/visualizations/` — không dùng Quartz hay SSG wiki.",
+          themes: [
+            "<strong>SSoT</strong> — Obsidian vault: capture, digest, file đầy đủ.",
+            "<strong>Reader web</strong> — UI theo mock: bảng captures, digest, chi tiết, YouTube block…",
+            "<strong>Chi tiết sâu</strong> — mở trực tiếp note trong Obsidian khi cần.",
+          ],
+          inference:
+            "Tách lớp: web = đọc nhanh & phân tích đã tổng hợp; Obsidian = chỉnh sửa, wikilink, plugin. Trade-off: phải implement sync đọc vault trong app (filesystem hoặc API nhỏ).",
+          questions: [
+            "Reader web chỉ chạy local hay sau này có cần auth / tunnel?",
+            "Có đồng bộ digest sang RSS / email không, hay chỉ trong app?",
+          ],
+          sources: [
+            {
+              captureId: "d120",
+              path: "Captures/2026-03-14--reader-web--d120",
+              title: "Spec reader web & vault paths",
+              excerpt: "Ánh xạ thư mục vault → view trong mock UI.",
+            },
+            {
+              captureId: "e901",
+              path: "Captures/2026-03-13--reader-vs-obsidian--e901",
+              title: "Chỉ Obsidian vs + reader web",
+              excerpt: "Khi nào đủ vault; khi nào cần console tổng hợp.",
+            },
+          ],
+          publish:
+            "Tuần này ghi nhận phạm vi hiển thị reader (cá nhân); capture nhạy cảm vẫn publish:false trong vault.",
+          meta:
+            'Tạo lúc <code>2026-03-16 18:05</code> · Model <code>gpt-4o-mini</code>',
+          statCaptures: 4,
+          statSourceKinds: 2,
+          challenge: {
+            file: null,
+            previewHtml:
+              "<p class=\"hint\" style=\"margin:0\">Chưa sinh challenge cho tuần này. Chạy <span class=\"mono-sm\">pnpm challenge -- --digest vault/Digests/2026-W11.md</span> sau khi ổn định digest.</p>",
+          },
+        },
+        w10: {
+          file: "Digests/2026-W10.md",
+          plain: "Chi tiết",
+          em: "W10.",
+          statusHtml:
+            '<div class="pulse">Đã lưu</div><div>2 captures · MVP</div><div style="margin-top:0.35rem">Router đầu tiên</div>',
+          title: "Digest — thử nghiệm router",
+          lede: "Khoảng 3–9 Mar 2026 · ISO week 2026-W10",
+          pills: [
+            { text: "đã lưu", warn: false },
+            { text: "2 captures", warn: false },
+            { text: "MVP", warn: false },
+          ],
+          summary:
+            "Tuần bootstrap: chỉ http_readability + route mock cho X. Chưa có Apify trong pipeline thực — dùng để validate cấu trúc thư mục capture.",
+          themes: [
+            "<strong>Router</strong> — hostSuffix matching.",
+            "<strong>Readability</strong> — bài báo tĩnh ổn định.",
+          ],
+          inference:
+            "Ít dữ liệu nên digest ngắn; phù hợp làm golden fixture cho test normaliser sau này.",
+          questions: [
+            "Có lưu raw HTML song song source.md không?",
+          ],
+          sources: [
+            {
+              captureId: "aa01",
+              path: "Captures/2026-03-05--article--aa01",
+              title: "Bài báo đầu tiên",
+              excerpt: "Readability-only ingest.",
+            },
+            {
+              captureId: "bb02",
+              path: "Captures/2026-03-06--x-mock--bb02",
+              title: "X stub",
+              excerpt: "Route x.com → placeholder.",
+            },
+          ],
+          publish: "Toàn bộ tuần này giữ private (thử nghiệm).",
+          meta: 'Tạo lúc <code>2026-03-09 09:00</code> · Model <code>gpt-4o-mini</code>',
+          statCaptures: 2,
+          statSourceKinds: 2,
+          challenge: {
+            file: null,
+            previewHtml:
+              "<p class=\"hint\" style=\"margin:0\">Tuần MVP ít dữ liệu — challenge mock có thể là 1–2 câu hỏi ngắn để regression test CLI.</p>",
+          },
+        },
+      };
+
+      function pillHtml(p) {
+        var cls = p.warn ? "pill warn" : "pill";
+        return '<span class="' + cls + '">' + p.text + "</span>";
+      }
+
+      function fillDigestDetail(id) {
+        var d = digestDetails[id] || digestDetails.w12;
+        currentDigestId = id;
+
+        document.getElementById("mh-plain").textContent = d.plain;
+        document.getElementById("mh-em").textContent = d.em;
+        document.getElementById("status-strip").innerHTML = d.statusHtml;
+
+        document.getElementById("dd-vault-path").textContent = d.file;
+        document.getElementById("dd-title").textContent = d.title;
+        document.getElementById("dd-lede").textContent = d.lede;
+        document.getElementById("dd-pills").innerHTML = d.pills.map(pillHtml).join("");
+        document.getElementById("dd-summary").textContent = d.summary;
+        document.getElementById("dd-inference").textContent = d.inference;
+        document.getElementById("dd-publish").textContent = d.publish;
+        document.getElementById("dd-meta").innerHTML = d.meta;
+
+        var th = document.getElementById("dd-themes");
+        th.innerHTML = d.themes.map(function (x) {
+          return "<li>" + x + "</li>";
+        }).join("");
+
+        var qu = document.getElementById("dd-questions");
+        qu.innerHTML = d.questions.map(function (x) {
+          return "<li>" + x + "</li>";
+        }).join("");
+
+        var src = document.getElementById("dd-sources");
+        src.innerHTML = d.sources
+          .map(function (s) {
+            var cap = s.captureId
+              ? ' role="button" tabindex="0" class="source-item interactive" data-capture="' +
+                s.captureId +
+                '"'
+              : ' class="source-item"';
+            return (
+              "<div" +
+              cap +
+              ">" +
+              '<div class="path">' +
+              s.path +
+              "</div>" +
+              '<div class="st">' +
+              s.title +
+              "</div>" +
+              '<div class="excerpt">' +
+              s.excerpt +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+
+        document.getElementById("dd-stat-captures").textContent = String(d.statCaptures);
+        document.getElementById("dd-stat-sources").textContent = String(d.statSourceKinds);
+
+        var chFile = document.getElementById("dd-challenge-file");
+        var chPrev = document.getElementById("dd-challenge-preview");
+        if (d.challenge) {
+          chFile.textContent = d.challenge.file || "— chưa có file";
+          chPrev.innerHTML = d.challenge.previewHtml;
+        } else {
+          chFile.textContent = "—";
+          chPrev.innerHTML = "";
+        }
+      }
+
+      var panelIds = ["ingest", "captures", "digests", "digest-detail", "capture-detail", "settings"];
+
+      var currentCaptureId = "a3f2";
+      var captureBackTo = "captures";
+
+      var captureDetails = {
+        a3f2: {
+          folder: "Captures/2026-03-20--llm-longform--a3f2",
+          plain: "Capture",
+          em: "evidence.",
+          statusHtml:
+            '<div class="pulse">Đã ingest</div><div>http_readability</div><div style="margin-top:0.35rem">publish:false</div>',
+          title: "Long-form · phân tích LLM",
+          url: "https://example.com/blog/context-windows-2026",
+          pills: [
+            { text: "type:capture", warn: false },
+            { text: "ok", warn: false },
+            { text: "#draft", warn: true },
+          ],
+          frontmatter: [
+            { k: "url", v: "https://example.com/blog/context-windows-2026" },
+            { k: "ingested_at", v: "2026-03-20T14:22:00+07:00" },
+            { k: "fetch_method", v: "http_readability" },
+            { k: "publish", v: "false" },
+            { k: "tags", v: "ml, draft" },
+          ],
+          noteLead:
+            "Bài dài so sánh context window và chi phí inference; có biểu đồ embed. Khuyến nghị đọc kèm note gốc tác giả.",
+          llmInsight:
+            "Suy luận (LLM): xu hướng ưu tiên model có cửa sổ lớn cho pipeline RAG vault — cần đối chiếu với benchmark trong source.md, không dùng làm số liệu chính thức.",
+          sourceExcerpt:
+            "… Context length alone does not predict retrieval quality. Teams reported diminishing returns past 128k when chunk overlap was held constant …\n\n[Figure 2: latency vs tokens — omitted in mock]",
+          assetsLine:
+            "assets/img-001.png, img-002.png (diagram) — đã tải local; hash SHA-256 trong _meta.yaml (mock).",
+          snippetsLine: "Không có file snippets/ — code inline ngắn trong source.",
+          linksLine:
+            "→ [[Digests/2026-W12]] · → mở URL gốc · → thư mục vault trong Obsidian",
+          meta:
+            'content_hash <code>a3f2…e1</code> · actor <code>—</code> · incomplete <code>false</code>',
+          imgs: 2,
+          snips: 0,
+        },
+        "91bc": {
+          folder: "Captures/2026-03-19--apify-crawl--91bc",
+          plain: "Capture",
+          em: "crawl.",
+          statusHtml:
+            '<div class="pulse">Đã ingest</div><div>apify · actor pin</div><div style="margin-top:0.35rem">4 ảnh · 1 snippet</div>',
+          title: "Trang động · Apify crawl",
+          url: "https://docs.example.com/dynamic/pricing",
+          pills: [
+            { text: "apify", warn: false },
+            { text: "actor pin", warn: false },
+            { text: "ok", warn: false },
+          ],
+          frontmatter: [
+            { k: "fetch_method", v: "apify" },
+            { k: "actor_id", v: "apify/website-content-crawler" },
+            { k: "actor_build", v: "2026.03.1 (mock)" },
+            { k: "ingested_at", v: "2026-03-19T11:05:00+07:00" },
+            { k: "incomplete", v: "false" },
+          ],
+          noteLead: "Trang pricing động; Apify trả markdown + screenshot references.",
+          llmInsight:
+            "Suy luận (LLM): có thể map block giá vào bảng so sánh nội bộ — cần xác minh ngày crawl vì giá hay đổi.",
+          sourceExcerpt:
+            "# Pricing\n\n| Tier | Seats | Price |\n|------|-------|-------|\n| Pro  | 10    | …     |\n\n```js\nconst plan = getPlanFromCookie();\n```",
+          assetsLine: "4 ảnh trong assets/ (hero, bảng, footer x2).",
+          snippetsLine: "snippets/pricing-snippet.js — 42 dòng.",
+          linksLine: "→ [[Digests/2026-W12]]",
+          meta: 'fetch_method <code>apify</code> · dataset run <code>run_91bc</code>',
+          imgs: 4,
+          snips: 1,
+        },
+        c801: {
+          folder: "Captures/2026-03-19--x-thread--c801",
+          plain: "Capture",
+          em: "thread.",
+          statusHtml:
+            '<div class="pulse">Đã ingest</div><div>x_api</div><div style="margin-top:0.35rem">publish:false</div>',
+          title: "X thread · infra Apify",
+          url: "https://x.com/user/status/0000000000000",
+          pills: [
+            { text: "x_api", warn: false },
+            { text: "publish:false", warn: true },
+            { text: "ok", warn: false },
+          ],
+          frontmatter: [
+            { k: "fetch_method", v: "x_api" },
+            { k: "ingested_at", v: "2026-03-19T09:40:00+07:00" },
+            { k: "publish", v: "false" },
+          ],
+          noteLead: "Thread 7 post flatten vào source.md; ảnh quote ít.",
+          llmInsight:
+            "Suy luận (LLM): tranh luận actor pin vs latest — ghi nhận không kết luận ai đúng; xem evidence tweet 3–5.",
+          sourceExcerpt:
+            "[1] We pin Apify builds in prod…\n[2] Latest is fine for experiments…\n[3] Breaking change last Tuesday…",
+          assetsLine: "1 ảnh trong assets/ (screenshot thread).",
+          snippetsLine: "Không có snippets/.",
+          linksLine: "→ [[Digests/2026-W12]] · → [[Captures/…-91bc]] (liên quan)",
+          meta: 'tweet_ids <code>…</code> · bearer tier <code>mock</code>',
+          imgs: 1,
+          snips: 0,
+        },
+        yt7f: {
+          folder: "Captures/2026-03-21--youtube-pkm--yt7f",
+          plain: "Capture",
+          em: "youtube.",
+          statusHtml:
+            '<div class="pulse">Đã ingest</div><div>YouTube · Apify</div><div style="margin-top:0.35rem">Transcript EN + dịch VI</div>',
+          title: "YouTube · PKM & context (transcript)",
+          url: "https://www.youtube.com/watch?v=YE7VzlLtp-4",
+          pills: [
+            { text: "youtube", warn: false },
+            { text: "transcript", warn: false },
+            { text: "milestones", warn: false },
+            { text: "publish:false", warn: true },
+          ],
+          frontmatter: [
+            { k: "source", v: "youtube" },
+            { k: "youtube_video_id", v: "YE7VzlLtp-4" },
+            { k: "fetch_method", v: "apify_youtube" },
+            { k: "transcript_locale", v: "en" },
+            { k: "transcript_translated_locales", v: "vi" },
+            { k: "publish", v: "false" },
+            { k: "ingested_at", v: "2026-03-21T11:20:00+07:00" },
+          ],
+          noteLead:
+            "Video dài ~18 phút; transcript đầy đủ trong source.md. Tóm tắt nhanh: so sánh PKM và giới hạn context LLM — khớp chủ đề digest W12.",
+          llmInsight:
+            "Suy luận (LLM): nội dung video bổ sung cho capture longform a3f2; không dùng transcript VI làm citation chính thức — chỉ hỗ trợ đọc.",
+          sourceExcerpt:
+            "## Transcript (en)\n[00:00] Today we compare PKM stacks and why vault-first workflows win for solo builders.\n[00:42] Context length is not the same as retrieval quality — you still need chunking.\n…\n\n## Transcript (vi) — bản dịch (LLM)\n[00:00] Hôm nay chúng ta so sánh các stack PKM…\n[00:42] Độ dài ngữ cảnh không phải là chất lượng truy hồi…",
+          assetsLine: "1 ảnh thumbnail trong assets/ (tuỳ actor).",
+          snippetsLine: "Không.",
+          linksLine: "→ [[Digests/2026-W12]] · layout video trong reader web",
+          meta: "Phase 2+ mock · timeline seek · video CC (Big Buck Bunny demo)",
+          imgs: 1,
+          snips: 0,
+          videoPanel: {
+            embedVideoId: "YE7VzlLtp-4",
+            embedLabel: "youtube.com/embed/YE7VzlLtp-4 — Big Buck Bunny (CC, demo seek)",
+            durationSeconds: 600,
+            milestones: [
+              { seconds: 0, label: "Mở đầu · đồng hồ", highlight: true },
+              { seconds: 45, label: "Cảnh chính · setup", highlight: true },
+              { seconds: 120, label: "Chuyển cảnh (2:00)", highlight: false },
+              { seconds: 300, label: "Cao trào giữa phim (gợi ý LLM)", highlight: true },
+            ],
+            transcriptEn:
+              "[00:00] Today we compare PKM stacks and why vault-first workflows win for solo builders.\n[00:42] Context length is not the same as retrieval quality — you still need chunking.\n[01:10] … (rút gọn mock — nội dung video demo khác)",
+            transcriptVi:
+              "[00:00] Hôm nay chúng ta so sánh các stack PKM và vì sao quy trình vault-first thắng cho solo builder. (bản dịch LLM)\n[00:42] Độ dài ngữ cảnh không phải là chất lượng truy hồi — bạn vẫn cần chunking.\n[01:10] …",
+          },
+        },
+        pending: {
+          folder: "Captures/2026-03-18--youtube--pending",
+          plain: "Capture",
+          em: "queued.",
+          statusHtml:
+            '<div class="pulse warn">Chưa ingest</div><div>YouTube · phase 2</div><div style="margin-top:0.35rem">Chờ actor / transcript</div>',
+          title: "YouTube · hàng đợi",
+          url: "https://www.youtube.com/watch?v=mockVideoId",
+          pills: [
+            { text: "queued", warn: true },
+            { text: "phase 2", warn: true },
+          ],
+          frontmatter: [
+            { k: "status", v: "queued" },
+            { k: "url", v: "https://www.youtube.com/watch?v=mockVideoId" },
+            { k: "fetch_method", v: "—" },
+          ],
+          noteLead: "Chưa có note.md — chỉ stub URL và lịch thử actor.",
+          llmInsight: "Không gọi LLM cho đến khi có transcript / metadata.",
+          sourceExcerpt: "(trống — chờ ingest)",
+          assetsLine: "—",
+          snippetsLine: "—",
+          linksLine: "→ Cấu hình Apify actor hoặc transcript pipeline",
+          meta: "stub only (mock)",
+          imgs: 0,
+          snips: 0,
+        },
+        d120: {
+          folder: "Captures/2026-03-14--reader-web--d120",
+          plain: "Capture",
+          em: "notes.",
+          statusHtml:
+            '<div class="pulse">Đã ingest</div><div>readability</div><div style="margin-top:0.35rem">PKM</div>',
+          title: "Spec reader web · vault paths",
+          url: "https://notes.example.com/reader-web-vault-mapping",
+          pills: [
+            { text: "readability", warn: false },
+            { text: "PKM", warn: false },
+          ],
+          frontmatter: [
+            { k: "fetch_method", v: "http_readability" },
+            { k: "ingested_at", v: "2026-03-14T16:00:00+07:00" },
+          ],
+          noteLead: "Ánh xạ Captures/, Digests/ → các view trong second-brain-mock-ui; không cần thư mục content/ kiểu SSG.",
+          llmInsight: "Suy luận (LLM): giữ một schema frontmatter để reader parse ổn định (type, source, publish).",
+          sourceExcerpt: "## Vault → UI\n\n- `Captures/.../note.md` → chi tiết capture\n- `Digests/YYYY-Www.md` → digest detail\n…",
+          assetsLine: "0 ảnh.",
+          snippetsLine: "Không.",
+          linksLine: "→ [[Digests/2026-W11]]",
+          meta: "capture mock d120",
+          imgs: 0,
+          snips: 0,
+        },
+        e901: {
+          folder: "Captures/2026-03-13--reader-vs-obsidian--e901",
+          plain: "Capture",
+          em: "compare.",
+          statusHtml:
+            '<div class="pulse">Đã ingest</div><div>readability</div><div style="margin-top:0.35rem">So sánh lớp đọc</div>',
+          title: "Chỉ Obsidian vs + reader web",
+          url: "https://notes.example.com/obsidian-only-vs-reader",
+          pills: [{ text: "readability", warn: false }],
+          frontmatter: [
+            { k: "fetch_method", v: "http_readability" },
+            { k: "ingested_at", v: "2026-03-13T10:00:00+07:00" },
+          ],
+          noteLead: "Obsidian đủ cho chi tiết; reader web cho tổng hợp và luồng ingest → digest trên một màn hình.",
+          llmInsight: "Suy luận (LLM): không Quartz — app đọc trực tiếp vault hoặc qua API mỏng; chi phí dev front cao hơn một lần so với SSG.",
+          sourceExcerpt: "| Layer | Obsidian | Reader web |\n|-------|----------|------------|\n| Edit  | ✓        | —          |\n| Scan  | manual   | digest UI  |",
+          assetsLine: "—",
+          snippetsLine: "—",
+          linksLine: "→ [[Digests/2026-W11]]",
+          meta: "capture mock e901",
+          imgs: 0,
+          snips: 0,
+        },
+        aa01: {
+          folder: "Captures/2026-03-05--article--aa01",
+          plain: "Capture",
+          em: "first.",
+          statusHtml: '<div class="pulse">MVP</div><div>readability</div><div style="margin-top:0.35rem">W10</div>',
+          title: "Bài báo đầu tiên",
+          url: "https://news.example.com/first-capture",
+          pills: [{ text: "MVP", warn: false }],
+          frontmatter: [
+            { k: "fetch_method", v: "http_readability" },
+            { k: "ingested_at", v: "2026-03-05T08:00:00+07:00" },
+          ],
+          noteLead: "Golden path ingest đầu tiên.",
+          llmInsight: "Suy luận (LLM): dùng làm fixture test normaliser.",
+          sourceExcerpt: "Lorem article body for testing capture folder layout…",
+          assetsLine: "—",
+          snippetsLine: "—",
+          linksLine: "→ [[Digests/2026-W10]]",
+          meta: "fixture aa01",
+          imgs: 0,
+          snips: 0,
+        },
+        bb02: {
+          folder: "Captures/2026-03-06--x-mock--bb02",
+          plain: "Capture",
+          em: "stub.",
+          statusHtml: '<div class="pulse warn">Stub</div><div>route mock</div><div style="margin-top:0.35rem">W10</div>',
+          title: "X stub",
+          url: "https://x.com/mock/status/stub",
+          pills: [{ text: "stub", warn: true }],
+          frontmatter: [
+            { k: "fetch_method", v: "x_api_placeholder" },
+            { k: "ingested_at", v: "2026-03-06T12:00:00+07:00" },
+          ],
+          noteLead: "Placeholder cho route x.com trước khi có bearer.",
+          llmInsight: "Không insight — chỉ validate router.",
+          sourceExcerpt: "(mock empty thread)",
+          assetsLine: "—",
+          snippetsLine: "—",
+          linksLine: "→ [[Digests/2026-W10]]",
+          meta: "fixture bb02",
+          imgs: 0,
+          snips: 0,
+        },
+      };
+
+      var youtubePanelState = { videoId: null, durationSeconds: 600 };
+
+      function formatYoutubeTime(totalSec) {
+        var s = Math.max(0, Math.floor(totalSec));
+        var m = Math.floor(s / 60);
+        var r = s % 60;
+        return m + ":" + (r < 10 ? "0" : "") + r;
+      }
+
+      function setActiveSeekUI(seconds) {
+        document.querySelectorAll("#cd-video-panel [data-seek-seconds]").forEach(function (el) {
+          var t = parseFloat(el.getAttribute("data-seek-seconds"), 10);
+          var on = seconds >= 0 && Math.abs(t - seconds) < 0.5;
+          el.classList.toggle("active", on);
+        });
+      }
+
+      function seekYoutubeInPanel(seconds) {
+        var id = youtubePanelState.videoId;
+        var iframe = document.getElementById("cd-yt-iframe");
+        if (id && iframe) {
+          var st = Math.max(0, Math.floor(seconds));
+          iframe.src = "https://www.youtube.com/embed/" + id + "?start=" + st + "&autoplay=1&rel=0";
+        }
+        setActiveSeekUI(seconds);
+      }
+
+      function renderYoutubeMilestones(milestones, durationSeconds) {
+        var block = document.getElementById("cd-yt-timeline-block");
+        var inner = document.getElementById("cd-yt-timeline-inner");
+        var list = document.getElementById("cd-yt-milestone-list");
+        if (!milestones || milestones.length === 0 || !durationSeconds || durationSeconds <= 0) {
+          block.hidden = true;
+          inner.innerHTML = "";
+          list.innerHTML = "";
+          return;
+        }
+        block.hidden = false;
+        inner.innerHTML = "";
+        list.innerHTML = "";
+        milestones.forEach(function (m) {
+          var sec = m.seconds;
+          var tick = document.createElement("button");
+          tick.type = "button";
+          tick.className = "yt-timeline-tick" + (m.highlight ? " highlight" : "");
+          tick.style.left = Math.min(100, Math.max(0, (sec / durationSeconds) * 100)) + "%";
+          tick.setAttribute("data-seek-seconds", String(sec));
+          tick.title = formatYoutubeTime(sec) + " — " + m.label;
+          tick.setAttribute("aria-label", "Tua tới " + formatYoutubeTime(sec));
+          inner.appendChild(tick);
+          var chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "yt-milestone-chip" + (m.highlight ? " highlight" : "");
+          chip.setAttribute("data-seek-seconds", String(sec));
+          var timeEl = document.createElement("span");
+          timeEl.className = "t";
+          timeEl.textContent = formatYoutubeTime(sec);
+          var labelEl = document.createElement("span");
+          labelEl.className = "yt-milestone-label";
+          labelEl.textContent = m.label;
+          chip.appendChild(timeEl);
+          chip.appendChild(labelEl);
+          list.appendChild(chip);
+        });
+      }
+
+      function setTranscriptTab(which) {
+        document.querySelectorAll("#cd-video-panel .tr-tab").forEach(function (b) {
+          var on = b.getAttribute("data-tr-tab") === which;
+          b.classList.toggle("active", on);
+          b.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        document.querySelectorAll("#cd-video-panel .transcript-pane").forEach(function (p) {
+          p.classList.toggle("active", p.getAttribute("data-tr-pane") === which);
+        });
+      }
+
+      function fillCaptureDetail(id) {
+        var c = captureDetails[id] || captureDetails.a3f2;
+        currentCaptureId = id;
+
+        document.getElementById("mh-plain").textContent = c.plain;
+        document.getElementById("mh-em").textContent = c.em;
+        document.getElementById("status-strip").innerHTML = c.statusHtml;
+
+        document.getElementById("cd-folder").textContent = c.folder + "/";
+        document.getElementById("cd-title").textContent = c.title;
+        document.getElementById("cd-url").textContent = c.url;
+        document.getElementById("cd-pills").innerHTML = c.pills.map(pillHtml).join("");
+
+        var fm = document.getElementById("cd-fm");
+        fm.innerHTML = c.frontmatter
+          .map(function (kv) {
+            return "<dt>" + kv.k + "</dt><dd>" + kv.v + "</dd>";
+          })
+          .join("");
+
+        document.getElementById("cd-note-lead").textContent = c.noteLead;
+        document.getElementById("cd-llm").textContent = c.llmInsight;
+        document.getElementById("cd-source").textContent = c.sourceExcerpt;
+        document.getElementById("cd-assets").textContent = c.assetsLine;
+        document.getElementById("cd-links").textContent = c.linksLine;
+        document.getElementById("cd-meta").innerHTML = c.meta;
+
+        document.getElementById("cd-side-imgs").textContent = String(c.imgs);
+        document.getElementById("cd-side-snips").textContent = String(c.snips);
+
+        var vpanel = document.getElementById("cd-video-panel");
+        var iframeWrap = document.getElementById("cd-yt-iframe-wrap");
+        var placeholder = document.getElementById("cd-yt-embed-placeholder");
+        var iframe = document.getElementById("cd-yt-iframe");
+        if (c.videoPanel) {
+          vpanel.hidden = false;
+          var vp = c.videoPanel;
+          var te = vp.transcriptEn;
+          var tv = vp.transcriptVi;
+          document.getElementById("cd-transcript-en").textContent = te;
+          document.getElementById("cd-transcript-vi").textContent = tv;
+          document.getElementById("cd-transcript-en-split").textContent = te;
+          document.getElementById("cd-transcript-vi-split").textContent = tv;
+          setTranscriptTab("en");
+
+          youtubePanelState.videoId = vp.embedVideoId || null;
+          youtubePanelState.durationSeconds = vp.durationSeconds || 600;
+
+          if (vp.embedVideoId) {
+            iframeWrap.hidden = false;
+            placeholder.hidden = true;
+            iframe.src = "https://www.youtube.com/embed/" + vp.embedVideoId + "?rel=0";
+          } else {
+            iframeWrap.hidden = true;
+            placeholder.hidden = false;
+            document.getElementById("cd-yt-embed-label").textContent = vp.embedLabel || "";
+            iframe.removeAttribute("src");
+          }
+
+          renderYoutubeMilestones(vp.milestones, youtubePanelState.durationSeconds);
+          setActiveSeekUI(-1);
+        } else {
+          vpanel.hidden = true;
+          youtubePanelState.videoId = null;
+        }
+      }
+
+      function setView(name) {
+        if (panelIds.indexOf(name) < 0) return;
+
+        document.querySelectorAll(".nav-dot").forEach(function (b) {
+          b.classList.toggle("active", b.getAttribute("data-view") === name);
+        });
+
+        document.querySelectorAll(".drawer-link[data-view]").forEach(function (b) {
+          b.classList.toggle("active", b.getAttribute("data-view") === name);
+        });
+
+        document.querySelectorAll(".view").forEach(function (el) {
+          var on = el.getAttribute("data-view") === name;
+          el.classList.toggle("active", on);
+          el.hidden = !on;
+        });
+
+        document.querySelectorAll(".side-view").forEach(function (el) {
+          var on = el.getAttribute("data-side") === name;
+          el.classList.toggle("active", on);
+        });
+
+        if (name === "digest-detail") {
+          fillDigestDetail(currentDigestId);
+        } else if (name === "capture-detail") {
+          fillCaptureDetail(currentCaptureId);
+        } else {
+          var cfg = views[name];
+          if (cfg) {
+            document.getElementById("mh-plain").textContent = cfg.plain;
+            document.getElementById("mh-em").textContent = cfg.em;
+            document.getElementById("status-strip").innerHTML = cfg.statusHtml;
+          }
+        }
+      }
+
+      function openDigestDetail(id) {
+        currentDigestId = id;
+        setView("digest-detail");
+      }
+
+      function openCaptureDetail(id, backView) {
+        captureBackTo = backView || "captures";
+        currentCaptureId = id;
+        var backBtn = document.getElementById("capture-back");
+        backBtn.textContent =
+          captureBackTo === "digest-detail" ? "← Quay lại digest" : "← Thư viện captures";
+        setView("capture-detail");
+      }
+
+      document.querySelectorAll(".nav-dot[data-view]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          setView(btn.getAttribute("data-view"));
+        });
+      });
+
+      var menuToggle = document.getElementById("menu-toggle");
+      var drawer = document.getElementById("nav-drawer");
+      var drawerBackdrop = document.getElementById("nav-drawer-backdrop");
+      var drawerClose = document.getElementById("drawer-close");
+
+      function closeNavDrawer() {
+        drawer.classList.remove("is-open");
+        drawerBackdrop.classList.remove("is-open");
+        menuToggle.setAttribute("aria-expanded", "false");
+        drawer.setAttribute("aria-hidden", "true");
+        drawerBackdrop.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+
+      function openNavDrawer() {
+        drawer.classList.add("is-open");
+        drawerBackdrop.classList.add("is-open");
+        menuToggle.setAttribute("aria-expanded", "true");
+        drawer.setAttribute("aria-hidden", "false");
+        drawerBackdrop.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+
+      function toggleNavDrawer() {
+        if (drawer.classList.contains("is-open")) {
+          closeNavDrawer();
+        } else {
+          openNavDrawer();
+        }
+      }
+
+      menuToggle.addEventListener("click", function () {
+        toggleNavDrawer();
+      });
+      drawerClose.addEventListener("click", function () {
+        closeNavDrawer();
+      });
+      drawerBackdrop.addEventListener("click", function () {
+        closeNavDrawer();
+      });
+
+      document.querySelectorAll(".drawer-link[data-view]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          setView(btn.getAttribute("data-view"));
+          closeNavDrawer();
+        });
+      });
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && drawer.classList.contains("is-open")) {
+          closeNavDrawer();
+        }
+      });
+
+      document.querySelectorAll(".digest-card.interactive[data-digest]").forEach(function (card) {
+        function open() {
+          openDigestDetail(card.getAttribute("data-digest"));
+        }
+        card.addEventListener("click", open);
+        card.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        });
+      });
+
+      document.getElementById("digest-back").addEventListener("click", function () {
+        setView("digests");
+      });
+
+      document.getElementById("capture-back").addEventListener("click", function () {
+        setView(captureBackTo);
+      });
+
+      document.querySelectorAll(".mock-table .row-actions").forEach(function (el) {
+        el.addEventListener("click", function (e) {
+          e.stopPropagation();
+        });
+      });
+
+      document.querySelector(".mock-table tbody").addEventListener("click", function (e) {
+        if (e.target.closest(".row-actions")) return;
+        var tr = e.target.closest("tr.capture-row[data-capture]");
+        if (tr) openCaptureDetail(tr.getAttribute("data-capture"), "captures");
+      });
+
+      document.querySelectorAll("tr.capture-row[data-capture]").forEach(function (tr) {
+        tr.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openCaptureDetail(tr.getAttribute("data-capture"), "captures");
+          }
+        });
+      });
+
+      document.getElementById("view-digest-detail").addEventListener("click", function (e) {
+        var item = e.target.closest("#dd-sources .source-item[data-capture]");
+        if (item) openCaptureDetail(item.getAttribute("data-capture"), "digest-detail");
+      });
+
+      document.getElementById("view-digest-detail").addEventListener("keydown", function (e) {
+        var item = e.target.closest("#dd-sources .source-item[data-capture]");
+        if (item && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          openCaptureDetail(item.getAttribute("data-capture"), "digest-detail");
+        }
+      });
+
+      var goBtn = document.getElementById("go");
+      var toast = document.getElementById("toast");
+      var t = null;
+
+      document.getElementById("cd-video-panel").addEventListener("click", function (e) {
+        var tab = e.target.closest(".tr-tab[data-tr-tab]");
+        if (tab) {
+          setTranscriptTab(tab.getAttribute("data-tr-tab"));
+          return;
+        }
+        var seekEl = e.target.closest("[data-seek-seconds]");
+        if (seekEl) {
+          var sec = parseFloat(seekEl.getAttribute("data-seek-seconds"), 10);
+          if (!isNaN(sec)) {
+            seekYoutubeInPanel(sec);
+            clearTimeout(t);
+            toast.textContent = "Đã tua tới " + formatYoutubeTime(sec) + " · mock (?start= + autoplay)";
+            toast.classList.remove("show");
+            void toast.offsetWidth;
+            toast.classList.add("show");
+            t = setTimeout(function () {
+              toast.classList.remove("show");
+            }, 2200);
+          }
+        }
+      });
+
+      document.getElementById("dd-challenge-gen").addEventListener("click", function () {
+        clearTimeout(t);
+        toast.textContent = "Đã gọi pipeline challenge từ digest (mock)";
+        toast.classList.remove("show");
+        void toast.offsetWidth;
+        toast.classList.add("show");
+        t = setTimeout(function () {
+          toast.classList.remove("show");
+        }, 2200);
+      });
+
+      goBtn.addEventListener("click", function () {
+        goBtn.classList.add("processing");
+        goBtn.textContent = "Đang xử lý…";
+        clearTimeout(t);
+        toast.classList.remove("show");
+        void toast.offsetWidth;
+        toast.classList.add("show");
+        t = setTimeout(function () {
+          goBtn.classList.remove("processing");
+          goBtn.textContent = "Chạy ingest";
+          toast.classList.remove("show");
+        }, 2200);
+      });
+    })();
+  </script>
+</body>
+</html>

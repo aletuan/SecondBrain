@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Data
+data/brain.db
+data/vectors/
+
+# Environment
+.env
+backend/.env
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# OS
+.DS_Store
+
+# Node
+node_modules/
+.pnpm-store/
+.next/
+
+# Local routing (copy from config/routing.example.yaml)
+config/routing.yaml
+
+# Local Obsidian vault at repo root only (captures, digests — user data)
+# (Hidden in IDE file tree; diagrams also live under docs/diagrams/*.excalidraw)
+/vault/
