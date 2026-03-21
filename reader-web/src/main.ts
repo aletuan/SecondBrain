@@ -676,7 +676,6 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
     <tr class="capture-row" tabindex="0" data-id="${esc(r.id)}">
       <td><span class="mono-sm">${esc(r.id)}</span></td>
       <td>${esc(r.source)}</td>
-      <td><span class="pill">${esc(r.fetch_method || '—')}</span></td>
       <td><span class="pill${r.publish ? '' : ' warn'}">${r.publish ? 'publish' : 'private'}</span></td>
       <td><span style="color:var(--signal);font-size:11px">Mở →</span></td>
     </tr>`,
@@ -702,7 +701,7 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
         rows.length === 0
           ? '<p class="hint">Chưa có capture.</p>'
           : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th>Slug / thư mục</th><th>Nguồn</th><th>Fetch</th><th>Trạng thái</th><th></th>
+            <th>Slug / thư mục</th><th>Nguồn</th><th>Trạng thái</th><th></th>
           </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`
       }
       <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · hàng có thể mở bằng Enter khi focus.</p>

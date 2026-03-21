@@ -8,6 +8,10 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: false,
+    // Avoid stale JS/CSS in the browser when iterating on UI (private mode does not disable HTTP cache).
+    headers: {
+      'Cache-Control': 'no-store',
+    },
   },
   plugins: [
     {
