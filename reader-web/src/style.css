@@ -113,6 +113,13 @@ body {
   mask-image: radial-gradient(ellipse 70% 55% at 30% 20%, black, transparent 75%);
 }
 
+[data-theme="light"] .noise {
+  opacity: 0.015;
+}
+[data-theme="light"] .grid-bg {
+  opacity: 0.055;
+}
+
 .app {
   display: grid;
   grid-template-columns: 52px 1fr minmax(280px, 320px);
