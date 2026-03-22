@@ -6,7 +6,7 @@ The second-brain **reader web** is a **separate** application from this CLI. It 
 
 A working app lives under [`reader-web/`](../reader-web/): **Vite** + vanilla TS, dev server with Connect middleware exposing read routes plus ingest against the Brain CLI repo (`READER_BRAIN_ROOT`, default parent of `reader-web/`) with `VAULT_ROOT` aligned to the reader vault — same files Obsidian sees. Treat ingest as **local-only** (do not expose the dev server to the internet); use `READER_ALLOW_INGEST=0` to disable. See [`reader-web/README.md`](../reader-web/README.md).
 
-**Ingest API:** **`POST /api/ingest`** remains a single round-trip (JSON result); body **`{ "url": "…" }`** only. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (same body, returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks real pipeline phases from the CLI (`tsx … ingest --progress-json`). Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request sends **SIGTERM** to the child process.
+**Ingest API:** **`POST /api/ingest`** remains a single round-trip (JSON result); body **`{ "url": "…" }`** only. **`POST /api/digest`** runs the Brain `digest` command against the same vault (optional JSON `since` / `noLlm`); the digests list screen exposes a **Tạo digest** button when ingest is allowed. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (same body, returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks real pipeline phases from the CLI (`tsx … ingest --progress-json`). Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request sends **SIGTERM** to the child process.
 
 **YouTube timeline:** the standalone demo [`visualizations/reader-youtube-timeline.html`](visualizations/reader-youtube-timeline.html) is optional reference only; the reader app implements embed + milestones + seek inside the capture detail screen (aligned with the main mock below).
 
@@ -50,7 +50,7 @@ Path pattern (CLI output):
 
 - Digests: `vault/Digests/YYYY-Www.md`
 - Challenges: `vault/Challenges/YYYY-Www.md` (from `pnpm challenge`)
-- Reader API: `GET /api/digests/:week` (markdown), `GET /api/challenges/:week` (404 if missing). On digest detail (`#/digest/YYYY-Www`), the UI loads both and renders the challenge section below the digest when the file exists.
+- Reader API: `GET /api/digests/:week` (markdown), `GET /api/challenges/:week` (404 if missing). On digest detail (`#/digest/YYYY-Www`), the UI loads both and renders the challenge section below the digest when the file exists. **Captures** lines with vault wikilinks `[[Captures/…/note|…]]` are turned into in-app links `#/capture/<id>` when rendering (vault file unchanged). Further layout options: [`reader-web-digest-capture-display-options.md`](reader-web-digest-capture-display-options.md).
 
 ## CLI helpers related to reader data
 

@@ -236,11 +236,53 @@ class DigestHeadingRenderer extends Renderer {
   }
 }
 
+/** Adds `digest-capture-link` for in-app capture navigation from wikilink-derived anchors. */
+class DigestProseRenderer extends DigestHeadingRenderer {
+  constructor(h2IdPrefix: string) {
+    super(h2IdPrefix);
+  }
+
+  override link(token: Tokens.Link): string {
+    const { href, title, tokens } = token;
+    if (href.startsWith('#/capture/')) {
+      const inner = this.parser.parseInline(tokens);
+      const t =
+        title != null && String(title).trim() !== ''
+          ? ` title="${String(title).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
+          : '';
+      return `<a href="${href}" class="digest-capture-link"${t}>${inner}</a>`;
+    }
+    return super.link(token);
+  }
+}
+
+/**
+ * CLI digest lines use Obsidian wikilinks: `[[Captures/<id>/note|Title]]`.
+ * Marked does not parse those; convert to markdown links the SPA understands.
+ */
+function transformDigestCapturesWikilinks(markdown: string): string {
+  const mdLink = (folder: string, display: string) => {
+    const id = folder.trim();
+    const raw = display.trim() || id;
+    const label = raw
+      .replace(/\\/g, '\\\\')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]');
+    return `[${label}](#/capture/${encodeURIComponent(id)})`;
+  };
+  let s = markdown;
+  s = s.replace(/\[\[Captures\/(.+?)\/note\|([^\]]+)\]\]/g, (_, folder: string, alias: string) =>
+    mdLink(folder, alias),
+  );
+  s = s.replace(/\[\[Captures\/(.+?)\/note\]\]/g, (_, folder: string) => mdLink(folder, folder));
+  return s;
+}
+
 function markdownToProseHtml(markdown: string, opts?: { h2IdPrefix?: string }): string {
   const pfx = opts?.h2IdPrefix;
   if (!pfx) return marked.parse(markdown) as string;
 
-  return marked.parse(markdown, { renderer: new DigestHeadingRenderer(pfx) }) as string;
+  return marked.parse(markdown, { renderer: new DigestProseRenderer(pfx) }) as string;
 }
 
 function renderDigestMetaPanel(front: Record<string, string>): string {
@@ -398,6 +440,8 @@ type Health = {
   vaultRoot: string;
   brainRoot: string;
   ingestAvailable: boolean;
+  /** Same gate as ingest: Brain CLI + READER_ALLOW_INGEST. */
+  digestAvailable?: boolean;
   /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
   ingestSse?: boolean;
 };
@@ -696,12 +740,15 @@ function sideCapture(d: CaptureDetail): string {
   `;
 }
 
-function sideDigests(items: { week: string }[]): string {
+function sideDigests(items: { week: string }[], digestAvailable: boolean): string {
+  const uiHint = digestAvailable
+    ? 'Nút <strong>Tạo digest</strong> trên thanh công cụ chạy cùng CLI trong repo Brain (<code style="color:var(--signal)">--since 7d</code> mặc định).'
+    : 'Bật ingest (Brain CLI + <code style="color:var(--signal)">READER_ALLOW_INGEST</code>) hoặc chạy terminal: <code style="color:var(--signal)">pnpm digest</code>.';
   return `
     <div class="ingest-label" style="margin-bottom:0.5rem">Lịch digest</div>
     <div class="digest-block">
       <h4>Tạo digest</h4>
-      <p style="margin:0;font-size:12px;color:var(--muted)">Terminal: <code style="color:var(--signal)">pnpm digest</code></p>
+      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">${uiHint}</p>
     </div>
     <div class="digest-block">
       <h4>Đang có</h4>
@@ -1252,7 +1299,10 @@ function renderCaptureDetail(d: CaptureDetail): string {
   `;
 }
 
-function renderDigestsList(items: { id: string; week: string }[]): string {
+function renderDigestsList(
+  items: { id: string; week: string }[],
+  digestAvailable: boolean,
+): string {
   const cards = items
     .map(
       (x) => `
@@ -1266,6 +1316,9 @@ function renderDigestsList(items: { id: string; week: string }[]): string {
     </button>`,
     )
     .join('');
+  const digestBtnAttrs = digestAvailable
+    ? ''
+    : ' disabled title="Cần Brain CLI và READER_ALLOW_INGEST (xem /api/health)"';
   return `
     <header class="masthead">
       <h1>Lịch sử<br /><em>digest.</em></h1>
@@ -1275,16 +1328,20 @@ function renderDigestsList(items: { id: string; week: string }[]): string {
       </div>
     </header>
     <div class="view active">
-      <div class="toolbar">
+      <div class="toolbar digest-list-toolbar">
         <span class="ingest-label">Lịch sử digest</span>
-        <button type="button" class="btn-ghost" id="back-home-d">← Ingest</button>
+        <div class="digest-list-toolbar__actions">
+          <button type="button" class="btn-ingest" id="digest-run"${digestBtnAttrs}>Tạo digest</button>
+          <button type="button" class="btn-ghost" id="back-home-d">← Ingest</button>
+        </div>
       </div>
+      <p class="hint lib-toolbar-hint" id="digest-run-hint" hidden></p>
       ${
         items.length === 0
-          ? '<p class="hint">Chưa có digest — chạy <code>pnpm digest</code>.</p>'
+          ? `<p class="hint" id="digest-empty-hint">Chưa có digest — bấm <strong>Tạo digest</strong> hoặc chạy <code>pnpm digest</code>.</p>`
           : `<div class="digest-timeline">${cards}</div>`
       }
-      <p class="hint lib-toolbar-hint">Tạo digest mới từ terminal trong repo CLI.</p>
+      <p class="hint lib-toolbar-hint">Giống CLI: gom capture có <code>ingested_at</code> trong cửa sổ <code>--since</code> (mặc định 7d), ghi <code>Digests/YYYY-Www.md</code>.</p>
     </div>
   `;
 }
@@ -1294,7 +1351,9 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
   const bodyMd = stripDigestBodyLeadingH1(parsed?.body ?? markdown, week);
   const metaPanel = parsed?.front ? renderDigestMetaPanel(parsed.front) : '';
   const toc = renderDigestToc(bodyMd);
-  const bodyHtml = markdownToProseHtml(bodyMd, { h2IdPrefix: 'digest' });
+  const bodyHtml = markdownToProseHtml(transformDigestCapturesWikilinks(bodyMd), {
+    h2IdPrefix: 'digest',
+  });
 
   const ch = challengeMarkdown?.trim();
   const challengeBlock =
@@ -1542,10 +1601,50 @@ async function route() {
       return;
     }
     if (view === 'digests') {
-      const { digests } = await fetchJson<{ digests: { id: string; week: string }[] }>('/api/digests');
-      main.innerHTML = renderDigestsList(digests);
-      setSideInner(sideDigests(digests));
+      const [h, { digests }] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<{ digests: { id: string; week: string }[] }>('/api/digests'),
+      ]);
+      const digestOk = Boolean(h.digestAvailable ?? h.ingestAvailable);
+      main.innerHTML = renderDigestsList(digests, digestOk);
+      setSideInner(sideDigests(digests, digestOk));
       document.querySelector('#back-home-d')?.addEventListener('click', () => setHash('home'));
+      const digestRun = main.querySelector<HTMLButtonElement>('#digest-run');
+      const digestHint = main.querySelector<HTMLElement>('#digest-run-hint');
+      if (digestRun && digestHint && digestOk) {
+        digestRun.addEventListener('click', async () => {
+          digestHint.hidden = false;
+          digestHint.className = 'hint lib-toolbar-hint digest-run-hint digest-run-hint--pending';
+          digestHint.textContent = 'Đang chạy digest (CLI)…';
+          digestRun.disabled = true;
+          digestRun.classList.add('processing');
+          try {
+            const r = await fetch('/api/digest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            });
+            const j = (await r.json()) as {
+              ok?: boolean;
+              weekId?: string;
+              error?: string;
+              stderr?: string;
+            };
+            if (!r.ok || !j.weekId) {
+              const tail = j.stderr?.trim() ? ` — ${j.stderr.trim().slice(-400)}` : '';
+              throw new Error((j.error ?? `HTTP ${r.status}`) + tail);
+            }
+            digestHint.className = 'hint lib-toolbar-hint digest-run-hint digest-run-hint--ok';
+            digestHint.textContent = `Đã tạo ${j.weekId}. Đang mở…`;
+            setHash('digest', j.weekId);
+          } catch (e) {
+            digestHint.className = 'hint lib-toolbar-hint digest-run-hint digest-run-hint--err';
+            digestHint.textContent = e instanceof Error ? e.message : String(e);
+            digestRun.disabled = false;
+            digestRun.classList.remove('processing');
+          }
+        });
+      }
       main.querySelectorAll('.digest-card[data-week]').forEach((el) => {
         el.addEventListener('click', () => {
           const w = (el as HTMLElement).dataset.week;

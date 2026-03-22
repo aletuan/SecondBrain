@@ -1256,6 +1256,25 @@ main {
   flex: 1 1 auto;
 }
 
+.digest-list-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.digest-run-hint.digest-run-hint--ok {
+  color: color-mix(in srgb, var(--signal) 85%, var(--paper));
+}
+
+.digest-run-hint.digest-run-hint--err {
+  color: color-mix(in srgb, var(--accent) 90%, var(--paper));
+}
+
+.digest-run-hint.digest-run-hint--pending {
+  color: var(--muted);
+}
+
 .search-wrap {
   flex: 1 1 220px;
   max-width: 320px;
@@ -1660,7 +1679,7 @@ tr.capture-row:focus-visible {
   margin: 0;
 }
 
-/* —— Digest detail: editorial measure + metadata panel (frontmatter never raw in prose) —— */
+/* —— Digest detail: main body full width like capture note; challenge keeps a reading measure —— */
 .digest-toolbar {
   padding-bottom: 0.85rem;
   margin-bottom: 0;
@@ -1793,13 +1812,16 @@ tr.capture-row:focus-visible {
 
 .digest-body {
   padding-top: 0.35rem;
-  max-width: min(100%, 72ch);
+  max-width: none;
+  width: 100%;
 }
 
 .digest-prose--main {
   font-size: clamp(15px, 0.3vw + 14px, 17px);
   line-height: 1.74;
   color: var(--paper-read);
+  max-width: none;
+  width: 100%;
 }
 
 .digest-prose--main > h2.digest-h2:first-child,
@@ -1847,6 +1869,11 @@ tr.capture-row:focus-visible {
 .digest-prose--main a:hover {
   color: color-mix(in srgb, var(--signal) 85%, var(--paper));
   border-bottom-color: var(--signal);
+}
+
+/* From vault wikilink → `#/capture/…` (see `transformDigestCapturesWikilinks`) */
+.digest-prose--main a.digest-capture-link {
+  font-weight: 500;
 }
 
 .digest-prose--main p {
@@ -2018,9 +2045,10 @@ tr.capture-row:focus-visible {
   hanging-punctuation: first last;
 }
 
-/* Capture detail note.md: fill section width (digest/challenge keep .prose measure). */
+/* Capture detail note.md + digest main column: fill available width (challenge keeps 68ch). */
 #cap-note .prose,
-#note-prose {
+#note-prose,
+.digest-prose--main.prose {
   max-width: none;
   width: 100%;
 }
