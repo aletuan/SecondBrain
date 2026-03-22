@@ -50,6 +50,36 @@ function esc(s: string): string {
   return d.innerHTML;
 }
 
+/* ── Theme switcher ──────────────────────────────────────── */
+const THEME_ICONS = {
+  dark: '<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>',
+  light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+  solarized: '<svg viewBox="0 0 24 24"><path d="M10 2v7.527a2 2 0 0 1-1 1.732L6 13v1h12v-1l-3-1.741A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/><path d="M9 20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1H9z"/></svg>',
+} as const;
+
+type ThemeName = 'dark' | 'light' | 'solarized';
+const THEMES: ThemeName[] = ['dark', 'light', 'solarized'];
+
+function currentTheme(): ThemeName {
+  return (document.documentElement.getAttribute('data-theme') as ThemeName) || 'dark';
+}
+
+function setTheme(t: ThemeName): void {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.classList.toggle('active', (btn as HTMLElement).dataset.theme === t);
+  });
+}
+
+function themeSwitcherHtml(): string {
+  const cur = currentTheme();
+  return `<div class="theme-switcher">${THEMES.map(
+    (t) =>
+      `<button type="button" class="theme-btn${t === cur ? ' active' : ''}" data-theme="${t}" aria-label="Theme: ${t}" title="${t[0].toUpperCase() + t.slice(1)}">${THEME_ICONS[t]}</button>`,
+  ).join('')}</div>`;
+}
+
 /** Staggered step highlights while waiting on `postIngest` (cosmetic; API is single round-trip). */
 const INGEST_AGENT_STEP_MS = 1050;
 
@@ -372,6 +402,7 @@ function layoutShell(): string {
       <span class="burger" aria-hidden="true"></span>
     </button>
     <span class="mobile-brand">Second brain</span>
+    ${themeSwitcherHtml()}
   </header>
   <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" aria-hidden="true"></div>
   <nav id="nav-drawer" class="nav-drawer" aria-label="Menu điều hướng" aria-hidden="true">
@@ -875,6 +906,7 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
       : '';
   return `
     <header class="masthead">
+      ${themeSwitcherHtml()}
       <h1><span>Bộ nhớ</span><br /><em>thứ hai.</em></h1>
       <div class="status-strip">
         <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest sẵn sàng' : 'Ingest · kiểm tra CLI'}</div>
@@ -923,6 +955,7 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
     .join('');
   return `
     <header class="masthead">
+      ${themeSwitcherHtml()}
       <h1>Thư viện<br /><em>captures.</em></h1>
       <div class="status-strip">
         <div class="pulse">${rows.length} mục trong vault</div>
@@ -1321,6 +1354,7 @@ function renderDigestsList(
     : ' disabled title="Cần Brain CLI và READER_ALLOW_INGEST (xem /api/health)"';
   return `
     <header class="masthead">
+      ${themeSwitcherHtml()}
       <h1>Lịch sử<br /><em>digest.</em></h1>
       <div class="status-strip">
         <div class="pulse">${items.length} tuần</div>
@@ -1370,6 +1404,7 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
       : '';
   return `
     <header class="masthead">
+      ${themeSwitcherHtml()}
       <h1>Digest<br /><em>${esc(week)}</em></h1>
       <div class="status-strip">
         <div class="pulse">Chi tiết digest</div>
@@ -1678,5 +1713,12 @@ export function initApp() {
   window.addEventListener('hashchange', () => route());
   void route();
 }
+
+document.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('.theme-btn');
+  if (btn?.dataset.theme && THEMES.includes(btn.dataset.theme as ThemeName)) {
+    setTheme(btn.dataset.theme as ThemeName);
+  }
+});
 
 initApp();
