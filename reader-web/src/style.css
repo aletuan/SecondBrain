@@ -92,6 +92,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html[data-theme] body,
+html[data-theme] .app,
+html[data-theme] .rail,
+html[data-theme] .masthead,
+html[data-theme] .mobile-topbar,
+html[data-theme] .side,
+html[data-theme] .nav-drawer,
+html[data-theme] .card,
+html[data-theme] .chip,
+html[data-theme] .mock-table,
+html[data-theme] .ingest-shell,
+html[data-theme] .status-strip {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
 .noise {
   pointer-events: none;
   position: fixed;
