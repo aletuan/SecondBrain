@@ -28,7 +28,7 @@ pnpm install
 
 Open `http://127.0.0.1:5174` (dev) or the preview URL. Routes use the hash: `#/`, `#/captures`, `#/capture/:id`, `#/digests`, `#/digest/:week`.
 
-**Fresh UI while coding:** dev server sends `Cache-Control: no-store` so the browser should not reuse old JS. If something still looks stale, open DevTools → **Network** → enable **Disable cache** (while DevTools is open), then reload. After code changes, save the file and do a normal reload; restart `pnpm dev` if you had switched branches or killed the server.
+**Fresh UI while coding:** dev server sends strong no-cache headers (`no-store`, `Pragma`, `Expires`) via `server.headers` plus an early Connect middleware (`reader-dev-no-cache` in `vite.config.ts`), and `index.html` includes `http-equiv` hints. If UI still looks stale: restart `pnpm dev` after changing `vite.config.ts`, open DevTools → **Network** → **Disable cache**, hard-reload. `serve.ts` preview uses the same policy for `dist/`.
 
 ## Environment
 
