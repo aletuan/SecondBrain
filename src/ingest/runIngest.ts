@@ -8,6 +8,7 @@ import { extractYoutubeVideoId, ingestYouTubeViaApify } from '../adapters/youtub
 import { readRoutingYamlSync } from '../config/routingFile.js';
 import type { OpenAIClientLike } from '../llm/enrich.js';
 import { enrichNote } from '../llm/enrich.js';
+import { enrichMaxCharsFromEnv, truncateSourceForEnrich } from '../llm/enrichSource.js';
 import { translateTranscriptSegments } from '../llm/translateTranscript.js';
 import { loadRouting, resolveStrategy } from '../router.js';
 import type { CaptureBundle } from '../types/capture.js';
@@ -91,8 +92,14 @@ export async function runIngest(options: {
   if (willEnrich) {
     phase({ v: 1, kind: 'phase', phase: 'llm', state: 'active' });
     const raw = await fs.readFile(path.join(captureDir, 'source.md'), 'utf8');
-    const excerpt = raw.replace(/^---[\s\S]*?---\s*/, '').slice(0, 12_000);
-    await enrichNote({ notePath, sourceExcerpt: excerpt });
+    const body = raw.replace(/^---[\s\S]*?---\s*/, '');
+    const excerpt = truncateSourceForEnrich(body, enrichMaxCharsFromEnv());
+    await enrichNote({
+      notePath,
+      sourceExcerpt: excerpt,
+      title: bundle.title,
+      url: bundle.canonicalUrl,
+    });
     phase({ v: 1, kind: 'phase', phase: 'llm', state: 'done' });
   }
 

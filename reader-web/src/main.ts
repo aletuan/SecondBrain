@@ -640,7 +640,7 @@ function bindMobileNav() {
   });
 }
 
-function sideHome(h: Health, recentCount: number): string {
+function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
   return `
     <div>
       <div class="ingest-label" style="margin-bottom:0.5rem">Digest &amp; vault</div>
@@ -651,7 +651,7 @@ function sideHome(h: Health, recentCount: number): string {
       <ul>
         <li><strong>Vault</strong> — đường dẫn tuyệt đối trong status strip</li>
         <li>Ingest web ${h.ingestAvailable ? '<strong>bật</strong> (CLI Brain)' : '<strong>tắt</strong> hoặc thiếu repo'}</li>
-        <li>Captures gần đây: <strong>${recentCount}</strong> hiển thị dưới dạng thẻ</li>
+        <li>Trang chủ: <strong>${shownOnHome}</strong> thẻ gần đây · <strong>${vaultTotal}</strong> captures trong vault</li>
       </ul>
     </div>
     <div class="digest-block">
@@ -728,7 +728,10 @@ function sideDigestDetail(week: string, hasChallenge: boolean): string {
   `;
 }
 
-function renderHome(h: Health, recent: CaptureListItem[]): string {
+/** Max recent capture cards on home (grid shows up to 3×3 on wide desktop). */
+const HOME_RECENT_CAPTURE_LIMIT = 9;
+
+function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
   const ingestShellClass = h.ingestAvailable ? 'ingest-shell' : 'ingest-shell ingest-shell-muted';
   const ingestInner = h.ingestAvailable
     ? `
@@ -818,6 +821,11 @@ function renderHome(h: Health, recent: CaptureListItem[]): string {
           .join('');
 
   const n = recent.length;
+  const total = vaultCaptureTotal;
+  const totalSuffix =
+    total > n
+      ? `<span class="section-title__total" aria-hidden="true"> / ${String(total).padStart(2, '0')} trong vault</span><span class="visually-hidden"> trên ${total} captures trong vault</span>`
+      : '';
   return `
     <header class="masthead">
       <h1><span>Bộ nhớ</span><br /><em>thứ hai.</em></h1>
@@ -838,9 +846,18 @@ function renderHome(h: Health, recent: CaptureListItem[]): string {
         <span class="chip on">Readability</span>
         <span class="chip on">YouTube</span>
       </div>
-      <h2 class="section-title">Captures gần đây <span>${String(n).padStart(2, '0')}</span></h2>
-      <div class="cards">${cards}</div>
-      <p class="hint">Click thẻ để mở chi tiết · điều hướng đầy đủ qua rail hoặc Captures.</p>
+      <div class="recent-captures-bar">
+        <div class="recent-captures-bar__titles">
+          <h2 class="section-title section-title--home-recent" id="recent-captures-heading">
+            Captures gần đây
+            <span class="section-title__num">${String(n).padStart(2, '0')}</span>${totalSuffix}
+          </h2>
+          <p class="recent-captures-bar__sub">Tối đa ${HOME_RECENT_CAPTURE_LIMIT} mới nhất · màn rộng lưới 3 cột</p>
+        </div>
+        <a href="#/captures" class="recent-captures-cta">Toàn bộ thư viện<span class="recent-captures-cta__arrow" aria-hidden="true"> →</span></a>
+      </div>
+      <div class="cards" role="region" aria-labelledby="recent-captures-heading">${cards}</div>
+      <p class="hint home-captures-hint">Click thẻ để mở chi tiết · rail <em>Captures</em> hoặc nút thư viện phía trên.</p>
     </div>
   `;
 }
@@ -1342,9 +1359,10 @@ async function route() {
         fetchJson<Health>('/api/health'),
         fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
       ]);
-      const recent = capData.captures.slice(0, 3);
-      main.innerHTML = renderHome(h, recent);
-      setSideInner(sideHome(h, recent.length));
+      const allCaps = capData.captures;
+      const recent = allCaps.slice(0, HOME_RECENT_CAPTURE_LIMIT);
+      main.innerHTML = renderHome(h, recent, allCaps.length);
+      setSideInner(sideHome(h, recent.length, allCaps.length));
 
       main.querySelectorAll('.card[data-card-id]').forEach((el) => {
         el.addEventListener('click', () => {
