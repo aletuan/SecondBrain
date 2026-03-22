@@ -579,14 +579,10 @@ main {
   stroke-linejoin: round;
 }
 
-/* Desktop: inside masthead, top-right */
-.masthead {
-  position: relative;
-}
+/* Desktop: inside masthead, top-right corner of status column */
 .masthead .theme-switcher {
-  position: absolute;
-  top: 1.2rem;
-  right: 0;
+  grid-column: 2;
+  justify-self: end;
 }
 
 /* Mobile: inside topbar, right side */
