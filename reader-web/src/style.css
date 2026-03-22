@@ -540,6 +540,60 @@ main {
   }
 }
 
+/* ── Theme switcher ─────────────────────────────────────── */
+.theme-switcher {
+  display: flex;
+  gap: 2px;
+  background: rgba(128, 128, 128, 0.10);
+  border-radius: 6px;
+  padding: 3px;
+}
+.theme-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.theme-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  color: var(--paper);
+}
+.theme-btn.active {
+  background: rgba(128, 128, 128, 0.22);
+  color: var(--paper);
+}
+.theme-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Desktop: inside masthead, top-right */
+.masthead {
+  position: relative;
+}
+.masthead .theme-switcher {
+  position: absolute;
+  top: 1.2rem;
+  right: 0;
+}
+
+/* Mobile: inside topbar, right side */
+.mobile-topbar .theme-switcher {
+  margin-left: auto;
+}
+
 .view {
   display: none;
 }
