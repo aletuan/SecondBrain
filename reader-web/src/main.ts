@@ -1716,7 +1716,7 @@ export function initApp() {
 
 document.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('.theme-btn');
-  if (btn?.dataset.theme) {
+  if (btn?.dataset.theme && THEMES.includes(btn.dataset.theme as ThemeName)) {
     setTheme(btn.dataset.theme as ThemeName);
   }
 });
