@@ -199,7 +199,7 @@ body {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay);
     z-index: 10001;
     opacity: 0;
     pointer-events: none;
@@ -1398,7 +1398,7 @@ main {
 }
 
 .mock-table tr:hover td {
-  background: rgba(232, 93, 76, 0.04);
+  background: var(--accent-faint);
 }
 
 tr.capture-row {
@@ -2546,7 +2546,7 @@ tr.capture-row:focus-visible {
 
 .yt-sub-row.is-current {
   border-left-color: var(--accent);
-  background: rgba(232, 93, 76, 0.08);
+  background: var(--accent-mid);
 }
 
 .yt-sub-ts {
@@ -2626,7 +2626,7 @@ tr.capture-row:focus-visible {
 .tr-tab.active {
   color: var(--signal);
   border-color: var(--signal);
-  background: rgba(126, 184, 168, 0.08);
+  background: var(--signal-faint);
 }
 
 .tr-pane {
