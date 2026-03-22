@@ -2763,3 +2763,12 @@ tr.capture-row:focus-visible {
 .lib-toolbar-hint {
   margin-top: 1rem;
 }
+
+[data-theme="light"] .modal,
+[data-theme="light"] .ingest-agent-panel,
+[data-theme="light"] .capture-detail-modal {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .nav-drawer {
+  box-shadow: 8px 0 40px rgba(0, 0, 0, 0.1);
+}
