@@ -1584,16 +1584,6 @@ tr.capture-row:focus-visible {
   color: var(--muted);
 }
 
-.footer-mock {
-  margin-top: auto;
-  padding-top: 2rem;
-  border-top: 1px solid var(--line);
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 .digest-timeline {
   display: flex;
   flex-direction: column;

@@ -736,7 +736,6 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
         → <code style="color:var(--signal)">Digests/YYYY-Www</code>
       </p>
     </div>
-    <p class="footer-mock">Reader · mock-aligned UI</p>
   `;
 }
 
@@ -756,7 +755,6 @@ function sideCaptures(rows: CaptureListItem[]): string {
         <li>Mở note trong Obsidian, refresh reader để xem thay đổi</li>
       </ul>
     </div>
-    <p class="footer-mock">Thư viện captures</p>
   `;
 }
 
@@ -767,7 +765,6 @@ function sideCapture(d: CaptureDetail): string {
       <h4>${esc(d.id)}</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">Folder trong <code style="color:var(--signal)">Captures/</code> — chỉnh <code style="color:var(--signal)">note.md</code> trong Obsidian.</p>
     </div>
-    <p class="footer-mock">Chi tiết</p>
   `;
 }
 
@@ -785,7 +782,6 @@ function sideDigests(items: { week: string }[], digestAvailable: boolean): strin
       <h4>Đang có</h4>
       <p style="margin:0;font-size:12px;color:var(--muted)">${items.length} file · click thẻ để đọc</p>
     </div>
-    <p class="footer-mock">Digests</p>
   `;
 }
 
@@ -802,7 +798,6 @@ function sideDigestDetail(week: string, hasChallenge: boolean): string {
       <h4>Challenge</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">${challengeHint}</p>
     </div>
-    <p class="footer-mock">Chi tiết digest</p>
   `;
 }
 
@@ -964,7 +959,6 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
     </header>
     <div class="view active">
       <div class="toolbar">
-        <span class="ingest-label">Thư viện captures</span>
         <div class="search-wrap">
           <input type="search" id="lib-search" placeholder="Tìm theo slug, URL, nguồn…" aria-label="Tìm captures" />
         </div>
@@ -1702,7 +1696,7 @@ async function route() {
     }
   } catch (e) {
     main.innerHTML = `<div class="err">${esc(e instanceof Error ? e.message : String(e))}</div>`;
-    setSideInner('<p class="footer-mock">Lỗi tải</p>');
+    setSideInner('');
   }
 }
 
