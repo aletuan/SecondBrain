@@ -161,6 +161,162 @@ function noteToHtml(markdown: string, captureId: string, opts?: NoteToHtmlOpts):
   return html;
 }
 
+/**
+ * Paragraphs that are only bare `<img>` or `<a><img></a>` (whitespace between allowed).
+ * Used to group consecutive image blocks into a horizontal filmstrip in capture notes.
+ */
+function collectSlideImagesFromP(p: HTMLParagraphElement): HTMLImageElement[] | null {
+  const imgs: HTMLImageElement[] = [];
+  for (const child of Array.from(p.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      if (child.textContent?.trim()) return null;
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) return null;
+    const el = child as HTMLElement;
+    /* marked `breaks: true` joins consecutive `![](…)` lines into one <p> with <br> between imgs */
+    if (el.tagName === 'BR') continue;
+    if (el.tagName === 'IMG') {
+      imgs.push(el as HTMLImageElement);
+      continue;
+    }
+    if (el.tagName === 'A') {
+      if (el.childElementCount !== 1 || el.firstElementChild?.tagName !== 'IMG') return null;
+      imgs.push(el.firstElementChild as HTMLImageElement);
+      continue;
+    }
+    return null;
+  }
+  return imgs.length > 0 ? imgs : null;
+}
+
+function bindFilmstripKeyboard(track: HTMLElement): void {
+  track.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    ev.preventDefault();
+    const step = Math.min(Math.round(track.clientWidth * 0.72), 420);
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollBy({
+      left: ev.key === 'ArrowRight' ? step : -step,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  });
+}
+
+function bindFilmstripChrome(track: HTMLElement, idxEl: HTMLElement, slides: HTMLElement[]): void {
+  const total = slides.length;
+  if (total === 0) return;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const setIdx = (i: number) => {
+    idxEl.textContent = `${pad(Math.min(i + 1, total))} / ${pad(total)}`;
+  };
+
+  if (typeof IntersectionObserver === 'undefined') {
+    setIdx(0);
+    return;
+  }
+
+  const ratios = new Map<Element, number>();
+  slides.forEach((s) => ratios.set(s, 0));
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        ratios.set(e.target, e.intersectionRatio);
+      }
+      let pick = 0;
+      let maxR = -1;
+      slides.forEach((s, i) => {
+        const r = ratios.get(s) ?? 0;
+        if (r > maxR) {
+          maxR = r;
+          pick = i;
+        }
+      });
+      if (maxR < 0.08) return;
+      setIdx(pick);
+    },
+    { root: track, threshold: [0.15, 0.35, 0.55, 0.75, 0.95] },
+  );
+  slides.forEach((s) => io.observe(s));
+  setIdx(0);
+}
+
+/** Wrap runs of 2+ consecutive image-only paragraphs in `#note-prose` into a horizontal scroll strip. */
+function wrapConsecutiveProseImagesInFilmstrips(prose: Element): void {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const blocks = Array.from(prose.children);
+    for (let i = 0; i < blocks.length; i += 1) {
+      const el = blocks[i]!;
+      const imgs0 = el instanceof HTMLParagraphElement ? collectSlideImagesFromP(el) : null;
+      if (!imgs0) continue;
+      let j = i + 1;
+      while (j < blocks.length) {
+        const b = blocks[j]!;
+        if (!(b instanceof HTMLParagraphElement)) break;
+        const im = collectSlideImagesFromP(b);
+        if (!im) break;
+        j += 1;
+      }
+      const runEls = blocks.slice(i, j) as HTMLParagraphElement[];
+      const flatImgs = runEls.flatMap((para) => collectSlideImagesFromP(para)!);
+      if (flatImgs.length < 2) continue;
+
+      const strip = document.createElement('div');
+      strip.className = 'prose-filmstrip';
+      strip.setAttribute('role', 'region');
+      strip.setAttribute('aria-label', 'Ảnh liên tiếp — cuộn ngang để xem');
+
+      const head = document.createElement('div');
+      head.className = 'prose-filmstrip__head';
+
+      const eyebrow = document.createElement('span');
+      eyebrow.className = 'prose-filmstrip__eyebrow';
+      eyebrow.textContent = 'Dải ảnh';
+
+      const idx = document.createElement('span');
+      idx.className = 'prose-filmstrip__idx';
+      idx.setAttribute('aria-live', 'polite');
+      const total = flatImgs.length;
+      idx.textContent = `01 / ${String(total).padStart(2, '0')}`;
+
+      const hint = document.createElement('span');
+      hint.className = 'prose-filmstrip__hint';
+      hint.textContent = '← cuộn →';
+
+      head.append(eyebrow, idx, hint);
+
+      const track = document.createElement('div');
+      track.className = 'prose-filmstrip__track';
+      track.setAttribute('tabindex', '0');
+      track.setAttribute(
+        'aria-label',
+        'Cuộn ngang xem từng ảnh; phím mũi tên trái phải khi vùng này đang được focus',
+      );
+
+      const slides: HTMLElement[] = [];
+      for (const img of flatImgs) {
+        const slide = document.createElement('div');
+        slide.className = 'prose-filmstrip__slide';
+        slide.appendChild(img);
+        track.appendChild(slide);
+        slides.push(slide);
+      }
+
+      strip.append(head, track);
+      bindFilmstripChrome(track, idx, slides);
+      bindFilmstripKeyboard(track);
+
+      prose.insertBefore(strip, runEls[0]!);
+      runEls.forEach((para) => para.remove());
+      changed = true;
+      break;
+    }
+  }
+}
+
 /** Drop “images” section + body until next ATX heading (YouTube: redundant vs embed). */
 function stripImageSectionHeadings(md: string): string {
   const lines = md.split(/\r?\n/);
@@ -1593,7 +1749,10 @@ async function route() {
           }, 2000);
         }
       });
-      if (prose) prose.innerHTML = noteHtml;
+      if (prose) {
+        prose.innerHTML = noteHtml;
+        wrapConsecutiveProseImagesInFilmstrips(prose);
+      }
 
       const mergedSub = d.youtubeVideoId
         ? mergeTranscriptsForUi(d.transcriptEn ?? '', d.transcriptVi ?? '')

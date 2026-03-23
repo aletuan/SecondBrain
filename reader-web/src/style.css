@@ -2203,6 +2203,265 @@ tr.capture-row:focus-visible {
   border: 1px solid var(--line);
 }
 
+/* Capture note: editorial “gallery rail” filmstrip (scroll lives on __track) */
+#note-prose .prose-filmstrip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 1rem 0 1.65rem;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, var(--signal));
+  background:
+    radial-gradient(ellipse 130% 90% at 0% -20%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 58%),
+    radial-gradient(ellipse 100% 70% at 100% 110%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 52%),
+    linear-gradient(
+      168deg,
+      color-mix(in srgb, var(--elevated) 92%, var(--ink)) 0%,
+      var(--panel) 42%,
+      color-mix(in srgb, var(--elevated) 95%, var(--ink)) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--paper-read) 7%, transparent),
+    0 22px 56px color-mix(in srgb, var(--ink) 44%, transparent);
+  overflow: hidden;
+}
+
+#note-prose .prose-filmstrip::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--signal) 90%, var(--line)) 0%,
+    color-mix(in srgb, var(--accent) 65%, var(--signal)) 48%,
+    color-mix(in srgb, var(--signal) 35%, var(--line)) 100%
+  );
+  pointer-events: none;
+}
+
+#note-prose .prose-filmstrip::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 9px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--muted) 45%, transparent) 0 1.5px,
+    transparent 2.2px
+  );
+  background-size: 11px 9px;
+  background-repeat: repeat-x;
+  background-position: center bottom;
+}
+
+#note-prose .prose-filmstrip__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem 1.1rem;
+  padding: 0.7rem 1rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
+#note-prose .prose-filmstrip__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--signal) 68%, var(--muted));
+}
+
+#note-prose .prose-filmstrip__idx {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--paper-read);
+  padding: 0.2em 0.55em;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, var(--signal));
+  background: color-mix(in srgb, var(--panel) 75%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--paper-read) 5%, transparent);
+}
+
+#note-prose .prose-filmstrip__hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.88;
+}
+
+#note-prose .prose-filmstrip__track {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 1.05rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 1rem;
+  padding: 1.05rem 1rem 1.2rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: color-mix(in srgb, var(--signal) 52%, var(--line)) color-mix(in srgb, var(--elevated) 55%, var(--ink));
+  scrollbar-width: thin;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
+  outline: none;
+}
+
+#note-prose .prose-filmstrip__track:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--signal) 45%, transparent);
+}
+
+#note-prose .prose-filmstrip__track::-webkit-scrollbar {
+  height: 8px;
+}
+
+#note-prose .prose-filmstrip__track::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--elevated) 80%, var(--ink));
+  border-radius: 4px;
+  margin-inline: 0.5rem;
+}
+
+#note-prose .prose-filmstrip__track::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--signal) 58%, var(--line)),
+    color-mix(in srgb, var(--signal) 35%, var(--line))
+  );
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+@keyframes prose-filmstrip-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#note-prose .prose-filmstrip__slide {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  max-width: min(78vw, 440px);
+  padding: 0.35rem 0.35rem 0.5rem;
+  border-radius: 4px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--paper-read) 4%, var(--elevated)) 0%,
+    color-mix(in srgb, var(--panel) 90%, var(--ink)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--paper-read) 6%, transparent),
+    0 14px 32px color-mix(in srgb, var(--ink) 36%, transparent);
+  transition:
+    transform 0.35s var(--ease-out),
+    border-color 0.25s ease,
+    box-shadow 0.35s var(--ease-out);
+  animation: prose-filmstrip-slide-in 0.52s var(--ease-out) backwards;
+}
+
+#note-prose .prose-filmstrip__slide:nth-child(1) {
+  animation-delay: 0.04s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(2) {
+  animation-delay: 0.09s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(3) {
+  animation-delay: 0.14s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(4) {
+  animation-delay: 0.19s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(5) {
+  animation-delay: 0.24s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(6) {
+  animation-delay: 0.29s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(7) {
+  animation-delay: 0.34s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(8) {
+  animation-delay: 0.39s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(9) {
+  animation-delay: 0.44s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(10) {
+  animation-delay: 0.49s;
+}
+#note-prose .prose-filmstrip__slide:nth-child(n + 11) {
+  animation-delay: 0.52s;
+}
+
+#note-prose .prose-filmstrip__slide:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--signal) 35%, var(--line));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--paper-read) 7%, transparent),
+    0 20px 44px color-mix(in srgb, var(--ink) 48%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--signal) 18%, transparent);
+}
+
+#note-prose .prose-filmstrip__slide img {
+  display: block;
+  max-width: min(72vw, 400px);
+  width: auto;
+  height: auto;
+  max-height: min(68vh, 500px);
+  object-fit: contain;
+  margin: 0 auto;
+  border: 1px solid color-mix(in srgb, var(--line) 90%, var(--ink));
+  border-radius: 2px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 32%, transparent);
+  transition: filter 0.3s ease;
+}
+
+#note-prose .prose-filmstrip__slide:hover img {
+  filter: contrast(1.03) saturate(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #note-prose .prose-filmstrip__track {
+    scroll-snap-type: none;
+  }
+
+  #note-prose .prose-filmstrip__slide {
+    animation: none;
+    transition: none;
+  }
+
+  #note-prose .prose-filmstrip__slide:hover {
+    transform: none;
+  }
+
+  #note-prose .prose-filmstrip__slide:hover img {
+    filter: none;
+  }
+}
+
 .prose pre,
 .transcript-pre {
   font-family: var(--font-mono);
