@@ -26,9 +26,20 @@ pnpm install
 | `pnpm preview` | Build then Express: static `dist/` + same `/api/*` (port **4173** or `READER_PORT`) |
 | `pnpm typecheck` | `tsc --noEmit` for `src/`, `vault/`, Vite config, `serve.ts` |
 
-Open `http://127.0.0.1:5174` (dev) or the preview URL. Routes use the hash: `#/`, `#/captures`, `#/capture/:id`, `#/digests`, `#/digest/:week`.
+Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default — avoids some HMR WebSocket issues when `localhost` vs `127.0.0.1` disagree). From the Brain repo root you can run `pnpm reader:dev` (same as `cd reader-web && pnpm dev`). Routes use the hash: `#/`, `#/captures`, `#/capture/:id`, `#/digests`, `#/digest/:week`.
 
-**Fresh UI while coding:** dev server sends strong no-cache headers (`no-store`, `Pragma`, `Expires`) via `server.headers` plus an early Connect middleware (`reader-dev-no-cache` in `vite.config.ts`), and `index.html` includes `http-equiv` hints. If UI still looks stale: restart `pnpm dev` after changing `vite.config.ts`, open DevTools → **Network** → **Disable cache**, hard-reload. `serve.ts` preview uses the same policy for `dist/`.
+**Live reload vs restart**
+
+| What you change | What to do |
+|-----------------|------------|
+| `reader-web/src/*` (UI, `main.ts`, `style.css`) | Save the file — Vite **hot-updates** or **full page reload** automatically. No need to restart the dev server. |
+| `reader-web/vault/*.ts` (Connect `/api/*` middleware) | **Restart** `pnpm dev` — middleware is registered once at startup. The dev server prints a yellow hint when you save these files. |
+| `reader-web/vite.config.ts` | **Restart** `pnpm dev`. |
+| `pnpm preview` / `dist/` | **No HMR.** Run `pnpm build` again (or use `pnpm dev` while iterating). |
+
+**If the browser still looks stale:** confirm you are on **`pnpm dev`** (port **5174**), not **`pnpm preview`** (port **4173**, static `dist/`). Then DevTools → **Network** → **Disable cache**, hard-reload. Optional: `READER_VITE_POLL=1 pnpm dev` if file saves are not detected (Docker bind mounts, some network disks). Optional: `READER_DEV_HOST=0.0.0.0` to listen on all interfaces (local network only — do not expose to the internet).
+
+**Fresh UI while coding:** dev server sends strong no-cache headers (`no-store`, `Pragma`, `Expires`) via `server.headers` plus an early Connect middleware (`reader-dev-no-cache` in `vite.config.ts`), and `index.html` includes `http-equiv` hints. `serve.ts` preview uses the same policy for `dist/`.
 
 ## Environment
 
@@ -39,6 +50,8 @@ Open `http://127.0.0.1:5174` (dev) or the preview URL. Routes use the hash: `#/`
 | `READER_BRAIN_ROOT` | Brain CLI repo (contains `src/cli.ts`); default parent of `reader-web/` |
 | `READER_ALLOW_INGEST` | `0` / `false` disables ingest and digest routes (`POST /api/ingest`, start/stream, `POST /api/digest`) |
 | `READER_PORT` | Preview server port (default `4173`) |
+| `READER_DEV_HOST` | Dev + HMR bind host (default `127.0.0.1`). Use `0.0.0.0` only on trusted LAN. |
+| `READER_VITE_POLL` | Set to `1` or `true` so Vite watches files with polling (fixes missed saves on Docker / some disks). |
 
 If neither vault env is set, the app resolves `../vault` from the `reader-web/` working directory.
 

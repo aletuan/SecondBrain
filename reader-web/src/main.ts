@@ -17,6 +17,7 @@ type YtPlayerApi = {
 };
 
 let ytCaptureCleanup: (() => void) | null = null;
+let filmstripLightboxCleanup: (() => void) | null = null;
 
 function loadYoutubeIframeApi(): Promise<void> {
   const w = window as unknown as {
@@ -240,6 +241,114 @@ function bindFilmstripChrome(track: HTMLElement, idxEl: HTMLElement, slides: HTM
   );
   slides.forEach((s) => io.observe(s));
   setIdx(0);
+}
+
+function closeFilmstripImageLightbox(): void {
+  filmstripLightboxCleanup?.();
+  filmstripLightboxCleanup = null;
+}
+
+/** Full-size viewer for filmstrip images (dialog on `document.body`). */
+function openFilmstripImageLightbox(source: HTMLImageElement): void {
+  closeFilmstripImageLightbox();
+
+  const prevHtmlOverflow = document.documentElement.style.overflow;
+  const prevBodyOverflow = document.body.style.overflow;
+  const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  const root = document.createElement('div');
+  root.className = 'cap-img-lightbox';
+  root.setAttribute('role', 'dialog');
+  root.setAttribute('aria-modal', 'true');
+  root.setAttribute('aria-label', 'Ảnh phóng to');
+
+  const scrim = document.createElement('button');
+  scrim.type = 'button';
+  scrim.className = 'cap-img-lightbox__scrim';
+  scrim.setAttribute('aria-label', 'Đóng xem ảnh');
+
+  const stage = document.createElement('div');
+  stage.className = 'cap-img-lightbox__stage';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'cap-img-lightbox__close';
+  closeBtn.setAttribute('aria-label', 'Đóng (Escape)');
+  const closeMark = document.createElement('span');
+  closeMark.className = 'cap-img-lightbox__close-mark';
+  closeMark.setAttribute('aria-hidden', 'true');
+  const closeSr = document.createElement('span');
+  closeSr.className = 'visually-hidden';
+  closeSr.textContent = 'Đóng';
+  closeBtn.append(closeMark, closeSr);
+
+  const figure = document.createElement('figure');
+  figure.className = 'cap-img-lightbox__figure';
+
+  const big = document.createElement('img');
+  big.className = 'cap-img-lightbox__img';
+  big.decoding = 'async';
+  big.src = source.currentSrc || source.src;
+  const alt = source.getAttribute('alt');
+  if (alt != null) big.setAttribute('alt', alt);
+
+  const cap = document.createElement('figcaption');
+  cap.className = 'cap-img-lightbox__caption';
+
+  const onImgLoad = (): void => {
+    const w = big.naturalWidth;
+    const h = big.naturalHeight;
+    if (w > 0 && h > 0) {
+      cap.textContent = `${w.toLocaleString('vi-VN')} × ${h.toLocaleString('vi-VN')} px`;
+    }
+  };
+  if (big.complete) onImgLoad();
+  else big.addEventListener('load', onImgLoad, { once: true });
+
+  figure.append(big, cap);
+  stage.append(closeBtn, figure);
+  root.append(scrim, stage);
+  document.body.appendChild(root);
+
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  const onKey = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      teardown();
+    }
+  };
+
+  const teardown = (): void => {
+    document.removeEventListener('keydown', onKey, true);
+    root.remove();
+    document.documentElement.style.overflow = prevHtmlOverflow;
+    document.body.style.overflow = prevBodyOverflow;
+    filmstripLightboxCleanup = null;
+    prevActive?.focus({ preventScroll: true });
+  };
+
+  filmstripLightboxCleanup = teardown;
+
+  scrim.addEventListener('click', () => teardown());
+  closeBtn.addEventListener('click', () => teardown());
+  stage.addEventListener('click', (ev) => {
+    if (ev.target === stage) teardown();
+  });
+
+  document.addEventListener('keydown', onKey, true);
+  closeBtn.focus({ preventScroll: true });
+}
+
+function bindFilmstripImageLightbox(prose: HTMLElement): void {
+  prose.addEventListener('click', (ev: Event) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLImageElement)) return;
+    if (!t.closest('.prose-filmstrip__slide')) return;
+    ev.preventDefault();
+    openFilmstripImageLightbox(t);
+  });
 }
 
 /** Wrap runs of 2+ consecutive image-only paragraphs in `#note-prose` into a horizontal scroll strip. */
@@ -1592,6 +1701,7 @@ function bindRail() {
 async function route() {
   ytCaptureCleanup?.();
   ytCaptureCleanup = null;
+  closeFilmstripImageLightbox();
 
   const main = document.querySelector<HTMLElement>('#main')!;
   const { view, id } = parseHash();
@@ -1752,6 +1862,7 @@ async function route() {
       if (prose) {
         prose.innerHTML = noteHtml;
         wrapConsecutiveProseImagesInFilmstrips(prose);
+        bindFilmstripImageLightbox(prose as HTMLElement);
       }
 
       const mergedSub = d.youtubeVideoId

@@ -22,7 +22,7 @@ pnpm digest -- --since 7d             # Digest with lookback window
 pnpm challenge --week 2026-W12        # Generate reading challenge from digest
 ```
 
-**Reader web** (optional, separate package): `cd reader-web && pnpm install && pnpm dev` — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader-web/README.md` and `docs/reader-web.md`.
+**Reader web** (optional, separate package): `cd reader-web && pnpm install && pnpm dev` (or repo root `pnpm reader:dev`) — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader-web/README.md` and `docs/reader-web.md`.
 
 Run a single test file: `pnpm vitest run tests/path/to/file.test.ts`
 
