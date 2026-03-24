@@ -23,6 +23,11 @@ The vault frontmatter field `publish` was intended for a future “public index�
 - Migrating or editing `Digests/` / `Challenges/` unless those files are found to contain `publish:` in real usage (current CLI digest path does not write `publish`; script scope is **Captures only** unless extended later).
 - Stripping `publish` from API `noteFm` / `sourceFm` blobs (optional future tightening); **default:** remove UI and list field only; raw frontmatter in JSON may still contain `publish` on old notes until the user runs cleanup.
 
+### API contract note (stale keys)
+
+- **`CaptureListItem` and reader UI** will not include `publish` after implementation.
+- **`noteFm` / `sourceFm` in capture detail** remain **opaque frontmatter maps** parsed from disk. They **may still contain `publish: true|false`** until the operator runs the optional cleanup script. API clients **must not** depend on `publish` for behavior; treat it as deprecated junk if present.
+
 ## Design — Code changes (same as Option A)
 
 ### Vault writer (`src/vault/writer.ts`)
@@ -59,10 +64,21 @@ After deployment, existing vaults may still contain lines like `publish: false` 
 ### Safety requirements
 
 1. **Default dry-run:** First invocation reports how many files would change and sample paths; **no writes** unless an explicit `--apply` (or equivalent) flag is passed.
-2. **Scope:** Only files matching `Captures/*/note.md` and `Captures/*/source.md` under `VAULT_ROOT` (or `--vault <path>`). No other paths unless spec is revised.
-3. **Edit rule:** Within the first YAML frontmatter block (delimited by leading `---` and the next `---`), remove lines that match `publish:` as a top-level key (boolean only: `true` / `false`), with flexible whitespace. Do not touch body markdown.
-4. **Idempotency:** Re-running on a clean vault is a no-op (zero files changed).
-5. **Backup:** Document that users should commit or backup the vault before `--apply` (git or copy). The script does not require automatic backups (keeps implementation small).
+2. **Scope:** Only files matching `Captures/*/note.md` and `Captures/*/source.md` under `VAULT_ROOT` (or `--vault <path>`). Resolve paths under the vault root only; **do not follow symlinks** out of the vault (or resolve `realpath` and ensure it stays under `VAULT_ROOT`).
+3. **Encoding:** **UTF-8** input/output. If a BOM or non–UTF-8 is detected, **skip** the file and log a warning (avoid corrupting notes).
+4. **Atomic writes:** On `--apply`, write to a temp file in the same directory then **rename** into place, so a crash mid-write does not truncate the original.
+5. **Exit codes:** `0` when every scanned file was either unchanged, successfully updated, or cleanly skipped (e.g. no frontmatter). Use a **non-zero** exit (e.g. `2`) if any file was **skipped as unsafe** (ambiguous frontmatter, encoding), so operators and CI can detect partial failure.
+6. **Concurrency:** Document that operators should close Obsidian or avoid editing the same files during `--apply` (no file locking in v1).
+7. **Idempotency:** Re-running on a clean vault is a no-op (zero files changed).
+8. **Backup:** Document that users should commit or backup the vault before `--apply` (git or copy). The script does not create automatic backups.
+
+### Edit rule (precise)
+
+- Only the **first** frontmatter block (`---` … `---`).
+- Remove **top-level** lines where the key is **exactly** `publish` (ASCII, case-sensitive: `publish`, not `Publish` or `foo_publish`).
+- **Supported values to strip:** `true` and `false` only (after optional whitespace). **Out of scope for v1:** YAML 1.1 aliases (`yes`/`no`/`on`/`off`), `null`, or quoted variants — skip the **whole file** if any line inside the frontmatter block looks like `publish:` but does not match `^publish:\s*(true|false)\s*$`.
+- **Duplicate `publish` lines:** remove **every** line that matches the pattern (all occurrences).
+- Do not touch body markdown below the closing `---`.
 
 ### Implementation sketch
 
@@ -73,8 +89,9 @@ After deployment, existing vaults may still contain lines like `publish: false` 
 ### Edge cases
 
 - **No frontmatter:** Skip file.
-- **Malformed YAML / multi-line values:** If the simple line-based removal is unsafe for a file, skip and log a warning (or only support lines that match `^\s*publish:\s*(true|false)\s*$` after the opening `---`).
-- **Quoted booleans:** Accept `publish: "false"` only if trivial to support; otherwise document “supported forms: `publish: true` / `publish: false`”.
+- **Unsafe frontmatter:** If the frontmatter region contains block scalars (`|` / `>`) or line continuations that make line-based editing risky, **skip the entire file** and warn (conservative default).
+- **Nested `publish:`** (indented under a mapping): do **not** remove — only column-0 `publish:` lines (top-level keys as written by this CLI). If the script uses “no leading whitespace before `publish:`”, nested keys are naturally ignored.
+- **Quoted booleans:** **Out of scope** for v1 unless trivial; `publish: "false"` → skip file or leave unchanged per implementation choice; document clearly.
 
 ### Documentation for operators
 
@@ -89,6 +106,7 @@ After deployment, existing vaults may still contain lines like `publish: false` 
 
 1. Land code + docs + script together or script immediately after writer change (script remains useful for old vaults).
 2. Operators with existing vaults: run dry-run, review, backup, `--apply`.
+3. **Optional discovery:** Before closing scope on non-Captures paths, operators may run e.g. `rg 'publish:' Digests Challenges` (or search the whole vault) to see if `publish:` appears outside `Captures/` and clean manually if needed.
 
 ## Approval
 
