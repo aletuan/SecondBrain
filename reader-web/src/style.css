@@ -29,9 +29,9 @@
 
 [data-theme="light"] {
   --ink: #f7f4ee;
-  --panel: #ffffff;
+  --panel: #faf8f2;
   --elevated: #f0ece4;
-  --line: #d5cfc4;
+  --line: #ccc7b8;
   --muted: #706a5e;
   --paper: #2c2a26;
   --paper-read: #1a1916;
@@ -129,10 +129,10 @@ html[data-theme] .status-strip {
 }
 
 [data-theme="light"] .noise {
-  opacity: 0.015;
+  opacity: 0.025;
 }
 [data-theme="light"] .grid-bg {
-  opacity: 0.055;
+  opacity: 0.04;
 }
 
 .app {
@@ -3362,5 +3362,17 @@ tr.capture-row:focus-visible {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 [data-theme="light"] .nav-drawer {
-  box-shadow: 8px 0 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 8px 0 40px rgba(0, 0, 0, 0.10);
+}
+[data-theme="light"] .ingest-shell {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .mobile-topbar {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .ingest-agent-status {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
