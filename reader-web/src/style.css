@@ -1309,16 +1309,34 @@ main {
   outline-offset: 2px;
 }
 
-.card::after {
+.card::before {
   content: '';
   position: absolute;
+  left: 0;
   top: 0;
-  right: 0;
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, transparent 50%, var(--accent-dim) 50%);
-  opacity: 0.6;
+  bottom: 0;
+  width: 3px;
+  background: var(--muted);
+  opacity: 0.7;
 }
+
+.card[data-source-type="youtube"]::before { background: var(--signal); }
+.card[data-source-type="x"]::before { background: var(--accent); }
+.card[data-source-type="article"]::before { background: var(--warn); }
+
+.card-source-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-left: 0.35em;
+  background: var(--muted);
+}
+
+.card[data-source-type="youtube"] .card-source-dot { background: var(--signal); }
+.card[data-source-type="x"] .card-source-dot { background: var(--accent); }
+.card[data-source-type="article"] .card-source-dot { background: var(--warn); }
 
 .card-meta {
   display: flex;

@@ -1212,10 +1212,15 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
       : recent
           .map((r) => {
             const pub = r.publish ? 'publish' : 'private';
+            const sourceType = r.youtube_video_id
+              ? 'youtube'
+              : r.url && isLikelyXOrTwitterUrl(r.url)
+                ? 'x'
+                : 'article';
             return `
-        <button type="button" class="card" data-card-id="${esc(r.id)}">
+        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
           <div class="card-meta">
-            <span>${esc(r.source)}</span>
+            <span>${esc(r.source)}<span class="card-source-dot"></span></span>
             <span>${esc(r.fetch_method || '—')}</span>
           </div>
           <h3>${esc(r.title)}</h3>
