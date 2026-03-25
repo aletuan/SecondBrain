@@ -58,6 +58,10 @@ const THEME_ICONS = {
   solarized: '<svg viewBox="0 0 24 24"><path d="M10 2v7.527a2 2 0 0 1-1 1.732L6 13v1h12v-1l-3-1.741A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/><path d="M9 20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1H9z"/></svg>',
 } as const;
 
+/** Library row “open” affordance (row click opens detail; icon is decorative). */
+const LIB_OPEN_CHEVRON_SVG =
+  '<svg class="mock-table-open__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 6 6 6-6 6"/></svg>';
+
 type ThemeName = 'dark' | 'light' | 'solarized';
 const THEMES: ThemeName[] = ['dark', 'light', 'solarized'];
 
@@ -1066,8 +1070,74 @@ function sideDigestDetail(week: string, hasChallenge: boolean): string {
   `;
 }
 
+/* ── Skeleton placeholders ──────────────────────────────── */
+
+function skeletonCardsHtml(count: number): string {
+  return Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
+      <div class="skeleton skeleton-card__line skeleton-card__line--title"></div>
+      <div class="skeleton skeleton-card__line skeleton-card__line--url"></div>
+      <div class="skeleton skeleton-card__line skeleton-card__line--tag"></div>
+    </div>`).join('');
+}
+
+function skeletonTableRowsHtml(count: number): string {
+  return Array.from({ length: count }, () => `
+    <tr class="skeleton-row">
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--title"></div></td>
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--source"></div></td>
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--status"></div></td>
+      <td></td>
+    </tr>`).join('');
+}
+
+function skeletonProseHtml(): string {
+  return `
+    <div class="skeleton-prose">
+      <div class="skeleton skeleton-prose__title"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+    </div>`;
+}
+
 /** Max recent capture cards on home (grid shows up to 3×3 on wide desktop). */
 const HOME_RECENT_CAPTURE_LIMIT = 9;
+
+const CAPTURE_FOLDER_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** `YYYY-MM-DD--stem--hash` → `stem`; otherwise returns `id`. */
+function friendlySlugFromCaptureId(id: string): string {
+  const parts = id.split('--');
+  if (parts.length < 3) return id;
+  if (!CAPTURE_FOLDER_DATE.test(parts[0]!)) return id;
+  const hash = parts[parts.length - 1]!;
+  const stem = parts.slice(1, -1).join('--');
+  if (!stem || !/^[a-f0-9]{4,12}$/i.test(hash)) return id;
+  return stem;
+}
+
+function captureSourceLabel(r: CaptureListItem): string {
+  const u = r.url?.trim();
+  if (u) {
+    try {
+      const host = new URL(u).hostname.replace(/^www\./i, '');
+      if (host) return host;
+    } catch {
+      /* invalid URL */
+    }
+  }
+  return r.source || '—';
+}
+
+/** Primary line in library table: note heading when distinct from folder id, else short slug. */
+function captureTablePrimaryLine(r: CaptureListItem): string {
+  if (r.title && r.title !== r.id) return r.title;
+  return friendlySlugFromCaptureId(r.id);
+}
 
 function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
   const ingestShellClass = h.ingestAvailable ? 'ingest-shell' : 'ingest-shell ingest-shell-muted';
@@ -1205,11 +1275,13 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
   const body = rows
     .map(
       (r) => `
-    <tr class="capture-row" tabindex="0" data-id="${esc(r.id)}">
-      <td><span class="mono-sm">${esc(r.id)}</span></td>
-      <td>${esc(r.source)}</td>
+    <tr class="capture-row" tabindex="0" data-id="${esc(r.id)}" data-slug="${esc(friendlySlugFromCaptureId(r.id))}">
+      <td class="capture-title-cell" title="${esc(r.id)}">
+        <div class="capture-title">${esc(captureTablePrimaryLine(r))}</div>
+      </td>
+      <td class="capture-source-cell">${esc(captureSourceLabel(r))}</td>
       <td><span class="pill${r.publish ? '' : ' warn'}">${r.publish ? 'publish' : 'private'}</span></td>
-      <td><span style="color:var(--signal);font-size:11px">Mở →</span></td>
+      <td class="capture-action-cell"><span class="mock-table-open" aria-hidden="true">${LIB_OPEN_CHEVRON_SVG}</span></td>
     </tr>`,
     )
     .join('');
@@ -1225,7 +1297,7 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
     <div class="view active">
       <div class="toolbar">
         <div class="search-wrap">
-          <input type="search" id="lib-search" placeholder="Tìm theo slug, URL, nguồn…" aria-label="Tìm captures" />
+          <input type="search" id="lib-search" placeholder="Tìm theo tiêu đề, slug, URL, nguồn…" aria-label="Tìm captures" />
         </div>
         <button type="button" class="btn-ghost" id="back-home">← Ingest</button>
       </div>
@@ -1233,7 +1305,7 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
         rows.length === 0
           ? '<p class="hint">Chưa có capture.</p>'
           : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th>Slug / thư mục</th><th>Nguồn</th><th>Trạng thái</th><th></th>
+            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Trạng thái</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
           </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`
       }
       <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · hàng có thể mở bằng Enter khi focus.</p>
@@ -1248,8 +1320,11 @@ function bindLibrarySearch() {
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
     tbody.querySelectorAll('tr').forEach((tr) => {
+      const el = tr as HTMLElement;
       const t = tr.textContent?.toLowerCase() ?? '';
-      (tr as HTMLElement).style.display = !q || t.includes(q) ? '' : 'none';
+      const slug = el.dataset.slug?.toLowerCase() ?? '';
+      const id = el.dataset.id?.toLowerCase() ?? '';
+      el.style.display = !q || t.includes(q) || slug.includes(q) || id.includes(q) ? '' : 'none';
     });
   });
 }
@@ -1709,6 +1784,11 @@ async function route() {
 
   try {
     if (view === 'home') {
+      main.innerHTML = `
+        <header class="masthead"><h1><span>Bộ nhớ</span><br /><em>thứ hai.</em></h1></header>
+        <div class="view active">
+          <div class="cards">${skeletonCardsHtml(3)}</div>
+        </div>`;
       const [h, capData] = await Promise.all([
         fetchJson<Health>('/api/health'),
         fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
@@ -1805,6 +1885,13 @@ async function route() {
       return;
     }
     if (view === 'captures') {
+      main.innerHTML = `
+        <header class="masthead"><h1>Thư viện<br /><em>captures.</em></h1></header>
+        <div class="view active">
+          <div class="mock-table-wrap"><table class="mock-table"><thead><tr>
+            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Trạng thái</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
+          </tr></thead><tbody>${skeletonTableRowsHtml(5)}</tbody></table></div>
+        </div>`;
       const { captures } = await fetchJson<{ captures: CaptureListItem[] }>('/api/captures');
       main.innerHTML = renderCapturesTable(captures);
       setSideInner(sideCaptures(captures));
@@ -1827,6 +1914,12 @@ async function route() {
       return;
     }
     if (view === 'capture' && id) {
+      main.innerHTML = `
+        <div class="toolbar detail-toolbar">
+          <button type="button" class="btn-ghost" id="cap-back-skel">← Thư viện</button>
+        </div>
+        <div class="view active">${skeletonProseHtml()}</div>`;
+      document.querySelector('#cap-back-skel')?.addEventListener('click', () => setHash('captures'));
       const d = await fetchJson<CaptureDetail>(`/api/captures/${encodeURIComponent(id)}`);
       main.innerHTML = renderCaptureDetail(d);
       setSideInner(sideCapture(d));
