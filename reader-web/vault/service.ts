@@ -136,6 +136,9 @@ export type CaptureDetail = {
   transcriptEn: string;
   transcriptVi: string;
   milestones: Awaited<ReturnType<typeof loadMilestones>>;
+  /** Same source as list view: `{slug}.comment` timeline. */
+  reaction_avg: number | null;
+  reaction_count: number;
 };
 
 export async function getCapture(id: string): Promise<CaptureDetail | null> {
@@ -158,6 +161,18 @@ export async function getCapture(id: string): Promise<CaptureDetail | null> {
     (source.fm.youtube_video_id as string | undefined) ||
     null;
   const milestones = await loadMilestones(dir);
+  let reaction_avg: number | null = null;
+  let reaction_count = 0;
+  try {
+    const commentPath = await getCommentPath(dir);
+    const commentRaw = await fs.readFile(commentPath, 'utf8');
+    const { entries } = parseReactionsMarkdown(commentRaw);
+    const stats = averageReactionStats(entries);
+    reaction_avg = stats.avg;
+    reaction_count = stats.count;
+  } catch {
+    /* missing or unreadable .comment */
+  }
   return {
     id,
     vaultRoot,
@@ -169,6 +184,8 @@ export async function getCapture(id: string): Promise<CaptureDetail | null> {
     transcriptEn: extractTranscriptSection(source.body, 'en'),
     transcriptVi: extractTranscriptSection(source.body, 'vi'),
     milestones,
+    reaction_avg,
+    reaction_count,
   };
 }
 

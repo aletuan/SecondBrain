@@ -29,4 +29,7 @@ export type CaptureDetail = {
   transcriptEn: string;
   transcriptVi: string;
   milestones: { t: number; label: string; kind?: string }[] | null;
+  /** Mean rating from `{slug}.comment` (same as library table). */
+  reaction_avg: number | null;
+  reaction_count: number;
 };

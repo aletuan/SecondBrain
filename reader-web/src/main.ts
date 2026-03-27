@@ -480,10 +480,25 @@ function captureBreadcrumbLabel(id: string): string {
   return `${slug.slice(0, 38)}…`;
 }
 
+/** ISO instant → Vietnamese prose, fixed to Asia/Ho_Chi_Minh (24h, locale wording). Omits vi-VN “lúc ” prefix. */
 function formatIngestedVi(iso: string): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso.trim() || '—';
-  return new Date(t).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+  const d = new Date(t);
+  const fmt = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return fmt
+    .formatToParts(d)
+    .filter((p) => !(p.type === 'literal' && p.value === 'lúc '))
+    .map((p) => p.value)
+    .join('');
 }
 
 /** Obsidian-style YAML frontmatter (single-line scalar values only). */
@@ -675,7 +690,13 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
   }
 }
 
-const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish']);
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at']);
+
+/** YAML keys superseded by the Đánh giá row (stats from `.comment`, same as library table). */
+function isEvaluationVoteFmKey(k: string): boolean {
+  const n = k.trim().toLowerCase();
+  return n === 'evaluation' || n === 'vote';
+}
 
 /** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
 function parseTagList(raw: string | boolean | undefined): string[] {
@@ -706,10 +727,15 @@ function parseTagList(raw: string | boolean | undefined): string[] {
     .filter(Boolean);
 }
 
+/** Strip optional leading `#` for UI only; vault YAML unchanged. */
+function formatTagForDisplay(raw: string): string {
+  return raw.trim().replace(/^#+\s*/, '');
+}
+
 function renderCaptureTagChips(tags: string[]): string {
   if (tags.length === 0) return '';
   const chips = tags
-    .map((t) => `<span class="capture-tag"><span class="capture-tag__hash" aria-hidden="true">#</span>${esc(t)}</span>`)
+    .map((t) => `<span class="capture-tag">${esc(formatTagForDisplay(t))}</span>`)
     .join('');
   return `<div class="capture-tags capture-tags--fm" aria-label="Thẻ (tags)">${chips}</div>`;
 }
@@ -1208,17 +1234,20 @@ function captureTablePrimaryLine(r: CaptureListItem): string {
   return friendlySlugFromCaptureId(r.id);
 }
 
-/** Thư viện: sao rút gọn + một chữ số thập phân (spec format B). */
-function formatLibraryRatingCell(r: CaptureListItem): string {
-  if (r.reaction_avg == null || r.reaction_count === 0) {
+/** Thư viện + frontmatter: sao rút gọn + một chữ số thập phân (spec format B). */
+function formatRatingDisplay(avg: number | null, count: number): string {
+  if (avg == null || count === 0) {
     return '<span class="capture-rating capture-rating--empty">—</span>';
   }
-  const avg = r.reaction_avg;
   const b = Math.min(5, Math.max(1, Math.round(avg)));
   const stars = ratingStarsOnly(b);
   const num = avg.toFixed(1);
-  const label = `Đánh giá trung bình ${num} trên 5, ${r.reaction_count} lượt`;
+  const label = `Đánh giá trung bình ${num} trên 5, ${count} lượt`;
   return `<span class="capture-rating" aria-label="${escAttr(label)}">${stars} ${num}</span>`;
+}
+
+function formatLibraryRatingCell(r: CaptureListItem): string {
+  return formatRatingDisplay(r.reaction_avg, r.reaction_count);
 }
 
 function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
@@ -1772,7 +1801,13 @@ function renderCaptureDetail(d: CaptureDetail): string {
       </div>`;
 
   const tagList = parseTagList(d.noteFm.tags);
-  const fmEntries = Object.entries(d.noteFm).filter(([k]) => !FM_SKIP_IN_GRID.has(k));
+  const fmEntries = Object.entries(d.noteFm).filter(
+    ([k]) => !FM_SKIP_IN_GRID.has(k) && !isEvaluationVoteFmKey(k),
+  );
+  const ratingRow = `<div class="fm-row fm-row--rating">
+        <dt class="fm-grid__key">Đánh giá</dt>
+        <dd class="fm-grid__value">${formatRatingDisplay(d.reaction_avg, d.reaction_count)}</dd>
+      </div>`;
   const fmNoteInner = fmEntries
     .map(
       ([k, v]) => `
@@ -1784,8 +1819,8 @@ function renderCaptureDetail(d: CaptureDetail): string {
     .join('');
   const fmNote =
     fmEntries.length > 0
-      ? fmNoteInner
-      : `<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
+      ? `${ratingRow}${fmNoteInner}`
+      : `${ratingRow}<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
 
   const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
     .trim();
@@ -1853,7 +1888,7 @@ function renderCaptureDetail(d: CaptureDetail): string {
     </div>
     <div class="section cap-anchor" id="cap-frontmatter">
       <h3>Frontmatter (note)</h3>
-      <p class="hint fm-frontmatter-hint">Bảng dưới đây lấy từ YAML note. <code>url</code> và <code>fetch_method</code> đã gộp lên dòng meta; <code>tags</code> hiển thị dạng thẻ trong ô.</p>
+      <p class="hint fm-frontmatter-hint">Bảng dưới đây lấy từ YAML note. <code>ingested_at</code>, <code>url</code> và <code>fetch_method</code> đã gộp lên dòng meta phía trên; <code>tags</code> hiển thị dạng thẻ trong ô. <strong>Đánh giá</strong> = trung bình từ file <code>.comment</code> (giống cột Thư viện); không lặp <code>evaluation</code>/<code>vote</code> trong YAML.</p>
       <dl class="fm-grid">${fmNote}</dl>
     </div>
     ${

@@ -2226,7 +2226,6 @@ tr.capture-row:focus-visible {
 .capture-tag {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.08em;
   padding: 0.28rem 0.55rem 0.32rem;
   border-radius: 999px;
   font-family: var(--font-mono);
@@ -2249,13 +2248,6 @@ tr.capture-row:focus-visible {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--signal) 55%, transparent);
   background: color-mix(in srgb, var(--signal) 18%, var(--panel));
-}
-
-.capture-tag__hash {
-  font-weight: 600;
-  opacity: 0.45;
-  font-size: 0.95em;
-  user-select: none;
 }
 
 .capture-tags--fm .capture-tag:nth-child(1) {
