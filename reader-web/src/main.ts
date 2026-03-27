@@ -1,7 +1,7 @@
 import './style.css';
 import { marked, Renderer } from 'marked';
 import type { Tokens } from 'marked';
-import type { CaptureDetail, CaptureListItem } from './types.js';
+import type { CaptureDetail, CaptureListItem, ReactionEntry } from './types.js';
 import {
   findActiveSegmentIndex,
   mergeTranscriptsForUi,
@@ -157,6 +157,23 @@ function noteToHtml(markdown: string, captureId: string, opts?: NoteToHtmlOpts):
         `![](/api/captures/${encodeURIComponent(captureId)}/assets/${encodeURIComponent(name.trim())})`,
     );
   }
+
+  // Convert Obsidian wikilinks [[Captures/<id>/note|Title]] → in-app links
+  md = md.replace(
+    /\[\[Captures\/(.+?)\/note\|([^\]]+)\]\]/g,
+    (_, folder: string, alias: string) => {
+      const id = folder.trim();
+      const label = alias.trim().replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+      return `[${label}](#/capture/${encodeURIComponent(id)})`;
+    },
+  );
+  md = md.replace(
+    /\[\[Captures\/(.+?)\/note\]\]/g,
+    (_, folder: string) => {
+      const id = folder.trim();
+      return `[${id}](#/capture/${encodeURIComponent(id)})`;
+    },
+  );
 
   let html = marked.parse(md) as string;
   if (omit) {
@@ -658,6 +675,58 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
 }
 
 const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method']);
+
+/** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
+function parseTagList(raw: string | boolean | undefined): string[] {
+  if (raw === undefined || typeof raw === 'boolean') return [];
+  const s = String(raw).trim();
+  if (!s) return [];
+
+  if (s.startsWith('[') && s.endsWith(']')) {
+    try {
+      const j = JSON.parse(s) as unknown;
+      if (Array.isArray(j) && j.every((x) => typeof x === 'string')) {
+        return j.map((t) => t.trim()).filter(Boolean);
+      }
+    } catch {
+      /* bracket list without valid JSON */
+    }
+    const inner = s.slice(1, -1).trim();
+    if (!inner) return [];
+    return inner
+      .split(',')
+      .map((t) => t.trim().replace(/^["']|["']$/g, ''))
+      .filter(Boolean);
+  }
+
+  return s
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function renderCaptureTagChips(tags: string[]): string {
+  if (tags.length === 0) return '';
+  const chips = tags
+    .map((t) => `<span class="capture-tag"><span class="capture-tag__hash" aria-hidden="true">#</span>${esc(t)}</span>`)
+    .join('');
+  return `<div class="capture-tags capture-tags--fm" aria-label="Thẻ (tags)">${chips}</div>`;
+}
+
+/** One cell in frontmatter table (tags = chips; boolean = pill; text = body). */
+function formatFmCellValue(key: string, v: string | boolean, tagList: string[]): string {
+  if (key === 'tags') {
+    return tagList.length
+      ? renderCaptureTagChips(tagList)
+      : '<span class="fm-value-empty">—</span>';
+  }
+  if (typeof v === 'boolean') {
+    return `<span class="fm-value-bool${v ? ' fm-value-bool--true' : ' fm-value-bool--false'}">${v ? 'true' : 'false'}</span>`;
+  }
+  const s = String(v);
+  if (!s.trim()) return '<span class="fm-value-empty">—</span>';
+  return `<span class="fm-value-text">${esc(s)}</span>`;
+}
 
 function setSideInner(html: string) {
   const el = document.querySelector('#side-inner');
@@ -1220,7 +1289,7 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
             return `
         <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
           <div class="card-meta">
-            <span>${esc(r.source)}<span class="card-source-dot"></span></span>
+            <span>${esc(r.source)}<span class="card-source-dot" aria-hidden="true"></span></span>
             <span>${esc(r.fetch_method || '—')}</span>
           </div>
           <h3>${esc(r.title)}</h3>
@@ -1476,6 +1545,132 @@ function bindYoutubeSubPanel(
   };
 }
 
+function reactionStarDisplay(rating: number): string {
+  return `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`;
+}
+
+function formatReactionTime(at: string): string {
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return at;
+  return new Date(t).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function renderReactionsTimelineHtml(entries: ReactionEntry[]): string {
+  if (entries.length === 0) {
+    return '<p class="hint cap-reactions-empty">Chưa có phản hồi.</p>';
+  }
+  const items = entries
+    .map((e) => {
+      const stars = reactionStarDisplay(e.rating);
+      const textBlock = e.text
+        ? `<p class="cap-reactions-item__text">${esc(e.text)}</p>`
+        : '';
+      return `<li class="cap-reactions-item">
+  <div class="cap-reactions-item__head">
+    <time class="cap-reactions-item__time" datetime="${escAttr(e.at)}">${esc(formatReactionTime(e.at))}</time>
+    <span class="cap-reactions-item__stars" title="${e.rating}/5" aria-label="${e.rating} trên 5 sao">${stars}</span>
+  </div>
+  ${textBlock}
+</li>`;
+    })
+    .join('');
+  return `<ul class="cap-reactions-list">${items}</ul>`;
+}
+
+async function bindCaptureReactions(captureId: string): Promise<void> {
+  const timeline = document.querySelector<HTMLElement>('#cap-reactions-timeline');
+  const errEl = document.querySelector<HTMLElement>('#cap-reactions-err');
+  const submit = document.querySelector<HTMLButtonElement>('#cap-reactions-submit');
+  const ta = document.querySelector<HTMLTextAreaElement>('#cap-reactions-note');
+  const starBtns = document.querySelectorAll<HTMLButtonElement>('.cap-reactions-star');
+  if (!timeline || !submit || !ta) return;
+
+  let selected: number | null = null;
+
+  const setErr = (msg: string) => {
+    if (!errEl) return;
+    if (!msg) {
+      errEl.hidden = true;
+      errEl.textContent = '';
+    } else {
+      errEl.hidden = false;
+      errEl.textContent = msg;
+    }
+  };
+
+  const syncStarUi = () => {
+    starBtns.forEach((b) => {
+      const n = Number(b.dataset.star);
+      const on = selected !== null && n <= selected;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    submit.disabled = selected === null;
+  };
+
+  starBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      selected = Number(b.dataset.star);
+      syncStarUi();
+      setErr('');
+    });
+  });
+
+  const load = async () => {
+    try {
+      const { entries } = await fetchJson<{ entries: ReactionEntry[] }>(
+        `/api/captures/${encodeURIComponent(captureId)}/reactions`,
+      );
+      const sorted = [...entries].sort((a, b) => {
+        const ta = Date.parse(a.at);
+        const tb = Date.parse(b.at);
+        return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+      });
+      timeline.innerHTML = renderReactionsTimelineHtml(sorted);
+    } catch (e) {
+      timeline.innerHTML = `<p class="err cap-reactions-load-err">${esc(e instanceof Error ? e.message : String(e))}</p>`;
+    }
+  };
+
+  submit.addEventListener('click', async () => {
+    if (selected === null) {
+      setErr('Chọn số sao trước khi gửi.');
+      return;
+    }
+    setErr('');
+    submit.disabled = true;
+    const body: { rating: number; comment?: string } = { rating: selected };
+    const c = ta.value.trim();
+    if (c) body.comment = c;
+    try {
+      const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify(body),
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string };
+      if (!r.ok) {
+        setErr(typeof j.error === 'string' ? j.error : `${r.status}`);
+        submit.disabled = selected === null;
+        syncStarUi();
+        return;
+      }
+      ta.value = '';
+      selected = null;
+      syncStarUi();
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      submit.disabled = selected === null;
+      syncStarUi();
+    }
+  });
+
+  syncStarUi();
+  await load();
+}
+
 function renderCaptureDetail(d: CaptureDetail): string {
   const yt = d.youtubeVideoId;
   const maxT =
@@ -1563,10 +1758,21 @@ function renderCaptureDetail(d: CaptureDetail): string {
         <div><span class="tr-col-label">VI (LLM)</span><pre class="transcript-pre">${esc(d.transcriptVi || '—')}</pre></div>
       </div>`;
 
-  const fmNote = Object.entries(d.noteFm)
-    .filter(([k]) => !FM_SKIP_IN_GRID.has(k))
-    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`)
+  const tagList = parseTagList(d.noteFm.tags);
+  const fmEntries = Object.entries(d.noteFm).filter(([k]) => !FM_SKIP_IN_GRID.has(k));
+  const fmNoteInner = fmEntries
+    .map(
+      ([k, v]) => `
+      <div class="fm-row">
+        <dt class="fm-grid__key">${esc(k)}</dt>
+        <dd class="fm-grid__value">${formatFmCellValue(k, v, tagList)}</dd>
+      </div>`,
+    )
     .join('');
+  const fmNote =
+    fmEntries.length > 0
+      ? fmNoteInner
+      : `<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
 
   const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
     .trim();
@@ -1611,7 +1817,15 @@ function renderCaptureDetail(d: CaptureDetail): string {
     ...(yt ? [`<a href="#cap-youtube">Video</a>`] : []),
     `<a href="#cap-note">Ghi chú</a>`,
     `<a href="#cap-source">Source</a>`,
+    `<a href="#cap-reactions">Phản hồi</a>`,
   ].join('');
+
+  const starBtns = [1, 2, 3, 4, 5]
+    .map(
+      (n) =>
+        `<button type="button" class="cap-reactions-star" data-star="${n}" aria-label="${n} sao" aria-pressed="false">★</button>`,
+    )
+    .join('');
 
   const sourceExcerpt = d.sourceBody;
   const sourceTooLong = sourceExcerpt.length > 12000;
@@ -1630,8 +1844,8 @@ function renderCaptureDetail(d: CaptureDetail): string {
     </div>
     <div class="section cap-anchor" id="cap-frontmatter">
       <h3>Frontmatter (note)</h3>
-      <p class="hint" style="margin-top:0"><code>url</code> và <code>fetch_method</code> hiển thị ở dòng meta phía trên (nếu có).</p>
-      <dl class="fm-grid">${fmNote || '<dd>(empty)</dd>'}</dl>
+      <p class="hint fm-frontmatter-hint">Bảng dưới đây lấy từ YAML note. <code>url</code> và <code>fetch_method</code> đã gộp lên dòng meta; <code>tags</code> hiển thị dạng thẻ trong ô.</p>
+      <dl class="fm-grid">${fmNote}</dl>
     </div>
     ${
       yt
@@ -1666,6 +1880,20 @@ function renderCaptureDetail(d: CaptureDetail): string {
         }</summary>
         <pre class="transcript-pre source-details-pre">${esc(sourceExcerpt)}</pre>
       </details>
+    </div>
+    <div class="section cap-anchor" id="cap-reactions">
+      <h3>Phản hồi</h3>
+      <p class="hint cap-reactions-intro">Đánh giá 1–5 sao; ghi chú tùy chọn. Lưu timeline Markdown trong file <code>.comment</code> cùng thư mục capture (đọc được trong Obsidian).</p>
+      <div class="cap-reactions-form" id="cap-reactions-form">
+        <div class="cap-reactions-stars" role="group" aria-label="Chọn từ 1 đến 5 sao">${starBtns}</div>
+        <label class="cap-reactions-label" for="cap-reactions-note">Ghi chú <span class="cap-reactions-optional">(tuỳ chọn)</span></label>
+        <textarea id="cap-reactions-note" class="cap-reactions-textarea" rows="3" maxlength="8000" placeholder="Ấn tượng, điểm cần nhớ…"></textarea>
+        <button type="button" class="btn-ingest cap-reactions-submit" id="cap-reactions-submit" disabled>Gửi</button>
+        <p class="cap-reactions-err" id="cap-reactions-err" role="alert" hidden></p>
+      </div>
+      <div class="cap-reactions-timeline" id="cap-reactions-timeline" aria-live="polite">
+        <p class="hint cap-reactions-loading">Đang tải phản hồi…</p>
+      </div>
     </div>
     </div>
   `;
@@ -1995,6 +2223,7 @@ async function route() {
           });
         });
       }
+      void bindCaptureReactions(d.id);
       return;
     }
     if (view === 'digests') {

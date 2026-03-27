@@ -11,6 +11,30 @@ function safeCaptureId(id: string): boolean {
   return FOLDER_RE.test(id) && id.includes('--');
 }
 
+/**
+ * Derive slug prefix for `{slug}.comment` from resolved `notePath` and capture folder id
+ * (`YYYY-MM-DD--slug--hash`).
+ */
+export function noteBasenameToCommentSlug(notePath: string, captureId: string): string {
+  const base = path.basename(notePath);
+  if (base.endsWith('.note.md') && base !== 'note.md') {
+    return base.slice(0, -'.note.md'.length);
+  }
+  const parts = captureId.split('--');
+  if (parts.length >= 3) {
+    return parts.slice(1, -1).join('--');
+  }
+  return 'note';
+}
+
+/** Path to `{slug}.comment` in the capture directory (Markdown reactions timeline). */
+export async function getCommentPath(captureDir: string): Promise<string> {
+  const { notePath } = await getCaptureFiles(captureDir);
+  const id = path.basename(captureDir);
+  const slug = noteBasenameToCommentSlug(notePath, id);
+  return path.join(captureDir, `${slug}.comment`);
+}
+
 async function getCaptureFiles(captureDir: string): Promise<{ notePath: string; sourcePath: string }> {
   try {
     const files = await fs.readdir(captureDir);

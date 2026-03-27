@@ -9,6 +9,13 @@ export type CaptureListItem = {
   youtube_video_id?: string;
 };
 
+/** One line in `{slug}.comment` (vault Markdown timeline). */
+export type ReactionEntry = {
+  at: string;
+  rating: number;
+  text?: string;
+};
+
 export type CaptureDetail = {
   id: string;
   vaultRoot: string;

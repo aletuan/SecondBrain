@@ -6,10 +6,16 @@ import path from 'node:path';
 import {
   getCapture,
   getChallenge,
+  getCommentPath,
   getDigest,
   listCaptures,
   listDigests,
 } from './service.js';
+import {
+  MAX_COMMENT_CHARS,
+  appendToReactionsFile,
+  parseReactionsMarkdown,
+} from './reactionsMarkdown.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
 import type { IngestProgressEvent } from './ingestProgressParse.js';
 import { runDigestCli } from './runDigestCli.js';
@@ -117,6 +123,32 @@ function ingestAllowed(): boolean {
   const v = process.env.READER_ALLOW_INGEST?.trim().toLowerCase();
   if (v === '0' || v === 'false' || v === 'no') return false;
   return true;
+}
+
+type ParsedReactionPost =
+  | { ok: true; rating: number; comment?: string }
+  | { ok: false; status: number; error: string };
+
+function parseReactionPost(body: unknown): ParsedReactionPost {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 400, error: 'expected JSON object' };
+  }
+  const o = body as { rating?: unknown; comment?: unknown };
+  const r = o.rating;
+  if (typeof r !== 'number' || !Number.isInteger(r) || r < 1 || r > 5) {
+    return { ok: false, status: 400, error: 'rating must be integer 1-5' };
+  }
+  if (o.comment === undefined || o.comment === null) {
+    return { ok: true, rating: r };
+  }
+  if (typeof o.comment !== 'string') {
+    return { ok: false, status: 400, error: 'comment must be string' };
+  }
+  const c = o.comment.trim();
+  if (c.length > MAX_COMMENT_CHARS) {
+    return { ok: false, status: 400, error: `comment exceeds ${MAX_COMMENT_CHARS} chars` };
+  }
+  return { ok: true, rating: r, ...(c ? { comment: c } : {}) };
 }
 
 function readJsonBody(req: IncomingMessage, maxBytes = MAX_JSON_BODY): Promise<unknown> {
@@ -437,6 +469,68 @@ export function vaultApiMiddleware() {
         } catch {
           sendJson(res, 404, { error: 'not found' });
         }
+        return;
+      }
+
+      const reactionsM = /^\/api\/captures\/([^/]+)\/reactions$/.exec(urlRaw);
+      if (reactionsM && (req.method === 'GET' || req.method === 'POST')) {
+        const id = decodeURIComponent(reactionsM[1]!);
+        if (!(await getCapture(id))) {
+          sendJson(res, 404, { error: 'not found' });
+          return;
+        }
+        const vaultRoot = resolveVaultRoot();
+        const captureDir = path.join(vaultRoot, 'Captures', id);
+        const commentPath = await getCommentPath(captureDir);
+
+        if (req.method === 'GET') {
+          let raw = '';
+          try {
+            raw = await fs.readFile(commentPath, 'utf8');
+          } catch (e: unknown) {
+            const err = e as NodeJS.ErrnoException;
+            if (err.code === 'ENOENT') {
+              sendJson(res, 200, { entries: [] });
+              return;
+            }
+            sendJson(res, 500, { error: err.message ?? 'read failed' });
+            return;
+          }
+          const { entries } = parseReactionsMarkdown(raw);
+          sendJson(res, 200, { entries });
+          return;
+        }
+
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch (e) {
+          sendJson(res, 400, { error: e instanceof Error ? e.message : 'bad json' });
+          return;
+        }
+        const parsed = parseReactionPost(body);
+        if (!parsed.ok) {
+          sendJson(res, parsed.status, { error: parsed.error });
+          return;
+        }
+        let existing: string | null = null;
+        try {
+          existing = await fs.readFile(commentPath, 'utf8');
+        } catch (e: unknown) {
+          const err = e as NodeJS.ErrnoException;
+          if (err.code !== 'ENOENT') {
+            sendJson(res, 500, { error: err.message ?? 'read failed' });
+            return;
+          }
+        }
+        const next = appendToReactionsFile(existing, parsed.rating, parsed.comment);
+        try {
+          await fs.writeFile(commentPath, next, 'utf8');
+        } catch (e) {
+          sendJson(res, 500, { error: e instanceof Error ? e.message : 'write failed' });
+          return;
+        }
+        sendJson(res, 200, { ok: true });
         return;
       }
 

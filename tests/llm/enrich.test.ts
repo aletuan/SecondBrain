@@ -9,7 +9,9 @@ import {
   ENRICH_SYSTEM_PROMPT,
   enrichNote,
   extractTags,
+  resolveEnrichMaxCompletionTokens,
   resolveEnrichModel,
+  resolveEnrichTemperature,
   TAG_SYSTEM_PROMPT,
 } from '../../src/llm/enrich.js';
 
@@ -24,10 +26,14 @@ describe('ENRICH_SYSTEM_PROMPT', () => {
   it('asks for structured summary, insights, and concrete open questions', () => {
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Tóm tắt');
     expect(ENRICH_SYSTEM_PROMPT).toContain('Ý chính');
-    expect(ENRICH_SYSTEM_PROMPT).toMatch(/3 đến 7|3-7/);
+    expect(ENRICH_SYSTEM_PROMPT).toContain('tối đa 7');
+    expect(ENRICH_SYSTEM_PROMPT).toContain('song song');
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/gom tất cả/i);
+    expect(ENRICH_SYSTEM_PROMPT).toContain('ngoặc kép');
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Insight (LLM)');
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 4/i);
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Câu hỏi mở');
-    expect(ENRICH_SYSTEM_PROMPT).toMatch(/4 đến 8|4-8/);
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 8/i);
   });
 });
 
@@ -40,6 +46,54 @@ describe('buildEnrichUserMessage', () => {
     expect(u).toContain('Tiêu đề: My Article');
     expect(u).toContain('URL: https://example.com/a');
     expect(u).toContain('BODY');
+  });
+
+  it('adds fetchMethod hint for x_api', () => {
+    const u = buildEnrichUserMessage('POST', { fetchMethod: 'x_api' });
+    expect(u).toContain('Loại nguồn (X API)');
+    expect(u).toContain('POST');
+  });
+});
+
+describe('resolveEnrichTemperature', () => {
+  it('defaults to 0.3 when unset or invalid; accepts 0–2', () => {
+    const prev = process.env.ENRICH_TEMPERATURE;
+    try {
+      delete process.env.ENRICH_TEMPERATURE;
+      expect(resolveEnrichTemperature()).toBe(0.3);
+      process.env.ENRICH_TEMPERATURE = '0.2';
+      expect(resolveEnrichTemperature()).toBe(0.2);
+      process.env.ENRICH_TEMPERATURE = 'invalid';
+      expect(resolveEnrichTemperature()).toBe(0.3);
+      process.env.ENRICH_TEMPERATURE = '99';
+      expect(resolveEnrichTemperature()).toBe(0.3);
+      process.env.ENRICH_TEMPERATURE = '2';
+      expect(resolveEnrichTemperature()).toBe(2);
+    } finally {
+      if (prev !== undefined) process.env.ENRICH_TEMPERATURE = prev;
+      else delete process.env.ENRICH_TEMPERATURE;
+    }
+  });
+});
+
+describe('resolveEnrichMaxCompletionTokens', () => {
+  it('defaults to 4096 when unset or invalid; accepts 256–32000', () => {
+    const prev = process.env.ENRICH_MAX_COMPLETION_TOKENS;
+    try {
+      delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
+      expect(resolveEnrichMaxCompletionTokens()).toBe(4096);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = '8192';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(8192);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = 'invalid';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(4096);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = '100';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(4096);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = '256';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(256);
+    } finally {
+      if (prev !== undefined) process.env.ENRICH_MAX_COMPLETION_TOKENS = prev;
+      else delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
+    }
   });
 });
 
@@ -67,41 +121,62 @@ describe('resolveEnrichModel', () => {
 
 describe('buildEnrichmentSections', () => {
   it('sends system prompt and user message with context to the client', async () => {
-    let captured: ChatCompletionMessageParam[] | undefined;
-    const client = {
-      chat: {
-        completions: {
-          create: async (args: { messages: ChatCompletionMessageParam[] }) => {
-            captured = args.messages;
-            return {
-              choices: [
-                {
-                  message: {
-                    content:
-                      '## Tóm tắt\n- **Chủ đề / bối cảnh** — Test.\n- **Ý chính**\n- a\n## Insight (LLM) — suy luận\n- x\n## Câu hỏi mở\n- y?',
+    const prevTemp = process.env.ENRICH_TEMPERATURE;
+    const prevMax = process.env.ENRICH_MAX_COMPLETION_TOKENS;
+    try {
+      delete process.env.ENRICH_TEMPERATURE;
+      delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
+      let captured: ChatCompletionMessageParam[] | undefined;
+      let capturedTemperature: number | undefined;
+      let capturedMaxTokens: number | undefined;
+      const client = {
+        chat: {
+          completions: {
+            create: async (args: {
+              messages: ChatCompletionMessageParam[];
+              temperature?: number;
+              max_tokens?: number;
+            }) => {
+              captured = args.messages;
+              capturedTemperature = args.temperature;
+              capturedMaxTokens = args.max_tokens;
+              return {
+                choices: [
+                  {
+                    message: {
+                      content:
+                        '## Tóm tắt\n- **Chủ đề / bối cảnh** — Test.\n- **Ý chính**\n- a\n## Insight (LLM) — suy luận\n- x\n## Câu hỏi mở\n- y?',
+                    },
                   },
-                },
-              ],
-            };
+                ],
+              };
+            },
           },
         },
-      },
-    };
+      };
 
-    const out = await buildEnrichmentSections(
-      'excerpt text',
-      client,
-      'gpt-4o-mini',
-      { title: 'T', url: 'https://u' },
-    );
-    expect(out).toContain('## Tóm tắt');
-    expect(captured).toBeDefined();
-    expect(captured![0]!.role).toBe('system');
-    expect(String(captured![0]!.content)).toContain('Ý chính');
-    expect(captured![1]!.role).toBe('user');
-    expect(String(captured![1]!.content)).toContain('Tiêu đề: T');
-    expect(String(captured![1]!.content)).toContain('https://u');
-    expect(String(captured![1]!.content)).toContain('excerpt text');
+      const out = await buildEnrichmentSections(
+        'excerpt text',
+        client,
+        'gpt-4o-mini',
+        { title: 'T', url: 'https://u' },
+      );
+      expect(out).toContain('## Tóm tắt');
+      expect(captured).toBeDefined();
+      expect(captured![0]!.role).toBe('system');
+      expect(String(captured![0]!.content)).toContain('Ý chính');
+      expect(captured![1]!.role).toBe('user');
+      expect(String(captured![1]!.content)).toContain('Tiêu đề: T');
+      expect(String(captured![1]!.content)).toContain('https://u');
+      expect(String(captured![1]!.content)).toContain('excerpt text');
+      expect(capturedTemperature).toBe(0.3);
+      expect(capturedMaxTokens).toBe(4096);
+    } finally {
+      if (prevTemp !== undefined) process.env.ENRICH_TEMPERATURE = prevTemp;
+      else delete process.env.ENRICH_TEMPERATURE;
+      if (prevMax !== undefined) process.env.ENRICH_MAX_COMPLETION_TOKENS = prevMax;
+      else delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
+    }
   });
 });
 

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Second brain reader">
+  <rect width="32" height="32" rx="8" fill="#0e1014"/>
+  <!-- Open book: two pages + accent spine -->
+  <path
+    fill="#e8e4dc"
+    d="M7.5 8.5c0-1.1.9-2 2-2h4.5v19H9.5c-1.1 0-2-.9-2-2v-15z"
+  />
+  <path
+    fill="#c9c2b6"
+    d="M24.5 8.5c0-1.1-.9-2-2-2H18v19h4.5c1.1 0 2-.9 2-2v-15z"
+  />
+  <path
+    stroke="#e85d4c"
+    stroke-width="1.75"
+    stroke-linecap="round"
+    d="M16 7v19"
+  />
+</svg>

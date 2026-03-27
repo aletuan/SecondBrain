@@ -63,6 +63,8 @@ If neither vault env is set, the app resolves `../vault` from the `reader-web/` 
 - `POST /api/digest` — JSON `{ "since"?: "7d", "noLlm"?: boolean }` (optional; defaults match CLI) → runs `tsx …/cli.ts digest` with reader `VAULT_ROOT`; response `{ ok, weekId, digestPath }`. Disabled when `READER_ALLOW_INGEST` is off (same as ingest).
 - `GET /api/captures` — list captures
 - `GET /api/captures/:id` — capture payload (markdown, frontmatter, YouTube, transcripts, milestones)
+- `GET /api/captures/:id/reactions` — reader reactions timeline parsed from `{slug}.comment` in the capture folder (JSON `{ entries: [{ at, rating, text? }] }`; empty file → `entries: []`)
+- `POST /api/captures/:id/reactions` — JSON `{ "rating": 1-5, "comment"?: string }` appends one Markdown entry to `{slug}.comment` (UTF-8). Comment optional; max length 8000 chars. Returns `{ ok: true }` or `{ error }`.
 - `GET /api/captures/:id/assets/*` — image files from `assets/`
 - `GET /api/digests`, `GET /api/digests/:week`
 - `GET /api/challenges/:week` — markdown from `Challenges/YYYY-Www.md` (404 if missing; digest detail UI loads this in parallel)
