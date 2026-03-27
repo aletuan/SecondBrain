@@ -676,6 +676,58 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
 
 const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method']);
 
+/** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
+function parseTagList(raw: string | boolean | undefined): string[] {
+  if (raw === undefined || typeof raw === 'boolean') return [];
+  const s = String(raw).trim();
+  if (!s) return [];
+
+  if (s.startsWith('[') && s.endsWith(']')) {
+    try {
+      const j = JSON.parse(s) as unknown;
+      if (Array.isArray(j) && j.every((x) => typeof x === 'string')) {
+        return j.map((t) => t.trim()).filter(Boolean);
+      }
+    } catch {
+      /* bracket list without valid JSON */
+    }
+    const inner = s.slice(1, -1).trim();
+    if (!inner) return [];
+    return inner
+      .split(',')
+      .map((t) => t.trim().replace(/^["']|["']$/g, ''))
+      .filter(Boolean);
+  }
+
+  return s
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function renderCaptureTagChips(tags: string[]): string {
+  if (tags.length === 0) return '';
+  const chips = tags
+    .map((t) => `<span class="capture-tag"><span class="capture-tag__hash" aria-hidden="true">#</span>${esc(t)}</span>`)
+    .join('');
+  return `<div class="capture-tags capture-tags--fm" aria-label="Thẻ (tags)">${chips}</div>`;
+}
+
+/** One cell in frontmatter table (tags = chips; boolean = pill; text = body). */
+function formatFmCellValue(key: string, v: string | boolean, tagList: string[]): string {
+  if (key === 'tags') {
+    return tagList.length
+      ? renderCaptureTagChips(tagList)
+      : '<span class="fm-value-empty">—</span>';
+  }
+  if (typeof v === 'boolean') {
+    return `<span class="fm-value-bool${v ? ' fm-value-bool--true' : ' fm-value-bool--false'}">${v ? 'true' : 'false'}</span>`;
+  }
+  const s = String(v);
+  if (!s.trim()) return '<span class="fm-value-empty">—</span>';
+  return `<span class="fm-value-text">${esc(s)}</span>`;
+}
+
 function setSideInner(html: string) {
   const el = document.querySelector('#side-inner');
   if (el) el.innerHTML = html;
@@ -1706,10 +1758,21 @@ function renderCaptureDetail(d: CaptureDetail): string {
         <div><span class="tr-col-label">VI (LLM)</span><pre class="transcript-pre">${esc(d.transcriptVi || '—')}</pre></div>
       </div>`;
 
-  const fmNote = Object.entries(d.noteFm)
-    .filter(([k]) => !FM_SKIP_IN_GRID.has(k))
-    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`)
+  const tagList = parseTagList(d.noteFm.tags);
+  const fmEntries = Object.entries(d.noteFm).filter(([k]) => !FM_SKIP_IN_GRID.has(k));
+  const fmNoteInner = fmEntries
+    .map(
+      ([k, v]) => `
+      <div class="fm-row">
+        <dt class="fm-grid__key">${esc(k)}</dt>
+        <dd class="fm-grid__value">${formatFmCellValue(k, v, tagList)}</dd>
+      </div>`,
+    )
     .join('');
+  const fmNote =
+    fmEntries.length > 0
+      ? fmNoteInner
+      : `<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
 
   const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
     .trim();
@@ -1781,8 +1844,8 @@ function renderCaptureDetail(d: CaptureDetail): string {
     </div>
     <div class="section cap-anchor" id="cap-frontmatter">
       <h3>Frontmatter (note)</h3>
-      <p class="hint" style="margin-top:0"><code>url</code> và <code>fetch_method</code> hiển thị ở dòng meta phía trên (nếu có).</p>
-      <dl class="fm-grid">${fmNote || '<dd>(empty)</dd>'}</dl>
+      <p class="hint fm-frontmatter-hint">Bảng dưới đây lấy từ YAML note. <code>url</code> và <code>fetch_method</code> đã gộp lên dòng meta; <code>tags</code> hiển thị dạng thẻ trong ô.</p>
+      <dl class="fm-grid">${fmNote}</dl>
     </div>
     ${
       yt
