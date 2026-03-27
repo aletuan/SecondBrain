@@ -9,6 +9,7 @@ import {
   ENRICH_SYSTEM_PROMPT,
   enrichNote,
   extractTags,
+  resolveEnrichMaxCompletionTokens,
   resolveEnrichModel,
   resolveEnrichTemperature,
   TAG_SYSTEM_PROMPT,
@@ -26,6 +27,8 @@ describe('ENRICH_SYSTEM_PROMPT', () => {
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Tóm tắt');
     expect(ENRICH_SYSTEM_PROMPT).toContain('Ý chính');
     expect(ENRICH_SYSTEM_PROMPT).toContain('tối đa 7');
+    expect(ENRICH_SYSTEM_PROMPT).toContain('song song');
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/gom tất cả/i);
     expect(ENRICH_SYSTEM_PROMPT).toContain('ngoặc kép');
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Insight (LLM)');
     expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 4/i);
@@ -73,6 +76,27 @@ describe('resolveEnrichTemperature', () => {
   });
 });
 
+describe('resolveEnrichMaxCompletionTokens', () => {
+  it('defaults to 4096 when unset or invalid; accepts 256–32000', () => {
+    const prev = process.env.ENRICH_MAX_COMPLETION_TOKENS;
+    try {
+      delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
+      expect(resolveEnrichMaxCompletionTokens()).toBe(4096);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = '8192';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(8192);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = 'invalid';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(4096);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = '100';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(4096);
+      process.env.ENRICH_MAX_COMPLETION_TOKENS = '256';
+      expect(resolveEnrichMaxCompletionTokens()).toBe(256);
+    } finally {
+      if (prev !== undefined) process.env.ENRICH_MAX_COMPLETION_TOKENS = prev;
+      else delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
+    }
+  });
+});
+
 describe('resolveEnrichModel', () => {
   it('prefers explicit override then ENRICH_MODEL then OPENAI_MODEL', () => {
     expect(resolveEnrichModel('x-1')).toBe('x-1');
@@ -98,19 +122,24 @@ describe('resolveEnrichModel', () => {
 describe('buildEnrichmentSections', () => {
   it('sends system prompt and user message with context to the client', async () => {
     const prevTemp = process.env.ENRICH_TEMPERATURE;
+    const prevMax = process.env.ENRICH_MAX_COMPLETION_TOKENS;
     try {
       delete process.env.ENRICH_TEMPERATURE;
+      delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
       let captured: ChatCompletionMessageParam[] | undefined;
       let capturedTemperature: number | undefined;
+      let capturedMaxTokens: number | undefined;
       const client = {
         chat: {
           completions: {
             create: async (args: {
               messages: ChatCompletionMessageParam[];
               temperature?: number;
+              max_tokens?: number;
             }) => {
               captured = args.messages;
               capturedTemperature = args.temperature;
+              capturedMaxTokens = args.max_tokens;
               return {
                 choices: [
                   {
@@ -141,9 +170,12 @@ describe('buildEnrichmentSections', () => {
       expect(String(captured![1]!.content)).toContain('https://u');
       expect(String(captured![1]!.content)).toContain('excerpt text');
       expect(capturedTemperature).toBe(0.3);
+      expect(capturedMaxTokens).toBe(4096);
     } finally {
       if (prevTemp !== undefined) process.env.ENRICH_TEMPERATURE = prevTemp;
       else delete process.env.ENRICH_TEMPERATURE;
+      if (prevMax !== undefined) process.env.ENRICH_MAX_COMPLETION_TOKENS = prevMax;
+      else delete process.env.ENRICH_MAX_COMPLETION_TOKENS;
     }
   });
 });

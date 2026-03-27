@@ -1,7 +1,7 @@
 # Design: Tóm tắt enrich — từ outline (liệt kê) sang mở chi tiết theo nguồn
 
 **Ngày:** 2026-03-28  
-**Trạng thái:** Đề xuất (bổ sung sau `2026-03-27-enrich-summary-quality-design.md` và triển khai trên `feat/enrich-summary-quality`)
+**Trạng thái:** Đã duyệt — plan: `docs/superpowers/plans/2026-03-28-enrich-outline-vs-detail.md`
 
 **Liên quan:** `src/llm/enrich.ts` (`ENRICH_SYSTEM_PROMPT`), `src/llm/enrichSource.ts` (`truncateSourceForEnrich`, `ENRICH_MAX_CHARS`).
 
