@@ -6,6 +6,8 @@ export type CaptureListItem = {
   source: string;
   ingested_at: string;
   publish: boolean;
+  reaction_avg: number | null;
+  reaction_count: number;
   youtube_video_id?: string;
 };
 

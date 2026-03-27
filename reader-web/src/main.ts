@@ -2,6 +2,7 @@ import './style.css';
 import { marked, Renderer } from 'marked';
 import type { Tokens } from 'marked';
 import type { CaptureDetail, CaptureListItem, ReactionEntry } from './types.js';
+import { ratingStarsOnly } from '../vault/reactionsMarkdown.js';
 import {
   findActiveSegmentIndex,
   mergeTranscriptsForUi,
@@ -674,7 +675,7 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
   }
 }
 
-const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method']);
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish']);
 
 /** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
 function parseTagList(raw: string | boolean | undefined): string[] {
@@ -1089,7 +1090,6 @@ function sideCaptures(rows: CaptureListItem[]): string {
     <div class="digest-block">
       <h4>Gợi ý</h4>
       <ul>
-        <li>Kiểm tra <strong>publish:false</strong> trước khi chia sẻ</li>
         <li>Mở note trong Obsidian, refresh reader để xem thay đổi</li>
       </ul>
     </div>
@@ -1156,7 +1156,7 @@ function skeletonTableRowsHtml(count: number): string {
     <tr class="skeleton-row">
       <td><div class="skeleton skeleton-row__bar skeleton-row__bar--title"></div></td>
       <td><div class="skeleton skeleton-row__bar skeleton-row__bar--source"></div></td>
-      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--status"></div></td>
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--rating"></div></td>
       <td></td>
     </tr>`).join('');
 }
@@ -1206,6 +1206,19 @@ function captureSourceLabel(r: CaptureListItem): string {
 function captureTablePrimaryLine(r: CaptureListItem): string {
   if (r.title && r.title !== r.id) return r.title;
   return friendlySlugFromCaptureId(r.id);
+}
+
+/** Thư viện: sao rút gọn + một chữ số thập phân (spec format B). */
+function formatLibraryRatingCell(r: CaptureListItem): string {
+  if (r.reaction_avg == null || r.reaction_count === 0) {
+    return '<span class="capture-rating capture-rating--empty">—</span>';
+  }
+  const avg = r.reaction_avg;
+  const b = Math.min(5, Math.max(1, Math.round(avg)));
+  const stars = ratingStarsOnly(b);
+  const num = avg.toFixed(1);
+  const label = `Đánh giá trung bình ${num} trên 5, ${r.reaction_count} lượt`;
+  return `<span class="capture-rating" aria-label="${escAttr(label)}">${stars} ${num}</span>`;
 }
 
 function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
@@ -1280,7 +1293,6 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
       ? '<p class="hint">Chưa có capture — nhập URL phía trên hoặc ingest từ CLI.</p>'
       : recent
           .map((r) => {
-            const pub = r.publish ? 'publish' : 'private';
             const sourceType = r.youtube_video_id
               ? 'youtube'
               : r.url && isLikelyXOrTwitterUrl(r.url)
@@ -1294,10 +1306,11 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
           </div>
           <h3>${esc(r.title)}</h3>
           <p>${esc(r.url ? r.url.slice(0, 96) + (r.url.length > 96 ? '…' : '') : r.id)}</p>
-          <div class="tag-row">
-            <span class="tag">${esc(pub)}</span>
-            ${r.youtube_video_id ? '<span class="tag">youtube</span>' : ''}
-          </div>
+          ${
+            r.youtube_video_id
+              ? '<div class="tag-row"><span class="tag">youtube</span></div>'
+              : ''
+          }
         </button>`;
           })
           .join('');
@@ -1354,7 +1367,7 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
         <div class="capture-title">${esc(captureTablePrimaryLine(r))}</div>
       </td>
       <td class="capture-source-cell">${esc(captureSourceLabel(r))}</td>
-      <td><span class="pill${r.publish ? '' : ' warn'}">${r.publish ? 'publish' : 'private'}</span></td>
+      <td class="capture-rating-cell">${formatLibraryRatingCell(r)}</td>
       <td class="capture-action-cell"><span class="mock-table-open" aria-hidden="true">${LIB_OPEN_CHEVRON_SVG}</span></td>
     </tr>`,
     )
@@ -1379,7 +1392,7 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
         rows.length === 0
           ? '<p class="hint">Chưa có capture.</p>'
           : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Trạng thái</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
+            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Đánh giá</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
           </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`
       }
       <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · hàng có thể mở bằng Enter khi focus.</p>
@@ -1782,7 +1795,6 @@ function renderCaptureDetail(d: CaptureDetail): string {
 
   const title = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
   const ingestedRaw = String(d.noteFm.ingested_at ?? d.sourceFm.ingested_at ?? '').trim();
-  const publish = d.noteFm.publish === true;
   const rawUrl = String(d.noteFm.url ?? '').trim();
   const href = rawUrl ? safeExternalHref(rawUrl) : null;
   const sourceKind = String(d.noteFm.source ?? d.sourceFm.source ?? '').trim();
@@ -1793,9 +1805,6 @@ function renderCaptureDetail(d: CaptureDetail): string {
       `<time class="detail-meta-time" datetime="${escAttr(ingestedRaw)}">${esc(formatIngestedVi(ingestedRaw))}</time>`,
     );
   }
-  metaParts.push(
-    `<span class="pill${publish ? '' : ' warn'}">${publish ? 'publish' : 'private'}</span>`,
-  );
   if (sourceKind) {
     metaParts.push(`<span class="mono-sm" title="source (frontmatter)">${esc(sourceKind)}</span>`);
   }
@@ -2122,7 +2131,7 @@ async function route() {
         <header class="masthead"><h1>Thư viện<br /><em>captures.</em></h1></header>
         <div class="view active">
           <div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Trạng thái</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
+            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Đánh giá</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
           </tr></thead><tbody>${skeletonTableRowsHtml(5)}</tbody></table></div>
         </div>`;
       const { captures } = await fetchJson<{ captures: CaptureListItem[] }>('/api/captures');

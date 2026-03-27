@@ -11,11 +11,35 @@ export type ParsedReactionEntry = {
   text?: string;
 };
 
-export function ratingToStarLine(rating: number): string {
+/** Five ★/☆ characters only (no `(n/5)` suffix) — for compact UI next to a decimal average. */
+export function ratingStarsOnly(rating: number): string {
   if (rating < 1 || rating > 5 || !Number.isInteger(rating)) {
     throw new Error('rating must be integer 1–5');
   }
-  return `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)} (${rating}/5)`;
+  return `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`;
+}
+
+export function ratingToStarLine(rating: number): string {
+  return `${ratingStarsOnly(rating)} (${rating}/5)`;
+}
+
+/**
+ * Arithmetic mean of valid 1–5 ratings; `null` average when there are no valid entries.
+ */
+export function averageReactionStats(entries: ParsedReactionEntry[]): {
+  avg: number | null;
+  count: number;
+} {
+  let sum = 0;
+  let count = 0;
+  for (const e of entries) {
+    const r = e.rating;
+    if (typeof r !== 'number' || !Number.isFinite(r) || r < 1 || r > 5) continue;
+    sum += r;
+    count += 1;
+  }
+  if (count === 0) return { avg: null, count: 0 };
+  return { avg: sum / count, count };
 }
 
 /** ISO-8601 with local timezone offset, e.g. `2026-03-27T14:32:01+07:00`. */

@@ -4,6 +4,7 @@ import { stripFrontmatter, firstHeading } from './frontmatter.js';
 import { extractTranscriptSection } from './transcript.js';
 import { loadMilestones } from './milestones.js';
 import { resolveVaultRoot } from './paths.js';
+import { averageReactionStats, parseReactionsMarkdown } from './reactionsMarkdown.js';
 
 const FOLDER_RE = /^[\w-]+$/;
 
@@ -63,6 +64,10 @@ export type CaptureListItem = {
   source: string;
   ingested_at: string;
   publish: boolean;
+  /** Arithmetic mean of 1–5 ratings from `{slug}.comment`, or null if none. */
+  reaction_avg: number | null;
+  /** Count of valid rating entries in the comment file. */
+  reaction_count: number;
   youtube_video_id?: string;
 };
 
@@ -89,6 +94,19 @@ export async function listCaptures(): Promise<{ captures: CaptureListItem[]; vau
     }
     const { fm, body } = stripFrontmatter(raw);
     const title = firstHeading(body) || id;
+    const captureDir = path.join(capDir, id);
+    let reaction_avg: number | null = null;
+    let reaction_count = 0;
+    try {
+      const commentPath = await getCommentPath(captureDir);
+      const commentRaw = await fs.readFile(commentPath, 'utf8');
+      const { entries } = parseReactionsMarkdown(commentRaw);
+      const stats = averageReactionStats(entries);
+      reaction_avg = stats.avg;
+      reaction_count = stats.count;
+    } catch {
+      /* missing or unreadable .comment */
+    }
     items.push({
       id,
       title,
@@ -97,6 +115,8 @@ export async function listCaptures(): Promise<{ captures: CaptureListItem[]; vau
       source: String(fm.source ?? 'web'),
       ingested_at: String(fm.ingested_at ?? ''),
       publish: fm.publish === true,
+      reaction_avg,
+      reaction_count,
       youtube_video_id:
         typeof fm.youtube_video_id === 'string' ? fm.youtube_video_id : undefined,
     });

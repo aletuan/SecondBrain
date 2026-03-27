@@ -34,7 +34,7 @@ Path pattern (CLI output):
 ### Frontmatter (typical)
 
 - `type: capture`
-- `url`, `ingested_at`, `publish` — **`publish: false`** means “private / do not surface in any public index”. A personal reader may still show it locally; a future “published” view should respect `publish: true` only.
+- `url`, `ingested_at`, `publish` — **`publish: false`** means “private / do not surface in any public index”. A future “published” view should respect `publish: true` only. The **local reader UI** does not show a publish/private badge or a `publish` row in the frontmatter grid; the field may still be present in note YAML for tooling.
 - YouTube: `source: youtube`, `youtube_video_id`, `transcript_locale` (`en` or `en,vi`), `transcript_vi: true` when a Vietnamese transcript block exists.
 
 ### YouTube in the reader
