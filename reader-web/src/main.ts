@@ -480,10 +480,25 @@ function captureBreadcrumbLabel(id: string): string {
   return `${slug.slice(0, 38)}…`;
 }
 
+/** ISO instant → Vietnamese prose, fixed to Asia/Ho_Chi_Minh (24h, locale wording). Omits vi-VN “lúc ” prefix. */
 function formatIngestedVi(iso: string): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso.trim() || '—';
-  return new Date(t).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+  const d = new Date(t);
+  const fmt = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return fmt
+    .formatToParts(d)
+    .filter((p) => !(p.type === 'literal' && p.value === 'lúc '))
+    .map((p) => p.value)
+    .join('');
 }
 
 /** Obsidian-style YAML frontmatter (single-line scalar values only). */
@@ -675,7 +690,7 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
   }
 }
 
-const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish']);
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at']);
 
 /** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
 function parseTagList(raw: string | boolean | undefined): string[] {
@@ -1853,7 +1868,7 @@ function renderCaptureDetail(d: CaptureDetail): string {
     </div>
     <div class="section cap-anchor" id="cap-frontmatter">
       <h3>Frontmatter (note)</h3>
-      <p class="hint fm-frontmatter-hint">Bảng dưới đây lấy từ YAML note. <code>url</code> và <code>fetch_method</code> đã gộp lên dòng meta; <code>tags</code> hiển thị dạng thẻ trong ô.</p>
+      <p class="hint fm-frontmatter-hint">Bảng dưới đây lấy từ YAML note. <code>ingested_at</code>, <code>url</code> và <code>fetch_method</code> đã gộp lên dòng meta phía trên; <code>tags</code> hiển thị dạng thẻ trong ô.</p>
       <dl class="fm-grid">${fmNote}</dl>
     </div>
     ${
