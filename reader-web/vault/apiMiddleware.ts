@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import fsSync from 'node:fs';
@@ -40,9 +41,9 @@ const ASSET_RE = /^\/api\/captures\/([^/]+)\/assets\/(.+)$/;
 const MAX_JSON_BODY = 32_768;
 const MAX_PENDING_INGEST_JOBS = 16;
 
-type IngestJobPayload = {
-  url: string;
-};
+type IngestJobPayload =
+  | { kind: 'url'; url: string }
+  | { kind: 'reingest'; captureId: string };
 
 const pendingIngestJobs = new Map<string, IngestJobPayload>();
 
@@ -228,11 +229,32 @@ export function vaultApiMiddleware() {
           return;
         }
         const jobId = randomUUID();
-        pendingIngestJobs.set(jobId, {
-          url: parsedBody.url,
-        });
+        pendingIngestJobs.set(jobId, { kind: 'url', url: parsedBody.url });
         sendJson(res, 200, { ok: true, jobId });
         return;
+      }
+
+      if (req.method === 'POST') {
+        const reingestM = /^\/api\/captures\/([^/]+)\/reingest\/start$/.exec(urlRaw);
+        if (reingestM) {
+          if (!ingestAllowed()) {
+            sendJson(res, 403, { error: 'ingest disabled (READER_ALLOW_INGEST)' });
+            return;
+          }
+          const captureId = decodeURIComponent(reingestM[1]!);
+          if (!(await getCapture(captureId))) {
+            sendJson(res, 404, { error: 'capture not found' });
+            return;
+          }
+          if (pendingIngestJobs.size >= MAX_PENDING_INGEST_JOBS) {
+            sendJson(res, 503, { error: 'too many pending ingest jobs; try again later' });
+            return;
+          }
+          const jobId = randomUUID();
+          pendingIngestJobs.set(jobId, { kind: 'reingest', captureId });
+          sendJson(res, 200, { ok: true, jobId });
+          return;
+        }
       }
 
       if (req.method === 'GET' && urlRaw === '/api/ingest/stream') {
@@ -272,14 +294,25 @@ export function vaultApiMiddleware() {
         };
 
         try {
-          const { code, stdout, stderr, captureDir } = await runIngestCli({
-            url: payload.url,
-            progressJson: true,
-            onIngestProgress: forward,
-            onChild: (c) => {
-              childRef = c;
-            },
-          });
+          const vaultRoot = resolveVaultRoot();
+          const onChild = (c: ChildProcess) => {
+            childRef = c;
+          };
+          const cliOpts =
+            payload.kind === 'url'
+              ? {
+                  url: payload.url,
+                  progressJson: true as const,
+                  onIngestProgress: forward,
+                  onChild,
+                }
+              : {
+                  reingestCaptureDir: path.join(vaultRoot, 'Captures', payload.captureId),
+                  progressJson: true as const,
+                  onIngestProgress: forward,
+                  onChild,
+                };
+          const { code, stdout, stderr, captureDir } = await runIngestCli(cliOpts);
           if (code !== 0) {
             sendSse(res, {
               v: 1,

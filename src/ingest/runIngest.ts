@@ -12,12 +12,21 @@ import { enrichMaxCharsFromEnv, truncateSourceForEnrich } from '../llm/enrichSou
 import { translateTranscriptSegments } from '../llm/translateTranscript.js';
 import { loadRouting, resolveStrategy } from '../router.js';
 import type { CaptureBundle } from '../types/capture.js';
-import { addTagsToNoteFrontmatter, downloadImagesToAssets, getCaptureFiles, writeCapture } from '../vault/writer.js';
+import {
+  addTagsToNoteFrontmatter,
+  assertCaptureDirUnderVault,
+  downloadImagesToAssets,
+  getCaptureFiles,
+  overwriteCaptureAtDir,
+  writeCapture,
+} from '../vault/writer.js';
 import type { IngestPhaseProgressEvent } from './ingestProgress.js';
 
 export async function runIngest(options: {
   url: string;
   cwd?: string;
+  /** If set, overwrite this existing capture folder instead of creating a new one. */
+  captureDir?: string;
   /** Emitted at real pipeline boundaries (Reader SSE / `--progress-json`). */
   onProgress?: (ev: IngestPhaseProgressEvent) => void;
 }): Promise<string> {
@@ -84,7 +93,15 @@ export async function runIngest(options: {
   }
 
   phase({ v: 1, kind: 'phase', phase: 'vault', state: 'active' });
-  const { captureDir } = await writeCapture(vaultRoot, bundle);
+  let captureDir: string;
+  if (options.captureDir) {
+    const abs = assertCaptureDirUnderVault(vaultRoot, options.captureDir);
+    await overwriteCaptureAtDir(abs, bundle, { ingestedAt: new Date() });
+    captureDir = abs;
+  } else {
+    const { captureDir: d } = await writeCapture(vaultRoot, bundle);
+    captureDir = d;
+  }
   await downloadImagesToAssets(bundle, captureDir);
   phase({ v: 1, kind: 'phase', phase: 'vault', state: 'done' });
   const { notePath, sourcePath } = await getCaptureFiles(captureDir);

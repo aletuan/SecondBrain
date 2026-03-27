@@ -11,7 +11,7 @@ import type { IngestProgressEvent } from './ingest/ingestProgress.js';
 import { runIngest } from './ingest/runIngest.js';
 import type { OpenAIClientLike } from './llm/enrich.js';
 import { applyTranslationToCaptureSource } from './llm/translateTranscript.js';
-import { getCaptureFiles } from './vault/writer.js';
+import { getCaptureFiles, readIngestUrlFromCaptureDir } from './vault/writer.js';
 import { writeSuggestedMilestonesForCapture } from './youtube/suggestMilestones.js';
 
 function printError(e: unknown): void {
@@ -37,6 +37,10 @@ program
   .command('ingest')
   .argument('<url>', 'URL to ingest')
   .option(
+    '--capture-dir <dir>',
+    'overwrite an existing capture folder under the vault (in-place re-ingest)',
+  )
+  .option(
     '--progress-json',
     'emit one JSON progress object per line on stderr (v1 schema for Reader SSE)',
   )
@@ -48,14 +52,22 @@ program
       url: string,
       opts: {
         progressJson?: boolean;
+        captureDir?: string;
       },
     ) => {
       const writeProgress = (ev: IngestProgressEvent) => {
         process.stderr.write(`${JSON.stringify(ev)}\n`);
       };
       try {
+        const cwd = process.cwd();
+        const captureDir = opts.captureDir
+          ? path.isAbsolute(opts.captureDir)
+            ? opts.captureDir
+            : path.resolve(cwd, opts.captureDir)
+          : undefined;
         const dir = await runIngest({
           url,
+          captureDir,
           onProgress: opts.progressJson ? (ev) => writeProgress(ev) : undefined,
         });
         if (opts.progressJson) {
@@ -80,6 +92,49 @@ program
       }
     },
   );
+
+program
+  .command('reingest')
+  .description('Re-fetch a capture using `url` from existing note/source frontmatter (in-place overwrite)')
+  .requiredOption('--capture <dir>', 'capture folder (…/Captures/YYYY-MM-DD--slug--hash)')
+  .option(
+    '--progress-json',
+    'emit one JSON progress object per line on stderr (v1 schema for Reader SSE)',
+  )
+  .action(async (opts: { capture: string; progressJson?: boolean }) => {
+    const writeProgress = (ev: IngestProgressEvent) => {
+      process.stderr.write(`${JSON.stringify(ev)}\n`);
+    };
+    try {
+      const cwd = process.cwd();
+      const dir = path.isAbsolute(opts.capture) ? opts.capture : path.resolve(cwd, opts.capture);
+      const url = await readIngestUrlFromCaptureDir(dir);
+      const out = await runIngest({
+        url,
+        captureDir: dir,
+        onProgress: opts.progressJson ? (ev) => writeProgress(ev) : undefined,
+      });
+      if (opts.progressJson) {
+        writeProgress({
+          v: 1,
+          kind: 'done',
+          captureDir: out,
+          captureId: path.basename(out),
+        });
+      }
+      console.log(out);
+    } catch (e) {
+      if (opts.progressJson) {
+        writeProgress({
+          v: 1,
+          kind: 'error',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      printError(e);
+      process.exitCode = 1;
+    }
+  });
 
 program
   .command('translate-transcript')
