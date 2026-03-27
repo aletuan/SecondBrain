@@ -103,6 +103,7 @@ export async function runIngest(options: {
         sourceExcerpt: excerpt,
         title: bundle.title,
         url: bundle.canonicalUrl,
+        fetchMethod: bundle.fetchMethod,
         client: enrichClient,
       }),
       extractTags(excerpt, enrichClient, enrichModel),

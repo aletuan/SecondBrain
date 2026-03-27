@@ -44,6 +44,12 @@ describe('buildEnrichUserMessage', () => {
     expect(u).toContain('URL: https://example.com/a');
     expect(u).toContain('BODY');
   });
+
+  it('adds fetchMethod hint for x_api', () => {
+    const u = buildEnrichUserMessage('POST', { fetchMethod: 'x_api' });
+    expect(u).toContain('Loại nguồn (X API)');
+    expect(u).toContain('POST');
+  });
 });
 
 describe('resolveEnrichTemperature', () => {

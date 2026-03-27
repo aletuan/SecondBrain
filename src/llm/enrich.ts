@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { FetchMethod } from '../types/capture.js';
 
 export type ChatCompletionsLike = {
   create: (args: {
@@ -40,12 +41,29 @@ Viết tiếng Việt, súc tích, có cấu trúc:
 export type EnrichSourceContext = {
   title?: string;
   url?: string;
+  fetchMethod?: FetchMethod;
 };
+
+function fetchMethodHint(method: FetchMethod): string {
+  switch (method) {
+    case 'x_api':
+      return 'Loại nguồn (X API): ưu tiên các bước, số liệu và tên công cụ xuất hiện trong post (tweet/long post); không suy diễn ngoài nguồn.';
+    case 'http_readability':
+      return 'Loại nguồn (trang web): ưu tiên luận điểm, số liệu và tên riêng trong bài đã trích.';
+    case 'apify':
+      return 'Loại nguồn (Apify crawl): ưu tiên chi tiết có trong nội dung đã trích; không thêm giả định ngoài ngữ cảnh nguồn.';
+    default: {
+      const _exhaustive: never = method;
+      return _exhaustive;
+    }
+  }
+}
 
 export function buildEnrichUserMessage(excerpt: string, ctx: EnrichSourceContext = {}): string {
   const lines: string[] = [];
   if (ctx.title?.trim()) lines.push(`Tiêu đề: ${ctx.title.trim()}`);
   if (ctx.url?.trim()) lines.push(`URL: ${ctx.url.trim()}`);
+  if (ctx.fetchMethod) lines.push(fetchMethodHint(ctx.fetchMethod));
   const header =
     lines.length > 0
       ? `${lines.join('\n')}\n\n---\n\n`
@@ -127,6 +145,7 @@ export async function enrichNote(options: {
   sourceExcerpt: string;
   title?: string;
   url?: string;
+  fetchMethod?: FetchMethod;
   apiKey?: string;
   model?: string;
   client?: OpenAIClientLike;
@@ -139,7 +158,7 @@ export async function enrichNote(options: {
     options.sourceExcerpt,
     client,
     model,
-    { title: options.title, url: options.url },
+    { title: options.title, url: options.url, fetchMethod: options.fetchMethod },
   );
   const block = `\n\n---\n\n${body}\n`;
   await fs.appendFile(options.notePath, block, 'utf8');
