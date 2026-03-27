@@ -64,6 +64,7 @@ Set in `.env` at repo root (create the file; variables below):
 | `OPENAI_MODEL` | Model name (default: `gpt-4o-mini`) |
 | `ENRICH_MODEL` | Optional model **only** for ingest `enrichNote` (falls back to `OPENAI_MODEL`) |
 | `ENRICH_MAX_CHARS` | Max chars of `source.md` body sent to enrich (default 12000; long input uses head+tail) |
+| `ENRICH_TEMPERATURE` | Optional. Temperature for ingest `enrichNote` (0–2). If unset or invalid, defaults to `0.3`. |
 | `APIFY_TOKEN` | Apify API token for web/YouTube crawling |
 | `X_BEARER_TOKEN` | X API v2 bearer token |
 | `CAPTURE_IMAGE_MAX_BYTES` | Per-image download size limit |

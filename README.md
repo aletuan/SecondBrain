@@ -42,6 +42,7 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 | `OPENAI_MODEL` | No | Default `gpt-4o-mini`. |
 | `ENRICH_MODEL` | No | Optional model **only** for ingest note enrichment (else `OPENAI_MODEL`). |
 | `ENRICH_MAX_CHARS` | No | Max chars of `source.md` body for enrich (default 12000; long text uses head+tail). |
+| `ENRICH_TEMPERATURE` | No | Temperature for ingest note enrichment only (0–2; default `0.3` when unset/invalid). |
 | `APIFY_TOKEN` | For Apify routes | Actor runs. |
 | `X_BEARER_TOKEN` | For X routes (later) | Full X adapter is not implemented yet. |
 | `VAULT_ROOT` | No | Vault directory. |
