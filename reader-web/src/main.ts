@@ -158,6 +158,23 @@ function noteToHtml(markdown: string, captureId: string, opts?: NoteToHtmlOpts):
     );
   }
 
+  // Convert Obsidian wikilinks [[Captures/<id>/note|Title]] → in-app links
+  md = md.replace(
+    /\[\[Captures\/(.+?)\/note\|([^\]]+)\]\]/g,
+    (_, folder: string, alias: string) => {
+      const id = folder.trim();
+      const label = alias.trim().replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+      return `[${label}](#/capture/${encodeURIComponent(id)})`;
+    },
+  );
+  md = md.replace(
+    /\[\[Captures\/(.+?)\/note\]\]/g,
+    (_, folder: string) => {
+      const id = folder.trim();
+      return `[${id}](#/capture/${encodeURIComponent(id)})`;
+    },
+  );
+
   let html = marked.parse(md) as string;
   if (omit) {
     html = html.replace(/<img\b[^>]*>/gi, '');
@@ -1220,7 +1237,7 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
             return `
         <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
           <div class="card-meta">
-            <span>${esc(r.source)}<span class="card-source-dot"></span></span>
+            <span>${esc(r.source)}<span class="card-source-dot" aria-hidden="true"></span></span>
             <span>${esc(r.fetch_method || '—')}</span>
           </div>
           <h3>${esc(r.title)}</h3>

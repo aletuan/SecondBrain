@@ -2272,6 +2272,23 @@ tr.capture-row:focus-visible {
   color: color-mix(in srgb, var(--signal) 75%, var(--muted));
 }
 
+.prose a {
+  color: color-mix(in srgb, var(--signal) 65%, var(--paper-read));
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--signal) 35%, transparent);
+  transition: color 0.15s var(--ease-out), border-bottom-color 0.15s var(--ease-out);
+}
+
+.prose a:hover {
+  color: color-mix(in srgb, var(--signal) 85%, var(--paper));
+  border-bottom-color: var(--signal);
+}
+
+/* In-app capture cross-references (Xem thêm wikilinks) */
+.prose a[href^="#/capture/"] {
+  font-weight: 500;
+}
+
 .prose :where(code):not(pre code) {
   font-family: var(--font-mono);
   font-size: 0.88em;
