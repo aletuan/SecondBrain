@@ -25,10 +25,12 @@ describe('ENRICH_SYSTEM_PROMPT', () => {
   it('asks for structured summary, insights, and concrete open questions', () => {
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Tóm tắt');
     expect(ENRICH_SYSTEM_PROMPT).toContain('Ý chính');
-    expect(ENRICH_SYSTEM_PROMPT).toMatch(/3 đến 7|3-7/);
+    expect(ENRICH_SYSTEM_PROMPT).toContain('tối đa 7');
+    expect(ENRICH_SYSTEM_PROMPT).toContain('ngoặc kép');
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Insight (LLM)');
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 4/i);
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Câu hỏi mở');
-    expect(ENRICH_SYSTEM_PROMPT).toMatch(/4 đến 8|4-8/);
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 8/i);
   });
 });
 
