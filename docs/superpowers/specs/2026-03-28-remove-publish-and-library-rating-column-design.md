@@ -1,7 +1,7 @@
 # Design: Gỡ publish khỏi reader UI + cột Đánh giá (trung bình) trong Thư viện Captures
 
 **Ngày:** 2026-03-28  
-**Trạng thái:** Draft — chờ duyệt trước khi implement (nhánh gợi ý: `feature/remove-publish`)
+**Trạng thái:** Đã duyệt — implementation plan: [`docs/superpowers/plans/2026-03-28-remove-publish-and-library-rating-column.md`](../plans/2026-03-28-remove-publish-and-library-rating-column.md) (nhánh gợi ý: `feature/remove-publish`)
 
 **Liên quan:**  
 - Spec reactions vault: [`2026-03-27-reader-reactions-vault-comment-design.md`](./2026-03-27-reader-reactions-vault-comment-design.md) (`{slug}.comment`, `parseReactionsMarkdown`).  
@@ -47,7 +47,7 @@
 
 Trong **một ô** cùng lúc:
 
-1. **Chuỗi sao rút gọn** — tái sử dụng logic **`ratingToStarLine(b)`** với `b = Math.round(avg)` sau khi giới hạn vào **1–5** (nếu `avg` là NaN hoặc không có dữ liệu thì không áp dụng; ô chỉ placeholder).
+1. **Chuỗi sao rút gọn** — **5 ký tự ★/☆** (không kèm ` (n/5)` vì số thập phân hiển thị bên cạnh). Helper **`ratingStarsOnly(b)`** (hoặc tương đương) với `b = Math.round(avg)` giới hạn **1–5** — refactor từ `ratingToStarLine` (xem plan).
 2. **Số** — `avg` format **một chữ số thập phân** (locale invariable: dấu `.`), ví dụ `4.3`.
 
 Thứ tự gợi ý trong ô: **sao** rồi **khoảng trắng** rồi **số** (ví dụ `★★★★☆ 4.3`). Khoảng cách / `font-size` do CSS thống nhất với bảng.
@@ -91,6 +91,6 @@ Thứ tự gợi ý trong ô: **sao** rồi **khoảng trắng** rồi **số** 
 
 ## 5. Bước tiếp theo
 
-1. Duyệt spec này.  
-2. Viết implementation plan (`docs/superpowers/plans/…`).  
+1. ~~Duyệt spec này.~~  
+2. ~~Viết implementation plan~~ — [`2026-03-28-remove-publish-and-library-rating-column.md`](../plans/2026-03-28-remove-publish-and-library-rating-column.md).  
 3. Implement trên nhánh `feature/remove-publish` (hoặc tách PR: remove publish trước, rating column sau — tùy team).
