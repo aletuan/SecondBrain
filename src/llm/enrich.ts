@@ -6,6 +6,8 @@ export type ChatCompletionsLike = {
   create: (args: {
     model: string;
     messages: ChatCompletionMessageParam[];
+    temperature?: number;
+    max_tokens?: number;
   }) => Promise<{
     choices: Array<{ message?: { content?: string | null } | null }>;
   }>;
@@ -75,6 +77,36 @@ export async function buildEnrichmentSections(
   const text = res.choices[0]?.message?.content;
   if (!text?.trim()) throw new Error('enrich: empty completion');
   return text.trim();
+}
+
+export const TAG_SYSTEM_PROMPT =
+  'Từ nội dung sau, trả về 3-5 tags chủ đề dưới dạng JSON array. Tags phải ngắn gọn, lowercase, dùng hyphen. Chỉ trả về JSON array.';
+
+export async function extractTags(
+  excerpt: string,
+  client: OpenAIClientLike,
+  model: string,
+): Promise<string[]> {
+  try {
+    const res = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: TAG_SYSTEM_PROMPT },
+        { role: 'user', content: excerpt },
+      ],
+      temperature: 0.2,
+      max_tokens: 100,
+    });
+    const raw = res.choices[0]?.message?.content?.trim() ?? '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((t): t is string => typeof t === 'string' && t.length > 0)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
 }
 
 export async function enrichNote(options: {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import OpenAI from 'openai';
 import type { TranscriptSegment } from '../types/capture.js';
 import type { OpenAIClientLike } from './enrich.js';
+import { getCaptureFiles } from '../vault/writer.js';
 
 /**
  * Batch EN→VI transcript translation, aligned with
@@ -202,7 +203,7 @@ export async function applyTranslationToCaptureSource(options: {
   model?: string;
   apiKey?: string;
 }): Promise<void> {
-  const sourcePath = path.join(options.captureDir, 'source.md');
+  const { sourcePath } = await getCaptureFiles(options.captureDir);
   const raw = await fs.readFile(sourcePath, 'utf8');
   const segs = parseEnTranscriptFromSourceMarkdown(raw);
   if (segs.length === 0) {

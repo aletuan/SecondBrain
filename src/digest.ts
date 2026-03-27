@@ -3,6 +3,7 @@ import path from 'node:path';
 import OpenAI from 'openai';
 import { utcDigestWeekId } from './digest/isoWeek.js';
 import type { OpenAIClientLike } from './llm/enrich.js';
+import { getCaptureFiles, getSlugFromDir } from './vault/writer.js';
 
 function parseSinceDurationMs(since: string): number {
   const m = /^(\d+)d$/.exec(since.trim());
@@ -47,7 +48,7 @@ export async function collectDigestItems(
   for (const e of entries) {
     if (!e.isDirectory()) continue;
     const folder = path.join(base, String(e.name));
-    const notePath = path.join(folder, 'note.md');
+    const { notePath } = await getCaptureFiles(folder);
     let raw: string;
     try {
       raw = await fs.readFile(notePath, 'utf8');
@@ -61,8 +62,9 @@ export async function collectDigestItems(
     const title = titleLine?.[1]?.trim() ?? String(e.name);
     const body = raw.replace(/^---[\s\S]*?---\s*/, '');
     const excerpt = body.replace(/^#\s+.+\r?\n+/, '').trim().slice(0, 400);
+    const slug = getSlugFromDir(String(e.name));
     out.push({
-      wikilink: `Captures/${String(e.name)}/note`,
+      wikilink: `Captures/${String(e.name)}/${slug}.note`,
       title,
       excerpt,
     });

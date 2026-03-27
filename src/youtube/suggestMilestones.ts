@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { OpenAIClientLike } from '../llm/enrich.js';
 import { parseEnTranscriptFromSourceMarkdown } from '../llm/translateTranscript.js';
+import { getCaptureFiles } from '../vault/writer.js';
 import type { YoutubeMilestone } from './milestones.js';
 import { milestonesToYaml, mergeMilestones, parseMilestonesYaml } from './milestones.js';
 
@@ -75,7 +76,7 @@ export async function writeSuggestedMilestonesForCapture(options: {
   client: OpenAIClientLike;
   model: string;
 }): Promise<string> {
-  const sourcePath = path.join(options.captureDir, 'source.md');
+  const { sourcePath } = await getCaptureFiles(options.captureDir);
   const raw = await fs.readFile(sourcePath, 'utf8');
   const segs = parseEnTranscriptFromSourceMarkdown(raw);
   if (segs.length === 0) {

@@ -11,6 +11,26 @@ function safeCaptureId(id: string): boolean {
   return FOLDER_RE.test(id) && id.includes('--');
 }
 
+async function getCaptureFiles(captureDir: string): Promise<{ notePath: string; sourcePath: string }> {
+  try {
+    const files = await fs.readdir(captureDir);
+    const sourceFile = files.find(f => f.endsWith('.source.md'));
+    const noteFile = files.find(f => f.endsWith('.note.md'));
+    return {
+      sourcePath: sourceFile
+        ? path.join(captureDir, sourceFile)
+        : path.join(captureDir, 'source.md'),
+      notePath: noteFile
+        ? path.join(captureDir, noteFile)
+        : path.join(captureDir, 'note.md'),
+    };
+  } catch { /* ignore */ }
+  return {
+    sourcePath: path.join(captureDir, 'source.md'),
+    notePath: path.join(captureDir, 'note.md'),
+  };
+}
+
 export type CaptureListItem = {
   id: string;
   title: string;
@@ -36,7 +56,7 @@ export async function listCaptures(): Promise<{ captures: CaptureListItem[]; vau
     if (!e.isDirectory()) continue;
     const id = e.name;
     if (!safeCaptureId(id)) continue;
-    const notePath = path.join(capDir, id, 'note.md');
+    const { notePath } = await getCaptureFiles(path.join(capDir, id));
     let raw: string;
     try {
       raw = await fs.readFile(notePath, 'utf8');
@@ -81,8 +101,9 @@ export async function getCapture(id: string): Promise<CaptureDetail | null> {
   let noteRaw: string;
   let sourceRaw: string;
   try {
-    noteRaw = await fs.readFile(path.join(dir, 'note.md'), 'utf8');
-    sourceRaw = await fs.readFile(path.join(dir, 'source.md'), 'utf8');
+    const { notePath, sourcePath } = await getCaptureFiles(dir);
+    noteRaw = await fs.readFile(notePath, 'utf8');
+    sourceRaw = await fs.readFile(sourcePath, 'utf8');
   } catch {
     return null;
   }

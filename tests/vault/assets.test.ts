@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bundleFromParts } from '../../src/normaliser.js';
-import { downloadImagesToAssets, writeCapture } from '../../src/vault/writer.js';
+import { downloadImagesToAssets, getCaptureFiles, writeCapture } from '../../src/vault/writer.js';
 
 let tmp: string | undefined;
 
@@ -48,7 +48,8 @@ describe('downloadImagesToAssets', () => {
     const assets = path.join(captureDir, 'assets');
     const files = await fs.readdir(assets);
     expect(files.some((f) => f.startsWith('img-') && f.endsWith('.png'))).toBe(true);
-    const note = await fs.readFile(path.join(captureDir, 'note.md'), 'utf8');
+    const { notePath: np1 } = await getCaptureFiles(captureDir);
+    const note = await fs.readFile(np1, 'utf8');
     expect(note).toContain('![[assets/');
     expect(note).toContain('Shot');
   });
@@ -83,7 +84,8 @@ describe('downloadImagesToAssets', () => {
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
-    const note = await fs.readFile(path.join(captureDir, 'note.md'), 'utf8');
+    const { notePath: np2 } = await getCaptureFiles(captureDir);
+    const note = await fs.readFile(np2, 'utf8');
     expect(note).not.toContain('## Hình ảnh');
   });
 

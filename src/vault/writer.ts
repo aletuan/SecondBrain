@@ -128,6 +128,45 @@ export type WriteCaptureResult = {
   relativeFolder: string;
 };
 
+/** Extracts the slug from a capture directory name.
+ *  `2026-03-21--how-i-code--8dc9f7` → `how-i-code`
+ */
+export function getSlugFromDir(dirName: string): string {
+  const parts = dirName.split('--');
+  if (parts.length >= 3) {
+    return parts.slice(1, -1).join('--');
+  }
+  return dirName;
+}
+
+/** Returns paths for source and note files.
+ *  Scans for `*.source.md` / `*.note.md` first; falls back to legacy `source.md` / `note.md`.
+ */
+export async function getCaptureFiles(captureDir: string): Promise<{
+  sourcePath: string;
+  notePath: string;
+}> {
+  try {
+    const files = await fs.readdir(captureDir);
+    const sourceFile = files.find(f => f.endsWith('.source.md'));
+    const noteFile = files.find(f => f.endsWith('.note.md'));
+    return {
+      sourcePath: sourceFile
+        ? path.join(captureDir, sourceFile)
+        : path.join(captureDir, 'source.md'),
+      notePath: noteFile
+        ? path.join(captureDir, noteFile)
+        : path.join(captureDir, 'note.md'),
+    };
+  } catch {
+    /* ignore */
+  }
+  return {
+    sourcePath: path.join(captureDir, 'source.md'),
+    notePath: path.join(captureDir, 'note.md'),
+  };
+}
+
 function slugify(input: string): string {
   const s = input
     .toLowerCase()
@@ -199,10 +238,23 @@ export async function writeCapture(
 
   const noteMd = formatFrontmatter(noteFm) + `# ${bundle.title}\n\n`;
 
-  await fs.writeFile(path.join(captureDir, 'source.md'), sourceMd, 'utf8');
-  await fs.writeFile(path.join(captureDir, 'note.md'), noteMd, 'utf8');
+  await fs.writeFile(path.join(captureDir, `${slug}.source.md`), sourceMd, 'utf8');
+  await fs.writeFile(path.join(captureDir, `${slug}.note.md`), noteMd, 'utf8');
 
   return { captureDir, relativeFolder: relativeFolder.split(path.sep).join('/') };
+}
+
+/** Inserts `tags: [...]` into the YAML frontmatter of note.md. No-op if tags is empty. */
+export async function addTagsToNoteFrontmatter(
+  notePath: string,
+  tags: string[],
+): Promise<void> {
+  if (tags.length === 0) return;
+  const content = await fs.readFile(notePath, 'utf8');
+  const tagsLine = `tags: [${tags.map(t => JSON.stringify(t)).join(', ')}]`;
+  // Insert before closing --- of frontmatter
+  const updated = content.replace(/^(---\n[\s\S]*?)(---)/m, `$1${tagsLine}\n$2`);
+  await fs.writeFile(notePath, updated, 'utf8');
 }
 
 /** Fetch remote images into `assets/` and append Obsidian embeds to `note.md`. */
@@ -219,7 +271,7 @@ export async function downloadImagesToAssets(
 
   const assetsDir = path.join(captureDir, 'assets');
   await fs.mkdir(assetsDir, { recursive: true });
-  const notePath = path.join(captureDir, 'note.md');
+  const { notePath } = await getCaptureFiles(captureDir);
   const lines: string[] = [];
   let index = 0;
   for (const img of bundle.images) {

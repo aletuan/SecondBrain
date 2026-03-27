@@ -8,7 +8,9 @@ import {
   buildEnrichmentSections,
   ENRICH_SYSTEM_PROMPT,
   enrichNote,
+  extractTags,
   resolveEnrichModel,
+  TAG_SYSTEM_PROMPT,
 } from '../../src/llm/enrich.js';
 
 let tmp: string | undefined;
@@ -100,6 +102,53 @@ describe('buildEnrichmentSections', () => {
     expect(String(captured![1]!.content)).toContain('Tiêu đề: T');
     expect(String(captured![1]!.content)).toContain('https://u');
     expect(String(captured![1]!.content)).toContain('excerpt text');
+  });
+});
+
+describe('TAG_SYSTEM_PROMPT', () => {
+  it('asks for JSON array of tags', () => {
+    expect(TAG_SYSTEM_PROMPT).toContain('JSON array');
+    expect(TAG_SYSTEM_PROMPT).toContain('lowercase');
+    expect(TAG_SYSTEM_PROMPT).toContain('hyphen');
+  });
+});
+
+describe('extractTags', () => {
+  function makeClient(content: string) {
+    return {
+      chat: {
+        completions: {
+          create: async () => ({ choices: [{ message: { content } }] }),
+        },
+      },
+    };
+  }
+
+  it('parses a plain JSON array response', async () => {
+    const tags = await extractTags('text', makeClient('["ai", "machine-learning", "nlp"]'), 'gpt-4o-mini');
+    expect(tags).toEqual(['ai', 'machine-learning', 'nlp']);
+  });
+
+  it('strips code fences before parsing', async () => {
+    const tags = await extractTags('text', makeClient('```json\n["foo", "bar"]\n```'), 'gpt-4o-mini');
+    expect(tags).toEqual(['foo', 'bar']);
+  });
+
+  it('caps at 5 tags', async () => {
+    const client = makeClient('["a","b","c","d","e","f","g"]');
+    const tags = await extractTags('text', client, 'gpt-4o-mini');
+    expect(tags).toHaveLength(5);
+  });
+
+  it('returns [] on invalid JSON', async () => {
+    const tags = await extractTags('text', makeClient('not json'), 'gpt-4o-mini');
+    expect(tags).toEqual([]);
+  });
+
+  it('returns [] when completion is empty', async () => {
+    const client = { chat: { completions: { create: async () => ({ choices: [] }) } } };
+    const tags = await extractTags('text', client, 'gpt-4o-mini');
+    expect(tags).toEqual([]);
   });
 });
 

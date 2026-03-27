@@ -33,7 +33,7 @@ describe('generateDigest', () => {
     const cap = path.join(tmp, 'Captures', '2026-03-14--demo--a1b2c3');
     await fs.mkdir(cap, { recursive: true });
     await fs.writeFile(
-      path.join(cap, 'note.md'),
+      path.join(cap, 'demo.note.md'),
       `---
 type: "capture"
 url: "https://example.com/a"
@@ -58,6 +58,6 @@ Hello digest.
     expect(weekId).toBe('2026-W11');
     expect(digestPath).toContain(`Digests${path.sep}2026-W11.md`);
     const body = await fs.readFile(digestPath, 'utf8');
-    expect(body).toContain('[[Captures/2026-03-14--demo--a1b2c3/note|Demo Note]]');
+    expect(body).toContain('[[Captures/2026-03-14--demo--a1b2c3/demo.note|Demo Note]]');
   });
 });

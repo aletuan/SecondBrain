@@ -11,6 +11,7 @@ import type { IngestProgressEvent } from './ingest/ingestProgress.js';
 import { runIngest } from './ingest/runIngest.js';
 import type { OpenAIClientLike } from './llm/enrich.js';
 import { applyTranslationToCaptureSource } from './llm/translateTranscript.js';
+import { getCaptureFiles } from './vault/writer.js';
 import { writeSuggestedMilestonesForCapture } from './youtube/suggestMilestones.js';
 
 function printError(e: unknown): void {
@@ -91,7 +92,8 @@ program
         ? opts.capture
         : path.resolve(cwd, opts.capture);
       await applyTranslationToCaptureSource({ captureDir: dir });
-      console.log(path.join(dir, 'source.md'));
+      const { sourcePath } = await getCaptureFiles(dir);
+      console.log(sourcePath);
     } catch (e) {
       printError(e);
       process.exitCode = 1;

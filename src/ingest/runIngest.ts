@@ -7,12 +7,12 @@ import { fetchXThread } from '../adapters/xApi.js';
 import { extractYoutubeVideoId, ingestYouTubeViaApify } from '../adapters/youtube.js';
 import { readRoutingYamlSync } from '../config/routingFile.js';
 import type { OpenAIClientLike } from '../llm/enrich.js';
-import { enrichNote } from '../llm/enrich.js';
+import { enrichNote, extractTags, resolveEnrichModel } from '../llm/enrich.js';
 import { enrichMaxCharsFromEnv, truncateSourceForEnrich } from '../llm/enrichSource.js';
 import { translateTranscriptSegments } from '../llm/translateTranscript.js';
 import { loadRouting, resolveStrategy } from '../router.js';
 import type { CaptureBundle } from '../types/capture.js';
-import { downloadImagesToAssets, writeCapture } from '../vault/writer.js';
+import { addTagsToNoteFrontmatter, downloadImagesToAssets, getCaptureFiles, writeCapture } from '../vault/writer.js';
 import type { IngestPhaseProgressEvent } from './ingestProgress.js';
 
 export async function runIngest(options: {
@@ -87,19 +87,27 @@ export async function runIngest(options: {
   const { captureDir } = await writeCapture(vaultRoot, bundle);
   await downloadImagesToAssets(bundle, captureDir);
   phase({ v: 1, kind: 'phase', phase: 'vault', state: 'done' });
-  const notePath = path.join(captureDir, 'note.md');
+  const { notePath, sourcePath } = await getCaptureFiles(captureDir);
   const willEnrich = Boolean(process.env.OPENAI_API_KEY?.trim());
   if (willEnrich) {
     phase({ v: 1, kind: 'phase', phase: 'llm', state: 'active' });
-    const raw = await fs.readFile(path.join(captureDir, 'source.md'), 'utf8');
+    const key = process.env.OPENAI_API_KEY!.trim();
+    const enrichClient = new OpenAI({ apiKey: key }) as unknown as OpenAIClientLike;
+    const raw = await fs.readFile(sourcePath, 'utf8');
     const body = raw.replace(/^---[\s\S]*?---\s*/, '');
     const excerpt = truncateSourceForEnrich(body, enrichMaxCharsFromEnv());
-    await enrichNote({
-      notePath,
-      sourceExcerpt: excerpt,
-      title: bundle.title,
-      url: bundle.canonicalUrl,
-    });
+    const enrichModel = resolveEnrichModel();
+    const [, tags] = await Promise.all([
+      enrichNote({
+        notePath,
+        sourceExcerpt: excerpt,
+        title: bundle.title,
+        url: bundle.canonicalUrl,
+        client: enrichClient,
+      }),
+      extractTags(excerpt, enrichClient, enrichModel),
+    ]);
+    await addTagsToNoteFrontmatter(notePath, tags);
     phase({ v: 1, kind: 'phase', phase: 'llm', state: 'done' });
   }
 
