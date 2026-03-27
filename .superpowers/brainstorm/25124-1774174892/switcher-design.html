@@ -1,0 +1,205 @@
+<h2>Theme Switcher — Header Placement</h2>
+<p class="subtitle">Three compact icons in the top-right of the masthead. Click a theme to preview its colors below.</p>
+
+<style>
+  .demo-masthead {
+    position: relative;
+    padding: 28px 24px 20px;
+    border-radius: 6px;
+    margin-bottom: 24px;
+    transition: background 0.3s, color 0.3s;
+  }
+  .demo-masthead.dark { background: #070809; color: #e8e4dc; }
+  .demo-masthead.light { background: #f7f4ee; color: #2c2a26; }
+  .demo-masthead.solarized { background: #002b36; color: #eee8d5; }
+
+  .demo-masthead h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 26px;
+    margin: 0;
+    line-height: 1.2;
+  }
+  .demo-masthead h3 em {
+    font-style: italic;
+  }
+  .demo-masthead.dark h3 em { color: #e85d4c; }
+  .demo-masthead.light h3 em { color: #c0453a; }
+  .demo-masthead.solarized h3 em { color: #cb4b16; }
+
+  .demo-status {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  .demo-masthead.dark .demo-status { color: #6b7287; }
+  .demo-masthead.light .demo-status { color: #8a8478; }
+  .demo-masthead.solarized .demo-status { color: #657b83; }
+
+  .theme-switcher {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    display: flex;
+    gap: 2px;
+    background: rgba(128,128,128,0.12);
+    border-radius: 6px;
+    padding: 3px;
+  }
+  .theme-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: background 0.2s;
+    background: transparent;
+  }
+  .theme-btn.active {
+    background: rgba(128,128,128,0.2);
+  }
+  .demo-masthead.dark .theme-btn { color: #6b7287; }
+  .demo-masthead.dark .theme-btn.active { color: #e8e4dc; }
+  .demo-masthead.light .theme-btn { color: #8a8478; }
+  .demo-masthead.light .theme-btn.active { color: #2c2a26; }
+  .demo-masthead.solarized .theme-btn { color: #657b83; }
+  .demo-masthead.solarized .theme-btn.active { color: #eee8d5; }
+
+  /* Demo card area */
+  .demo-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 4px;
+    transition: background 0.3s;
+  }
+  .demo-masthead.dark .demo-cards { background: #0e1014; }
+  .demo-masthead.light .demo-cards { background: #ffffff; }
+  .demo-masthead.solarized .demo-cards { background: #073642; }
+
+  .demo-card {
+    padding: 12px;
+    border-radius: 2px;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .demo-masthead.dark .demo-card { background: #151820; border: 1px solid #2a303c; }
+  .demo-masthead.light .demo-card { background: #f7f4ee; border: 1px solid #d5cfc4; }
+  .demo-masthead.solarized .demo-card { background: #002b36; border: 1px solid #586e75; }
+
+  .demo-card-title {
+    font-family: 'Literata', serif;
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .demo-card-meta {
+    font-size: 10px;
+  }
+  .demo-masthead.dark .demo-card-meta { color: #6b7287; }
+  .demo-masthead.light .demo-card-meta { color: #8a8478; }
+  .demo-masthead.solarized .demo-card-meta { color: #657b83; }
+
+  .demo-chip {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+  }
+  .demo-masthead.dark .demo-chip { background: #151820; border: 1px solid #2a303c; color: #e8e4dc; }
+  .demo-masthead.light .demo-chip { background: #f0ece4; border: 1px solid #d5cfc4; color: #2c2a26; }
+  .demo-masthead.solarized .demo-chip { background: #073642; border: 1px solid #586e75; color: #93a1a1; }
+
+  .active-label {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.5;
+  }
+</style>
+
+<!-- Interactive demo -->
+<div class="demo-masthead dark" id="themeDemoArea">
+  <h3><span>Bộ nhớ</span><br><em>thứ hai.</em></h3>
+  <div class="demo-status">
+    <div>● Vault · ingest sẵn sàng</div>
+    <div>Obsidian · local reader</div>
+  </div>
+
+  <!-- THE SWITCHER -->
+  <div class="theme-switcher">
+    <button class="theme-btn active" onclick="switchDemo('dark')" title="Dark">🌙</button>
+    <button class="theme-btn" onclick="switchDemo('light')" title="Light">☀️</button>
+    <button class="theme-btn" onclick="switchDemo('solarized')" title="Solarized">🔬</button>
+  </div>
+
+  <!-- Mini content preview -->
+  <div style="margin-top:16px;">
+    <span class="demo-chip">YOUTUBE</span>
+    <span class="demo-chip">APIFY</span>
+    <span class="demo-chip">READABILITY</span>
+  </div>
+
+  <div class="demo-cards">
+    <div class="demo-card">
+      <div class="demo-card-title">Simon Willison: Engineering practices that make coding agents work</div>
+      <div class="demo-card-meta">youtube.com · 2026-03-20</div>
+    </div>
+    <div class="demo-card">
+      <div class="demo-card-title">Claude Code + Stitch 2.0 = Web Design GOD</div>
+      <div class="demo-card-meta">youtube.com · 2026-03-19</div>
+    </div>
+  </div>
+</div>
+<div class="active-label" id="themeLabel">Currently: Dark</div>
+
+<script>
+function switchDemo(theme) {
+  const area = document.getElementById('themeDemoArea');
+  area.className = 'demo-masthead ' + theme;
+  const labels = { dark: 'Dark', light: 'Light — Warm Parchment', solarized: 'Solarized Dark' };
+  document.getElementById('themeLabel').textContent = 'Currently: ' + labels[theme];
+  // Update active button
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  event.target.closest('.theme-btn').classList.add('active');
+}
+</script>
+
+<div style="margin-top:28px;">
+  <h3>Switcher Behavior</h3>
+  <ul style="font-size:13px; line-height:1.8; opacity:0.8;">
+    <li><strong>3 icons</strong>: 🌙 Dark · ☀️ Light · 🔬 Solarized — compact pill in top-right</li>
+    <li><strong>Instant swap</strong> — CSS variables change, no page reload</li>
+    <li><strong>localStorage</strong> — persists choice across sessions</li>
+    <li><strong>No flash</strong> — theme applied via inline script in &lt;head&gt; before CSS loads</li>
+    <li><strong>Smooth transition</strong> — 200ms ease on background/color properties</li>
+  </ul>
+</div>
+
+<div class="options" style="margin-top:24px;">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Looks good, proceed</h3>
+      <p>Approve this design direction and move to spec writing</p>
+    </div>
+  </div>
+  <div class="option" data-choice="adjust" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Needs adjustments</h3>
+      <p>I want to tweak colors, icons, or placement</p>
+    </div>
+  </div>
+</div>

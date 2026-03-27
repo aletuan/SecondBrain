@@ -1,0 +1,105 @@
+<h2>Theme Palette Directions</h2>
+<p class="subtitle">Three themes for the reader-web app. Current dark stays as-is. Pick the light + solarized directions that feel right.</p>
+
+<div class="cards" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:24px;">
+
+  <!-- DARK (current) -->
+  <div class="card" data-choice="dark-current" onclick="toggleSelect(this)" style="border:1px solid #2a303c; border-radius:8px; overflow:hidden;">
+    <div class="card-image" style="background:#070809; padding:20px; min-height:260px;">
+      <!-- Mini mockup -->
+      <div style="font-family:'DM Serif Display',serif; color:#e8e4dc; font-size:18px; margin-bottom:12px;">Bộ nhớ <em style="color:#e85d4c;">thứ hai.</em></div>
+      <div style="background:#0e1014; border:1px solid #2a303c; border-radius:2px; padding:10px; margin-bottom:10px;">
+        <div style="color:#6b7287; font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Luồng Ingest</div>
+        <div style="background:#151820; border:1px solid #2a303c; border-radius:2px; padding:8px; color:#6b7287; font-size:11px;">https://www.youtube.com/watch...</div>
+      </div>
+      <div style="display:flex; gap:6px; margin-bottom:12px;">
+        <span style="background:#151820; border:1px solid #2a303c; color:#e8e4dc; font-size:9px; padding:3px 8px; border-radius:2px;">YOUTUBE</span>
+        <span style="background:#151820; border:1px solid #2a303c; color:#e8e4dc; font-size:9px; padding:3px 8px; border-radius:2px;">APIFY</span>
+      </div>
+      <div style="background:#151820; border:1px solid #2a303c; border-radius:2px; padding:10px;">
+        <div style="color:#e8e4dc; font-size:12px; font-family:'Literata',serif; margin-bottom:4px;">Simon Willison: Engineering practices</div>
+        <div style="color:#6b7287; font-size:10px;">youtube.com · 2026-03-20</div>
+      </div>
+      <!-- Accent swatches -->
+      <div style="display:flex; gap:6px; margin-top:14px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:#e85d4c;" title="accent"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#3d9a7a;" title="signal"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#c9a227;" title="warn"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#8b9dc9;" title="nav"></div>
+      </div>
+    </div>
+    <div class="card-body" style="padding:14px;">
+      <h3 style="margin:0 0 6px;">Dark (Current)</h3>
+      <p style="margin:0; font-size:13px; opacity:0.7;">Editorial dark console. Stays exactly as-is.</p>
+    </div>
+  </div>
+
+  <!-- LIGHT: Warm Parchment -->
+  <div class="card" data-choice="light-parchment" onclick="toggleSelect(this)" style="border:1px solid #d5cfc4; border-radius:8px; overflow:hidden;">
+    <div class="card-image" style="background:#f7f4ee; padding:20px; min-height:260px;">
+      <div style="font-family:'DM Serif Display',serif; color:#2c2a26; font-size:18px; margin-bottom:12px;">Bộ nhớ <em style="color:#c0453a;">thứ hai.</em></div>
+      <div style="background:#ffffff; border:1px solid #d5cfc4; border-radius:2px; padding:10px; margin-bottom:10px;">
+        <div style="color:#8a8478; font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Luồng Ingest</div>
+        <div style="background:#f7f4ee; border:1px solid #d5cfc4; border-radius:2px; padding:8px; color:#8a8478; font-size:11px;">https://www.youtube.com/watch...</div>
+      </div>
+      <div style="display:flex; gap:6px; margin-bottom:12px;">
+        <span style="background:#f0ece4; border:1px solid #d5cfc4; color:#2c2a26; font-size:9px; padding:3px 8px; border-radius:2px;">YOUTUBE</span>
+        <span style="background:#f0ece4; border:1px solid #d5cfc4; color:#2c2a26; font-size:9px; padding:3px 8px; border-radius:2px;">APIFY</span>
+      </div>
+      <div style="background:#ffffff; border:1px solid #d5cfc4; border-radius:2px; padding:10px;">
+        <div style="color:#2c2a26; font-size:12px; font-family:'Literata',serif; margin-bottom:4px;">Simon Willison: Engineering practices</div>
+        <div style="color:#8a8478; font-size:10px;">youtube.com · 2026-03-20</div>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:14px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:#c0453a;" title="accent"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#2e8a65;" title="signal"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#b8922a;" title="warn"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#6e7fa8;" title="nav"></div>
+      </div>
+    </div>
+    <div class="card-body" style="padding:14px;">
+      <h3 style="margin:0 0 6px;">Light — Warm Parchment</h3>
+      <p style="margin:0; font-size:13px; opacity:0.7;">Creamy off-white like aged paper. Warm, bookish, editorial. Accents deepened for contrast.</p>
+    </div>
+  </div>
+
+  <!-- SOLARIZED -->
+  <div class="card" data-choice="solarized" onclick="toggleSelect(this)" style="border:1px solid #073642; border-radius:8px; overflow:hidden;">
+    <div class="card-image" style="background:#002b36; padding:20px; min-height:260px;">
+      <div style="font-family:'DM Serif Display',serif; color:#eee8d5; font-size:18px; margin-bottom:12px;">Bộ nhớ <em style="color:#cb4b16;">thứ hai.</em></div>
+      <div style="background:#073642; border:1px solid #586e75; border-radius:2px; padding:10px; margin-bottom:10px;">
+        <div style="color:#657b83; font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Luồng Ingest</div>
+        <div style="background:#002b36; border:1px solid #586e75; border-radius:2px; padding:8px; color:#657b83; font-size:11px;">https://www.youtube.com/watch...</div>
+      </div>
+      <div style="display:flex; gap:6px; margin-bottom:12px;">
+        <span style="background:#073642; border:1px solid #586e75; color:#93a1a1; font-size:9px; padding:3px 8px; border-radius:2px;">YOUTUBE</span>
+        <span style="background:#073642; border:1px solid #586e75; color:#93a1a1; font-size:9px; padding:3px 8px; border-radius:2px;">APIFY</span>
+      </div>
+      <div style="background:#073642; border:1px solid #586e75; border-radius:2px; padding:10px;">
+        <div style="color:#eee8d5; font-size:12px; font-family:'Literata',serif; margin-bottom:4px;">Simon Willison: Engineering practices</div>
+        <div style="color:#657b83; font-size:10px;">youtube.com · 2026-03-20</div>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:14px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:#cb4b16;" title="orange"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#2aa198;" title="cyan"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#b58900;" title="yellow"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#6c71c4;" title="violet"></div>
+      </div>
+    </div>
+    <div class="card-body" style="padding:14px;">
+      <h3 style="margin:0 0 6px;">Solarized Dark</h3>
+      <p style="margin:0; font-size:13px; opacity:0.7;">Ethan Schoonover's iconic palette. Blue-green base, precisely calibrated accents. Developer-beloved.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px; padding:16px; background:rgba(255,255,255,0.05); border-radius:6px;">
+  <h3 style="margin:0 0 8px;">Design Notes</h3>
+  <ul style="margin:0; padding-left:20px; font-size:13px; opacity:0.8; line-height:1.7;">
+    <li><strong>Fonts stay consistent</strong> across all themes — DM Serif Display / Literata / JetBrains Mono</li>
+    <li><strong>Accent colors adapt</strong> per theme for proper contrast ratios (WCAG AA)</li>
+    <li><strong>CSS variables swap</strong> — same variable names, different values per theme</li>
+    <li><strong>Switcher</strong> — 3-icon toggle in top-right header, persisted to localStorage</li>
+  </ul>
+</div>
