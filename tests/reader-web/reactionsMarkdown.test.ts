@@ -1,15 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendToReactionsFile,
+  averageReactionStats,
   formatReactionEntry,
   parseReactionsMarkdown,
+  ratingStarsOnly,
   ratingToStarLine,
 } from '../../reader-web/vault/reactionsMarkdown.js';
 
 describe('reactionsMarkdown', () => {
+  it('ratingStarsOnly has no suffix; ratingToStarLine adds (n/5)', () => {
+    expect(ratingStarsOnly(4)).toBe('★★★★☆');
+    expect(ratingToStarLine(4)).toBe('★★★★☆ (4/5)');
+  });
+
   it('ratingToStarLine covers 1 and 5', () => {
     expect(ratingToStarLine(1)).toContain('(1/5)');
     expect(ratingToStarLine(5)).toBe('★★★★★ (5/5)');
+  });
+
+  it('averageReactionStats: empty, one, many, fractional mean', () => {
+    expect(averageReactionStats([])).toEqual({ avg: null, count: 0 });
+    expect(averageReactionStats([{ at: 't', rating: 5 }])).toEqual({ avg: 5, count: 1 });
+    expect(averageReactionStats([{ at: 'a', rating: 4 }, { at: 'b', rating: 5 }])).toEqual({
+      avg: 4.5,
+      count: 2,
+    });
+    expect(
+      averageReactionStats([
+        { at: 'a', rating: 4 },
+        { at: 'b', rating: 5 },
+        { at: 'c', rating: 5 },
+      ]),
+    ).toEqual({ avg: 14 / 3, count: 3 });
   });
 
   it('parses spec example (two entries, second without comment)', () => {
