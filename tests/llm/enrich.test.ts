@@ -10,6 +10,7 @@ import {
   enrichNote,
   extractTags,
   resolveEnrichModel,
+  resolveEnrichTemperature,
   TAG_SYSTEM_PROMPT,
 } from '../../src/llm/enrich.js';
 
@@ -43,6 +44,27 @@ describe('buildEnrichUserMessage', () => {
   });
 });
 
+describe('resolveEnrichTemperature', () => {
+  it('defaults to 0.3 when unset or invalid; accepts 0–2', () => {
+    const prev = process.env.ENRICH_TEMPERATURE;
+    try {
+      delete process.env.ENRICH_TEMPERATURE;
+      expect(resolveEnrichTemperature()).toBe(0.3);
+      process.env.ENRICH_TEMPERATURE = '0.2';
+      expect(resolveEnrichTemperature()).toBe(0.2);
+      process.env.ENRICH_TEMPERATURE = 'invalid';
+      expect(resolveEnrichTemperature()).toBe(0.3);
+      process.env.ENRICH_TEMPERATURE = '99';
+      expect(resolveEnrichTemperature()).toBe(0.3);
+      process.env.ENRICH_TEMPERATURE = '2';
+      expect(resolveEnrichTemperature()).toBe(2);
+    } finally {
+      if (prev !== undefined) process.env.ENRICH_TEMPERATURE = prev;
+      else delete process.env.ENRICH_TEMPERATURE;
+    }
+  });
+});
+
 describe('resolveEnrichModel', () => {
   it('prefers explicit override then ENRICH_MODEL then OPENAI_MODEL', () => {
     expect(resolveEnrichModel('x-1')).toBe('x-1');
@@ -67,41 +89,54 @@ describe('resolveEnrichModel', () => {
 
 describe('buildEnrichmentSections', () => {
   it('sends system prompt and user message with context to the client', async () => {
-    let captured: ChatCompletionMessageParam[] | undefined;
-    const client = {
-      chat: {
-        completions: {
-          create: async (args: { messages: ChatCompletionMessageParam[] }) => {
-            captured = args.messages;
-            return {
-              choices: [
-                {
-                  message: {
-                    content:
-                      '## Tóm tắt\n- **Chủ đề / bối cảnh** — Test.\n- **Ý chính**\n- a\n## Insight (LLM) — suy luận\n- x\n## Câu hỏi mở\n- y?',
+    const prevTemp = process.env.ENRICH_TEMPERATURE;
+    try {
+      delete process.env.ENRICH_TEMPERATURE;
+      let captured: ChatCompletionMessageParam[] | undefined;
+      let capturedTemperature: number | undefined;
+      const client = {
+        chat: {
+          completions: {
+            create: async (args: {
+              messages: ChatCompletionMessageParam[];
+              temperature?: number;
+            }) => {
+              captured = args.messages;
+              capturedTemperature = args.temperature;
+              return {
+                choices: [
+                  {
+                    message: {
+                      content:
+                        '## Tóm tắt\n- **Chủ đề / bối cảnh** — Test.\n- **Ý chính**\n- a\n## Insight (LLM) — suy luận\n- x\n## Câu hỏi mở\n- y?',
+                    },
                   },
-                },
-              ],
-            };
+                ],
+              };
+            },
           },
         },
-      },
-    };
+      };
 
-    const out = await buildEnrichmentSections(
-      'excerpt text',
-      client,
-      'gpt-4o-mini',
-      { title: 'T', url: 'https://u' },
-    );
-    expect(out).toContain('## Tóm tắt');
-    expect(captured).toBeDefined();
-    expect(captured![0]!.role).toBe('system');
-    expect(String(captured![0]!.content)).toContain('Ý chính');
-    expect(captured![1]!.role).toBe('user');
-    expect(String(captured![1]!.content)).toContain('Tiêu đề: T');
-    expect(String(captured![1]!.content)).toContain('https://u');
-    expect(String(captured![1]!.content)).toContain('excerpt text');
+      const out = await buildEnrichmentSections(
+        'excerpt text',
+        client,
+        'gpt-4o-mini',
+        { title: 'T', url: 'https://u' },
+      );
+      expect(out).toContain('## Tóm tắt');
+      expect(captured).toBeDefined();
+      expect(captured![0]!.role).toBe('system');
+      expect(String(captured![0]!.content)).toContain('Ý chính');
+      expect(captured![1]!.role).toBe('user');
+      expect(String(captured![1]!.content)).toContain('Tiêu đề: T');
+      expect(String(captured![1]!.content)).toContain('https://u');
+      expect(String(captured![1]!.content)).toContain('excerpt text');
+      expect(capturedTemperature).toBe(0.3);
+    } finally {
+      if (prevTemp !== undefined) process.env.ENRICH_TEMPERATURE = prevTemp;
+      else delete process.env.ENRICH_TEMPERATURE;
+    }
   });
 });
 

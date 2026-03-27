@@ -60,6 +60,17 @@ export function resolveEnrichModel(override?: string): string {
   return process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
 }
 
+const DEFAULT_ENRICH_TEMPERATURE = 0.3;
+
+/** OpenAI chat completions allow 0–2; invalid/unset → default 0.3. */
+export function resolveEnrichTemperature(): number {
+  const raw = process.env.ENRICH_TEMPERATURE?.trim();
+  if (!raw) return DEFAULT_ENRICH_TEMPERATURE;
+  const n = Number.parseFloat(raw);
+  if (Number.isFinite(n) && n >= 0 && n <= 2) return n;
+  return DEFAULT_ENRICH_TEMPERATURE;
+}
+
 export async function buildEnrichmentSections(
   sourceExcerpt: string,
   client: OpenAIClientLike,
@@ -69,6 +80,7 @@ export async function buildEnrichmentSections(
   const userContent = buildEnrichUserMessage(sourceExcerpt, ctx);
   const res = await client.chat.completions.create({
     model,
+    temperature: resolveEnrichTemperature(),
     messages: [
       { role: 'system', content: ENRICH_SYSTEM_PROMPT },
       { role: 'user', content: userContent },
