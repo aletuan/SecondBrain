@@ -3526,7 +3526,16 @@ tr.capture-row:focus-visible {
 
 .skeleton-row__bar--title { width: 60%; }
 .skeleton-row__bar--source { width: 45%; }
-.skeleton-row__bar--status { width: 3.5rem; }
+.skeleton-row__bar--rating { width: 5rem; }
+
+.capture-rating {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.capture-rating--empty {
+  color: var(--muted);
+}
 
 .skeleton-prose {
   display: flex;
