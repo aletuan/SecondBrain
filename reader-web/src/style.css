@@ -125,7 +125,8 @@ html[data-theme] .card,
 html[data-theme] .chip,
 html[data-theme] .mock-table,
 html[data-theme] .ingest-shell,
-html[data-theme] .status-strip {
+html[data-theme] .status-strip,
+html[data-theme] .app-nav__status {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -301,6 +302,15 @@ html[data-theme] .status-strip {
     touch-action: manipulation;
   }
 
+  .drawer-brand {
+    padding: 0.35rem 1rem 0.85rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  }
+
+  .drawer-brand .app-nav__title {
+    margin: 0 0 0.4rem;
+  }
+
   .drawer-links {
     display: flex;
     flex-direction: column;
@@ -458,11 +468,50 @@ html[data-theme] .status-strip {
 .app-nav__mark-wrap {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.65rem;
   padding-bottom: 1rem;
   margin-bottom: 1rem;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+}
+
+.app-nav__title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.2rem, 2.6vw, 1.6rem);
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.02em;
+  max-width: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.app-nav__title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.app-nav__status.status-strip {
+  text-align: left;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.app-nav__status .pulse {
+  margin-bottom: 0.25rem;
+}
+
+.app-nav__vault-line {
+  margin-top: 0.3rem;
+  line-height: 1.35;
+}
+
+.app-nav__vault-label {
+  color: var(--warn);
 }
 
 .app-nav__brand-label {
@@ -839,10 +888,22 @@ main {
   border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 
+.app-nav__status-wrap {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
 .drawer-theme {
   flex-shrink: 0;
   margin-top: 0.25rem;
-  padding: 0.85rem 1rem 1rem;
+  padding: 0.85rem 1rem 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.drawer-status-wrap {
+  flex-shrink: 0;
+  padding: 0.65rem 1rem;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
   border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }

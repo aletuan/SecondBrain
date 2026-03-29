@@ -749,19 +749,24 @@ function layoutShell(): string {
       <span>Navigation</span>
       <button type="button" class="drawer-close" id="drawer-close" aria-label="Close menu">×</button>
     </div>
+    <div class="drawer-brand">
+      <p class="app-nav__title drawer-brand__title"><span>Second</span> <em>brain.</em></p>
+    </div>
     <div class="drawer-links">
       <button type="button" class="drawer-link active" data-route="home">Ingest</button>
       <button type="button" class="drawer-link" data-route="captures">Captures</button>
       <button type="button" class="drawer-link" data-route="digests">Digests</button>
     </div>
     <div class="drawer-theme" aria-label="Theme">${themeSwitcherHtml()}</div>
+    <div class="drawer-status-wrap">
+      <div class="status-strip app-nav__status" id="drawer-app-nav-status" aria-live="polite"></div>
+    </div>
   </nav>
   <div class="app">
     <nav class="app-nav" aria-label="App navigation">
       <div class="app-nav__inner">
         <div class="app-nav__mark-wrap">
-          <div class="mark" title="Second brain reader"></div>
-          <p class="app-nav__brand-label">Reader</p>
+          <h1 class="app-nav__title" id="app-nav-title"><span>Second</span> <em>brain.</em></h1>
         </div>
         <div class="app-nav__section">
           <h2 class="app-nav__section-title">Views</h2>
@@ -787,6 +792,9 @@ function layoutShell(): string {
             <button type="button" class="app-nav-source" data-source="other" aria-pressed="false">Other</button>
           </div>
           <div class="app-nav__theme" aria-label="Theme">${themeSwitcherHtml()}</div>
+          <div class="app-nav__status-wrap">
+            <div class="status-strip app-nav__status" id="app-nav-status" aria-live="polite"></div>
+          </div>
         </div>
       </div>
     </nav>
@@ -838,6 +846,22 @@ type Health = {
   /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
   ingestSse?: boolean;
 };
+
+function appNavStatusHtml(h: Health): string {
+  return `
+    <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest ready' : 'Ingest · check CLI'}</div>
+    <div>Obsidian · local reader</div>
+    <div class="app-nav__vault-line"><span class="app-nav__vault-label">vault</span> · <code>${esc(h.vaultRoot)}</code></div>
+  `;
+}
+
+function updateAppNavStatus(h: Health): void {
+  const html = appNavStatusHtml(h);
+  const desktop = document.getElementById('app-nav-status');
+  if (desktop) desktop.innerHTML = html;
+  const drawer = document.getElementById('drawer-app-nav-status');
+  if (drawer) drawer.innerHTML = html;
+}
 
 type IngestSseEvent =
   | { v: 1; kind: 'phase'; phase: 'fetch' | 'translate' | 'vault' | 'llm'; state: 'active' | 'done' }
@@ -1480,14 +1504,6 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
           .join('');
 
   return `
-    <header class="masthead">
-      <h1><span>Second</span><br /><em>brain.</em></h1>
-      <div class="status-strip">
-        <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest ready' : 'Ingest · check CLI'}</div>
-        <div>Obsidian · local reader</div>
-        <div style="margin-top:0.35rem"><span style="color:var(--warn)">vault</span> · ${esc(h.vaultRoot)}</div>
-      </div>
-    </header>
     <div class="view view-ingest active">
       <section class="ingest-zone" aria-label="URL input">
         <div class="ingest-label">Ingest</div>
@@ -2494,7 +2510,6 @@ async function route() {
   try {
     if (view === 'home') {
       main.innerHTML = `
-        <header class="masthead"><h1><span>Second</span><br /><em>brain.</em></h1></header>
         <div class="view active">
           <div class="cards">${skeletonCardsHtml(3)}</div>
         </div>`;
@@ -2502,6 +2517,7 @@ async function route() {
         fetchJson<Health>('/api/health'),
         fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
       ]);
+      updateAppNavStatus(h);
       const allCaps = capData.captures;
       const recent = allCaps.slice(0, HOME_RECENT_CAPTURE_LIMIT);
       main.innerHTML = renderHome(h, recent, allCaps.length);
@@ -2600,7 +2616,11 @@ async function route() {
             <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
           </tr></thead><tbody>${skeletonTableRowsHtml(5)}</tbody></table></div>
         </div>`;
-      const { captures } = await fetchJson<{ captures: CaptureListItem[] }>('/api/captures');
+      const [h, { captures }] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
+      ]);
+      updateAppNavStatus(h);
       capturesListAll = captures;
       mountCapturesView();
       return;
@@ -2619,6 +2639,7 @@ async function route() {
       main.innerHTML = renderCaptureDetail(d, {
         reingestAvailable: h.ingestAvailable && Boolean(h.ingestSse),
       });
+      updateAppNavStatus(h);
       document.querySelector('#cap-back')?.addEventListener('click', () => setHash('captures'));
       const titleLine = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
       const omitNoteImages =
@@ -2697,6 +2718,7 @@ async function route() {
         fetchJson<{ digests: { id: string; week: string }[] }>('/api/digests'),
       ]);
       const digestOk = Boolean(h.digestAvailable ?? h.ingestAvailable);
+      updateAppNavStatus(h);
       main.innerHTML = renderDigestsList(digests, digestOk);
       document.querySelector('#back-home-d')?.addEventListener('click', () => setHash('home'));
       const digestRun = main.querySelector<HTMLButtonElement>('#digest-run');
@@ -2744,12 +2766,14 @@ async function route() {
       return;
     }
     if (view === 'digest' && id) {
-      const [data, challengeMd] = await Promise.all([
+      const [data, challengeMd, h] = await Promise.all([
         fetchJson<{ week: string; markdown: string }>(
           `/api/digests/${encodeURIComponent(id)}`,
         ),
         fetchChallengeMarkdown(id),
+        fetchJson<Health>('/api/health'),
       ]);
+      updateAppNavStatus(h);
       main.innerHTML = renderDigestDetail(data.week, data.markdown, challengeMd);
       document.querySelector('#dig-back')?.addEventListener('click', () => setHash('digests'));
       return;
