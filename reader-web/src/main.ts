@@ -2003,7 +2003,14 @@ function renderCaptureDetail(
         <dd class="fm-grid__value">
           <div class="cap-categories-wrap" id="cap-categories-wrap">
             <span class="cap-categories-chips" id="cap-categories-chips">${renderCategoryChipsPlain(categoryIds)}</span>
-            <button type="button" class="btn-ghost btn-tiny" id="cap-categories-edit">Chỉnh</button>
+            <button
+              type="button"
+              class="btn-ghost btn-tiny btn-categories-edit"
+              id="cap-categories-edit"
+              aria-label="Chỉnh category cho capture này"
+            >
+              Sửa
+            </button>
           </div>
         </dd>
       </div>`;
@@ -2206,7 +2213,7 @@ function renderCaptureDetail(
       </div>
     </div>
     <dialog id="cap-categories-dlg" class="cap-categories-dlg">
-      <h3 class="cap-categories-dlg__title">Chọn category</h3>
+      <h2 class="cap-categories-dlg__title" id="cap-categories-dlg-title">Chọn category</h2>
       <div id="cap-categories-dlg-fields" class="cap-categories-dlg-fields"></div>
       <div class="cap-categories-dlg__actions">
         <button type="button" class="btn-ghost" id="cap-categories-cancel">Hủy</button>

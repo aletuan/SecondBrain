@@ -5,6 +5,7 @@ import {
   tryParseIngestProgressLine,
   type IngestProgressEvent,
 } from './ingestProgressParse.js';
+import { envForBrainChild } from './brainDotenv.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
 
 function collectStream(stream: NodeJS.ReadableStream): Promise<string> {
@@ -131,9 +132,10 @@ export async function runIngestCli(options: IngestCliOptions): Promise<{
     throw new Error('runIngestCli: provide url or reingestCaptureDir');
   }
 
+  const childEnv = await envForBrainChild(brainRoot, vaultRoot);
   const child = spawn(process.execPath, args, {
     cwd: brainRoot,
-    env: { ...process.env, VAULT_ROOT: vaultRoot },
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   options.onChild?.(child);

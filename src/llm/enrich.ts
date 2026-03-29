@@ -9,6 +9,8 @@ export type ChatCompletionsLike = {
     messages: ChatCompletionMessageParam[];
     temperature?: number;
     max_tokens?: number;
+    /** YouTube transcript batch translation uses JSON object mode when supported. */
+    response_format?: { type: 'json_object' };
   }) => Promise<{
     choices: Array<{ message?: { content?: string | null } | null }>;
   }>;
