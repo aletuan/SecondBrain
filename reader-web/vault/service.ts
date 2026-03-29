@@ -5,6 +5,7 @@ import { extractTranscriptSection } from './transcript.js';
 import { loadMilestones } from './milestones.js';
 import { resolveVaultRoot } from './paths.js';
 import { averageReactionStats, parseReactionsMarkdown } from './reactionsMarkdown.js';
+import { parseListField } from './parseListField.js';
 
 const FOLDER_RE = /^[\w-]+$/;
 
@@ -69,6 +70,8 @@ export type CaptureListItem = {
   /** Count of valid rating entries in the comment file. */
   reaction_count: number;
   youtube_video_id?: string;
+  /** Category ids from `categories` in note frontmatter (multi-label). */
+  categories: string[];
 };
 
 export async function listCaptures(): Promise<{ captures: CaptureListItem[]; vaultRoot: string }> {
@@ -119,6 +122,7 @@ export async function listCaptures(): Promise<{ captures: CaptureListItem[]; vau
       reaction_count,
       youtube_video_id:
         typeof fm.youtube_video_id === 'string' ? fm.youtube_video_id : undefined,
+      categories: parseListField(fm.categories),
     });
   }
   items.sort((a, b) => (a.ingested_at < b.ingested_at ? 1 : -1));

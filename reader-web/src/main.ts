@@ -8,6 +8,7 @@ import {
   mergeTranscriptsForUi,
   type MergedTranscriptLine,
 } from './transcriptParse.js';
+import { parseListField } from '../vault/parseListField.js';
 
 /** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
 type YtPlayerApi = {
@@ -700,36 +701,12 @@ function isEvaluationVoteFmKey(k: string): boolean {
 
 /** Parse `categories` from note (same shapes as `tags`). */
 function parseCategoryList(raw: string | boolean | undefined): string[] {
-  return parseTagList(raw);
+  return parseListField(raw);
 }
 
 /** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
 function parseTagList(raw: string | boolean | undefined): string[] {
-  if (raw === undefined || typeof raw === 'boolean') return [];
-  const s = String(raw).trim();
-  if (!s) return [];
-
-  if (s.startsWith('[') && s.endsWith(']')) {
-    try {
-      const j = JSON.parse(s) as unknown;
-      if (Array.isArray(j) && j.every((x) => typeof x === 'string')) {
-        return j.map((t) => t.trim()).filter(Boolean);
-      }
-    } catch {
-      /* bracket list without valid JSON */
-    }
-    const inner = s.slice(1, -1).trim();
-    if (!inner) return [];
-    return inner
-      .split(',')
-      .map((t) => t.trim().replace(/^["']|["']$/g, ''))
-      .filter(Boolean);
-  }
-
-  return s
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
+  return parseListField(raw);
 }
 
 /** Strip optional leading `#` for UI only; vault YAML unchanged. */
@@ -1123,7 +1100,7 @@ function bindMobileNav() {
 function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
   return `
     <div>
-      <div class="ingest-label" style="margin-bottom:0.5rem">Digest &amp; vault</div>
+      <div class="ingest-label">Digest &amp; vault</div>
       <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.5">Cùng thư mục với Obsidian · <code style="color:var(--signal)">READER_VAULT_ROOT</code></p>
     </div>
     <div class="digest-block">
@@ -1179,7 +1156,7 @@ function sideCaptures(rows: CaptureListItem[]): string {
   const threads = rows.filter(isThreadsCapture).length;
   const reactions = totalReactionEntries(rows);
   return `
-    <div class="ingest-label" style="margin-bottom:0.5rem">Tổng quan</div>
+    <div class="ingest-label">Tổng quan</div>
     <div class="stat-block stat-block--overview" role="group" aria-label="Thống kê thư viện captures">
       <div class="stat stat--tile stat--tile-total">
         <b>${n}</b><span class="stat__label">Captures</span>
@@ -1210,7 +1187,7 @@ function sideCaptures(rows: CaptureListItem[]): string {
 
 function sideCapture(d: CaptureDetail): string {
   return `
-    <div class="ingest-label" style="margin-bottom:0.5rem">Capture</div>
+    <div class="ingest-label">Capture</div>
     <div class="digest-block">
       <h4>${esc(d.id)}</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">Folder trong <code style="color:var(--signal)">Captures/</code> — chỉnh <code style="color:var(--signal)">note.md</code> trong Obsidian.</p>
@@ -1223,7 +1200,7 @@ function sideDigests(items: { week: string }[], digestAvailable: boolean): strin
     ? 'Nút <strong>Tạo digest</strong> trên thanh công cụ chạy cùng CLI trong repo Brain (<code style="color:var(--signal)">--since 7d</code> mặc định).'
     : 'Bật ingest (Brain CLI + <code style="color:var(--signal)">READER_ALLOW_INGEST</code>) hoặc chạy terminal: <code style="color:var(--signal)">pnpm digest</code>.';
   return `
-    <div class="ingest-label" style="margin-bottom:0.5rem">Lịch digest</div>
+    <div class="ingest-label">Lịch digest</div>
     <div class="digest-block">
       <h4>Tạo digest</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">${uiHint}</p>
@@ -1240,7 +1217,7 @@ function sideDigestDetail(week: string, hasChallenge: boolean): string {
     ? `Đã tải <code style="color:var(--signal)">Challenges/${esc(week)}.md</code> — kéo xuống dưới digest.`
     : `Chưa có file challenge — chạy <code style="color:var(--signal)">pnpm challenge --week ${esc(week)}</code> rồi refresh.`;
   return `
-    <div class="ingest-label" style="margin-bottom:0.5rem">Tuần</div>
+    <div class="ingest-label">Tuần</div>
     <div class="stat-block">
       <div class="stat" style="grid-column:1/-1"><b style="font-size:1.1rem">${esc(week)}</b><span>Digests/${esc(week)}.md</span></div>
     </div>
