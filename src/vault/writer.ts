@@ -392,6 +392,27 @@ export async function addTagsToNoteFrontmatter(
   await fs.writeFile(notePath, updated, 'utf8');
 }
 
+/** Sets or replaces `categories: [...]` in note frontmatter. Omits the key when ids is empty. */
+export async function setCategoriesInNoteFrontmatter(
+  notePath: string,
+  ids: string[],
+): Promise<void> {
+  const content = await fs.readFile(notePath, 'utf8');
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\s*/m.exec(content);
+  if (!m) throw new Error('setCategoriesInNoteFrontmatter: missing YAML frontmatter');
+  const inner = m[1] ?? '';
+  const after = content.slice(m[0].length);
+  const lines = inner.split(/\r?\n/);
+  const kept = lines.filter(line => !/^\s*categories:\s*/.test(line));
+  const body = kept.join('\n').replace(/\s+$/, '');
+  const catsLine =
+    ids.length > 0
+      ? `categories: [${ids.map(id => JSON.stringify(id)).join(', ')}]`
+      : '';
+  const newInner = catsLine ? `${body}\n${catsLine}\n` : `${body}\n`;
+  await fs.writeFile(notePath, `---\n${newInner}---\n${after}`, 'utf8');
+}
+
 /** Fetch remote images into `assets/` and append Obsidian embeds to `note.md`. */
 export async function downloadImagesToAssets(
   bundle: CaptureBundle,
