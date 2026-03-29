@@ -5,6 +5,7 @@ import {
   tryParseIngestProgressLine,
   type IngestProgressEvent,
 } from './ingestProgressParse.js';
+import { envForBrainChild } from './brainDotenv.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
 
 function collectStream(stream: NodeJS.ReadableStream): Promise<string> {
@@ -43,7 +44,12 @@ export async function assertIngestEnvironment(cwd: string = process.cwd()): Prom
 }
 
 export type IngestCliOptions = {
-  url: string;
+  /** Normal ingest (required unless `reingestCaptureDir` is set). */
+  url?: string;
+  /** Absolute path to `…/Captures/<id>/` for `reingest --capture` (exclusive with `url`). */
+  reingestCaptureDir?: string;
+  /** Optional in-place target for `ingest <url> --capture-dir` (advanced). */
+  captureDir?: string;
   /** Forward v1 JSON lines from CLI stderr (see Brain `ingestProgress`). */
   progressJson?: boolean;
   /** Called for each parsed progress object while the process runs. */
@@ -111,13 +117,25 @@ export async function runIngestCli(options: IngestCliOptions): Promise<{
   const cliTs = path.join(brainRoot, 'src', 'cli.ts');
   await fs.access(tsxCli);
 
-  const args = [tsxCli, cliTs, 'ingest'];
-  if (options.progressJson) args.push('--progress-json');
-  args.push(options.url);
+  let args: string[];
+  if (options.reingestCaptureDir) {
+    args = [tsxCli, cliTs, 'reingest', '--capture', options.reingestCaptureDir];
+    if (options.progressJson) args.push('--progress-json');
+  } else if (options.url) {
+    args = [tsxCli, cliTs, 'ingest'];
+    if (options.progressJson) args.push('--progress-json');
+    args.push(options.url);
+    if (options.captureDir) {
+      args.push('--capture-dir', options.captureDir);
+    }
+  } else {
+    throw new Error('runIngestCli: provide url or reingestCaptureDir');
+  }
 
+  const childEnv = await envForBrainChild(brainRoot, vaultRoot);
   const child = spawn(process.execPath, args, {
     cwd: brainRoot,
-    env: { ...process.env, VAULT_ROOT: vaultRoot },
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   options.onChild?.(child);

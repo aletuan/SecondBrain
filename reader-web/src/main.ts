@@ -690,12 +690,17 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
   }
 }
 
-const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at']);
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at', 'categories']);
 
 /** YAML keys superseded by the Đánh giá row (stats from `.comment`, same as library table). */
 function isEvaluationVoteFmKey(k: string): boolean {
   const n = k.trim().toLowerCase();
   return n === 'evaluation' || n === 'vote';
+}
+
+/** Parse `categories` from note (same shapes as `tags`). */
+function parseCategoryList(raw: string | boolean | undefined): string[] {
+  return parseTagList(raw);
 }
 
 /** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
@@ -738,6 +743,16 @@ function renderCaptureTagChips(tags: string[]): string {
     .map((t) => `<span class="capture-tag">${esc(formatTagForDisplay(t))}</span>`)
     .join('');
   return `<div class="capture-tags capture-tags--fm" aria-label="Thẻ (tags)">${chips}</div>`;
+}
+
+function renderCategoryChipsPlain(ids: string[]): string {
+  if (ids.length === 0) return '<span class="fm-value-empty">—</span>';
+  return ids
+    .map(
+      (id) =>
+        `<span class="capture-tag cap-category-chip" data-id="${escAttr(id)}">${esc(formatTagForDisplay(id))}</span>`,
+    )
+    .join('');
 }
 
 /** One cell in frontmatter table (tags = chips; boolean = pill; text = body). */
@@ -854,23 +869,10 @@ function applyIngestSseToPanel(panel: HTMLElement, ev: IngestSseEvent) {
   ingestAgentSetStep(step, ev.state === 'active' ? 'active' : 'done');
 }
 
-async function postIngestWithSse(
-  body: { url: string },
+function runIngestSseJob(
+  jobId: string,
   onProgress: (ev: IngestSseEvent) => void,
 ): Promise<{ ok: true; captureDir: string; captureId: string }> {
-  const r = await fetch('/api/ingest/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify(body),
-  });
-  const data = (await r.json().catch(() => ({}))) as { error?: string; jobId?: string };
-  if (!r.ok) {
-    throw new Error(data.error || `${r.status} /api/ingest/start`);
-  }
-  if (typeof data.jobId !== 'string' || !data.jobId) {
-    throw new Error('ingest/start: missing jobId');
-  }
-  const jobId = data.jobId;
   return new Promise((resolve, reject) => {
     let settled = false;
     const es = new EventSource(`/api/ingest/stream?jobId=${encodeURIComponent(jobId)}`);
@@ -915,6 +917,44 @@ async function postIngestWithSse(
       finish(() => reject(new Error('Kết nối tiến trình ingest bị gián đoạn (SSE).')));
     };
   });
+}
+
+async function postIngestWithSse(
+  body: { url: string },
+  onProgress: (ev: IngestSseEvent) => void,
+): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  const r = await fetch('/api/ingest/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const data = (await r.json().catch(() => ({}))) as { error?: string; jobId?: string };
+  if (!r.ok) {
+    throw new Error(data.error || `${r.status} /api/ingest/start`);
+  }
+  if (typeof data.jobId !== 'string' || !data.jobId) {
+    throw new Error('ingest/start: missing jobId');
+  }
+  return runIngestSseJob(data.jobId, onProgress);
+}
+
+async function postReingestWithSse(
+  captureId: string,
+  onProgress: (ev: IngestSseEvent) => void,
+): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/reingest/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: '{}',
+  });
+  const data = (await r.json().catch(() => ({}))) as { error?: string; jobId?: string };
+  if (!r.ok) {
+    throw new Error(data.error || `${r.status} /api/captures/…/reingest/start`);
+  }
+  if (typeof data.jobId !== 'string' || !data.jobId) {
+    throw new Error('reingest/start: missing jobId');
+  }
+  return runIngestSseJob(data.jobId, onProgress);
 }
 
 async function postIngest(body: { url: string }): Promise<{
@@ -1104,19 +1144,65 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
   `;
 }
 
+function parseCaptureHostname(url: string): string {
+  try {
+    return new URL(url.trim()).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isYoutubeCapture(r: CaptureListItem): boolean {
+  if (r.youtube_video_id) return true;
+  const h = parseCaptureHostname(r.url);
+  return h.includes('youtube.com') || h === 'youtu.be';
+}
+
+function isXCapture(r: CaptureListItem): boolean {
+  if (r.fetch_method === 'x_api') return true;
+  const h = parseCaptureHostname(r.url);
+  return h === 'x.com' || h === 'twitter.com' || h.endsWith('.twitter.com');
+}
+
+function isThreadsCapture(r: CaptureListItem): boolean {
+  return parseCaptureHostname(r.url).includes('threads.net');
+}
+
+function totalReactionEntries(rows: CaptureListItem[]): number {
+  return rows.reduce((s, r) => s + (r.reaction_count ?? 0), 0);
+}
+
 function sideCaptures(rows: CaptureListItem[]): string {
   const n = rows.length;
-  const yt = rows.filter((r) => r.youtube_video_id).length;
+  const yt = rows.filter(isYoutubeCapture).length;
+  const xCount = rows.filter(isXCapture).length;
+  const threads = rows.filter(isThreadsCapture).length;
+  const reactions = totalReactionEntries(rows);
   return `
     <div class="ingest-label" style="margin-bottom:0.5rem">Tổng quan</div>
-    <div class="stat-block">
-      <div class="stat"><b>${n}</b><span>Captures</span></div>
-      <div class="stat"><b>${yt}</b><span>YouTube</span></div>
+    <div class="stat-block stat-block--overview" role="group" aria-label="Thống kê thư viện captures">
+      <div class="stat stat--tile stat--tile-total">
+        <b>${n}</b><span class="stat__label">Captures</span>
+      </div>
+      <div class="stat stat--tile stat--tile-comments">
+        <b>${reactions}</b><span class="stat__label">Phản hồi</span>
+        <span class="stat__hint">mục trong <code>.comment</code></span>
+      </div>
+      <div class="stat stat--tile stat--tile-yt">
+        <b>${yt}</b><span class="stat__label">YouTube</span>
+      </div>
+      <div class="stat stat--tile stat--tile-x">
+        <b>${xCount}</b><span class="stat__label">X / Twitter</span>
+      </div>
+      <div class="stat stat--tile stat--tile-threads">
+        <b>${threads}</b><span class="stat__label">Threads</span>
+      </div>
     </div>
     <div class="digest-block">
       <h4>Gợi ý</h4>
       <ul>
         <li>Mở note trong Obsidian, refresh reader để xem thay đổi</li>
+        <li>Phản hồi = tổng dòng đánh giá trong các file <code>.comment</code>; nguồn X nhận diện qua <code>fetch_method</code> hoặc host URL.</li>
       </ul>
     </div>
   `;
@@ -1619,6 +1705,76 @@ function renderReactionsTimelineHtml(entries: ReactionEntry[]): string {
   return `<ul class="cap-reactions-list">${items}</ul>`;
 }
 
+function bindCaptureReingest(captureId: string, detail: CaptureDetail, h: Health): void {
+  const dlg = document.querySelector<HTMLDialogElement>('#cap-reingest-dlg');
+  const openBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-open');
+  if (!dlg || !openBtn || !h.ingestSse) return;
+
+  const cancelBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-cancel');
+  const confirmBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-confirm');
+  const st = document.querySelector<HTMLElement>('#cap-reingest-status');
+  const stMsg = document.querySelector<HTMLElement>('#cap-reingest-status-msg');
+  const stFoot = document.querySelector<HTMLElement>('#cap-reingest-status-footer');
+  if (!cancelBtn || !confirmBtn || !st || !stMsg || !stFoot) return;
+
+  const yt = Boolean(detail.youtubeVideoId);
+  openBtn.addEventListener('click', () => dlg.showModal());
+  cancelBtn.addEventListener('click', () => dlg.close());
+  confirmBtn.addEventListener('click', async () => {
+    dlg.close();
+    st.hidden = false;
+    st.className = [
+      'ingest-agent-status',
+      'cap-reingest-runner',
+      'ingest-agent-status--running',
+      yt ? '' : 'ingest-agent-status--no-yt',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    ingestAgentResetSteps(st);
+    stMsg.textContent = 'Đang chạy pipeline ingest lại';
+    stFoot.innerHTML = '';
+    stFoot.style.whiteSpace = '';
+    openBtn.disabled = true;
+    try {
+      const out = await postReingestWithSse(captureId, (ev) => {
+        if (ev.kind === 'phase') applyIngestSseToPanel(st, ev);
+      });
+      ingestAgentMarkAllDone(st);
+      st.className = [
+        'ingest-agent-status',
+        'cap-reingest-runner',
+        'ingest-agent-status--ok',
+        yt ? '' : 'ingest-agent-status--no-yt',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      stMsg.textContent = 'Hoàn tất · capture đã ghi.';
+      stFoot.style.whiteSpace = '';
+      stFoot.innerHTML = `<button type="button" class="btn-link" id="cap-reingest-done-cap">${esc(out.captureId)}</button><span class="ingest-agent-status__path mono-sm">${esc(out.captureDir)}</span><span class="cap-reingest-done-hint">Đang tải lại trang để hiển thị nội dung mới…</span>`;
+      document.querySelector('#cap-reingest-done-cap')?.addEventListener('click', () => setHash('capture', out.captureId));
+      window.setTimeout(() => setHash('capture', captureId), 1600);
+    } catch (e) {
+      ingestAgentMarkActiveError(st);
+      st.className = [
+        'ingest-agent-status',
+        'cap-reingest-runner',
+        'ingest-agent-status--err',
+        yt ? '' : 'ingest-agent-status--no-yt',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const raw = e instanceof Error ? e.message : String(e);
+      const { friendly, detail } = ingestFailurePresentation(raw);
+      stMsg.textContent = friendly;
+      stFoot.textContent = detail;
+      stFoot.style.whiteSpace = 'pre-wrap';
+    } finally {
+      openBtn.disabled = false;
+    }
+  });
+}
+
 async function bindCaptureReactions(captureId: string): Promise<void> {
   const timeline = document.querySelector<HTMLElement>('#cap-reactions-timeline');
   const errEl = document.querySelector<HTMLElement>('#cap-reactions-err');
@@ -1713,7 +1869,86 @@ async function bindCaptureReactions(captureId: string): Promise<void> {
   await load();
 }
 
-function renderCaptureDetail(d: CaptureDetail): string {
+async function bindCaptureCategories(captureId: string): Promise<void> {
+  const dlg = document.querySelector<HTMLDialogElement>('#cap-categories-dlg');
+  const fields = document.querySelector<HTMLDivElement>('#cap-categories-dlg-fields');
+  const chipsWrap = document.querySelector<HTMLSpanElement>('#cap-categories-chips');
+  const editBtn = document.querySelector<HTMLButtonElement>('#cap-categories-edit');
+  const cancelBtn = document.querySelector<HTMLButtonElement>('#cap-categories-cancel');
+  const saveBtn = document.querySelector<HTMLButtonElement>('#cap-categories-save');
+  if (!dlg || !fields || !chipsWrap || !editBtn || !cancelBtn || !saveBtn) return;
+  const chipBox = chipsWrap;
+
+  let taxonomy: { id: string; label: string }[] = [];
+  try {
+    const r = await fetch('/api/taxonomy/categories');
+    if (r.ok) {
+      const j = (await r.json()) as { items?: { id: string; label: string }[] };
+      taxonomy = j.items ?? [];
+    }
+  } catch {
+    /* ignore */
+  }
+  const labelMap = new Map(taxonomy.map((t) => [t.id, t.label]));
+
+  function refreshChipLabels(ids: string[]) {
+    if (ids.length === 0) {
+      chipBox.innerHTML = '<span class="fm-value-empty">—</span>';
+      return;
+    }
+    chipBox.innerHTML = ids
+      .map((id) => {
+        const lab = labelMap.get(id) ?? id;
+        return `<span class="capture-tag cap-category-chip" data-id="${escAttr(id)}">${esc(formatTagForDisplay(lab))}</span>`;
+      })
+      .join('');
+  }
+
+  function parseIdsFromChips(): string[] {
+    return Array.from(chipBox.querySelectorAll<HTMLElement>('.cap-category-chip'))
+      .map((el) => el.dataset.id ?? '')
+      .filter(Boolean);
+  }
+
+  refreshChipLabels(parseIdsFromChips());
+
+  editBtn.addEventListener('click', () => {
+    const selected = new Set(parseIdsFromChips());
+    fields.innerHTML = taxonomy
+      .map(
+        (t) =>
+          `<label class="cap-categories-label"><input type="checkbox" name="cat" value="${escAttr(t.id)}" ${selected.has(t.id) ? 'checked' : ''} /> ${esc(t.label)}</label>`,
+      )
+      .join('');
+    dlg.showModal();
+  });
+
+  cancelBtn.addEventListener('click', () => dlg.close());
+
+  saveBtn.addEventListener('click', async () => {
+    const checked = Array.from(
+      fields.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
+    ).map((i) => i.value);
+    const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/categories`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: checked }),
+    });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      window.alert(j.error ?? 'Lưu thất bại');
+      return;
+    }
+    const j = (await r.json()) as { categories: string[] };
+    dlg.close();
+    refreshChipLabels(j.categories);
+  });
+}
+
+function renderCaptureDetail(
+  d: CaptureDetail,
+  opts?: { reingestAvailable?: boolean },
+): string {
   const yt = d.youtubeVideoId;
   const maxT =
     d.milestones && d.milestones.length > 0
@@ -1801,12 +2036,29 @@ function renderCaptureDetail(d: CaptureDetail): string {
       </div>`;
 
   const tagList = parseTagList(d.noteFm.tags);
+  const categoryIds = parseCategoryList(d.noteFm.categories);
   const fmEntries = Object.entries(d.noteFm).filter(
     ([k]) => !FM_SKIP_IN_GRID.has(k) && !isEvaluationVoteFmKey(k),
   );
   const ratingRow = `<div class="fm-row fm-row--rating">
         <dt class="fm-grid__key">Đánh giá</dt>
         <dd class="fm-grid__value">${formatRatingDisplay(d.reaction_avg, d.reaction_count)}</dd>
+      </div>`;
+  const categoryRow = `<div class="fm-row fm-row--categories">
+        <dt class="fm-grid__key">categories</dt>
+        <dd class="fm-grid__value">
+          <div class="cap-categories-wrap" id="cap-categories-wrap">
+            <span class="cap-categories-chips" id="cap-categories-chips">${renderCategoryChipsPlain(categoryIds)}</span>
+            <button
+              type="button"
+              class="btn-ghost btn-tiny btn-categories-edit"
+              id="cap-categories-edit"
+              aria-label="Chỉnh category cho capture này"
+            >
+              Sửa
+            </button>
+          </div>
+        </dd>
       </div>`;
   const fmNoteInner = fmEntries
     .map(
@@ -1819,8 +2071,8 @@ function renderCaptureDetail(d: CaptureDetail): string {
     .join('');
   const fmNote =
     fmEntries.length > 0
-      ? `${ratingRow}${fmNoteInner}`
-      : `${ratingRow}<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
+      ? `${ratingRow}${categoryRow}${fmNoteInner}`
+      : `${ratingRow}${categoryRow}<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
 
   const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
     .trim();
@@ -1874,12 +2126,79 @@ function renderCaptureDetail(d: CaptureDetail): string {
   const sourceExcerpt = d.sourceBody;
   const sourceTooLong = sourceExcerpt.length > 12000;
 
+  const reingestBtn = opts?.reingestAvailable
+    ? `<button type="button" class="btn-ghost btn-tiny btn-reingest" id="cap-reingest-open">Ingest lại</button>`
+    : '';
+  const reingestPanelClass = yt ? '' : ' ingest-agent-status--no-yt';
+  const reingestBlock = opts?.reingestAvailable
+    ? `
+    <dialog id="cap-reingest-dlg" class="cap-reingest-dlg">
+      <h2 class="cap-reingest-dlg__title" id="cap-reingest-dlg-title">Ingest lại capture này?</h2>
+      <p class="cap-reingest-dlg__body">Pipeline sẽ <strong>ghi đè</strong> <code>*.note.md</code>, <code>*.source.md</code> và thư mục <code>assets/</code> theo URL trong frontmatter. File <code>.comment</code> (đánh giá) và <code>milestones.yaml</code> (nếu có) được giữ.</p>
+      <div class="cap-reingest-dlg__actions">
+        <button type="button" class="btn-ghost" id="cap-reingest-cancel" value="cancel">Hủy</button>
+        <button type="button" class="btn-ingest" id="cap-reingest-confirm">Ingest Lại</button>
+      </div>
+    </dialog>
+    <div
+      class="ingest-agent-status cap-reingest-runner${reingestPanelClass}"
+      id="cap-reingest-status"
+      hidden
+      role="status"
+      aria-live="polite"
+    >
+      <div class="ingest-agent-status__head">
+        <span class="ingest-agent-status__badge" aria-hidden="true">Agent</span>
+        <div class="ingest-agent-status__head-text">
+          <p class="ingest-agent-status__msg" id="cap-reingest-status-msg">Đang ingest lại…</p>
+        </div>
+      </div>
+      <ol class="ingest-agent-status__steps" id="cap-reingest-status-steps" aria-label="Tiến trình ingest lại">
+        <li class="ingest-agent-step" data-step="fetch">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Fetch &amp; chuẩn hoá</span>
+            <span class="ingest-agent-step__hint">Adapter · routing</span>
+          </span>
+        </li>
+        <li class="ingest-agent-step ingest-agent-step--yt-only" data-step="translate">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Dịch transcript</span>
+            <span class="ingest-agent-step__hint">YouTube · EN → VI</span>
+          </span>
+        </li>
+        <li class="ingest-agent-step" data-step="vault">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Ghi vault</span>
+            <span class="ingest-agent-step__hint">Ghi đè capture</span>
+          </span>
+        </li>
+        <li class="ingest-agent-step" data-step="llm">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Enrich note</span>
+            <span class="ingest-agent-step__hint">Tóm tắt · insight</span>
+          </span>
+        </li>
+      </ol>
+      <div class="ingest-agent-status__footer" id="cap-reingest-status-footer"></div>
+    </div>`
+    : '';
+
   return `
     <div class="toolbar detail-toolbar">
       <button type="button" class="btn-ghost" id="cap-back">← Thư viện</button>
       <span class="detail-breadcrumb" title="${escAttr(d.id)}">Captures / ${esc(bc)}</span>
+      ${reingestBtn}
       <button type="button" class="btn-ghost btn-tiny" id="cap-copy-path" data-path="${escAttr(vaultPath)}">Copy path</button>
     </div>
+    ${reingestBlock}
     <div class="view active">
     <nav class="detail-toc" aria-label="Trên trang này">${tocLinks}</nav>
     <div class="detail-hero">
@@ -1939,6 +2258,14 @@ function renderCaptureDetail(d: CaptureDetail): string {
         <p class="hint cap-reactions-loading">Đang tải phản hồi…</p>
       </div>
     </div>
+    <dialog id="cap-categories-dlg" class="cap-categories-dlg">
+      <h2 class="cap-categories-dlg__title" id="cap-categories-dlg-title">Chọn category</h2>
+      <div id="cap-categories-dlg-fields" class="cap-categories-dlg-fields"></div>
+      <div class="cap-categories-dlg__actions">
+        <button type="button" class="btn-ghost" id="cap-categories-cancel">Hủy</button>
+        <button type="button" class="btn-ingest" id="cap-categories-save">Lưu</button>
+      </div>
+    </dialog>
     </div>
   `;
 }
@@ -2197,8 +2524,13 @@ async function route() {
         </div>
         <div class="view active">${skeletonProseHtml()}</div>`;
       document.querySelector('#cap-back-skel')?.addEventListener('click', () => setHash('captures'));
-      const d = await fetchJson<CaptureDetail>(`/api/captures/${encodeURIComponent(id)}`);
-      main.innerHTML = renderCaptureDetail(d);
+      const [h, d] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<CaptureDetail>(`/api/captures/${encodeURIComponent(id)}`),
+      ]);
+      main.innerHTML = renderCaptureDetail(d, {
+        reingestAvailable: h.ingestAvailable && Boolean(h.ingestSse),
+      });
       setSideInner(sideCapture(d));
       document.querySelector('#cap-back')?.addEventListener('click', () => setHash('captures'));
       const titleLine = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
@@ -2267,7 +2599,9 @@ async function route() {
           });
         });
       }
+      bindCaptureReingest(d.id, d, h);
       void bindCaptureReactions(d.id);
+      void bindCaptureCategories(d.id);
       return;
     }
     if (view === 'digests') {

@@ -189,6 +189,20 @@ export async function getCapture(id: string): Promise<CaptureDetail | null> {
   };
 }
 
+/** Absolute path to the capture's `*.note.md`, or null if missing/invalid id. */
+export async function getCaptureNotePath(id: string): Promise<string | null> {
+  if (!safeCaptureId(id)) return null;
+  const vaultRoot = resolveVaultRoot();
+  const dir = path.join(vaultRoot, 'Captures', id);
+  try {
+    const { notePath } = await getCaptureFiles(dir);
+    await fs.access(notePath);
+    return notePath;
+  } catch {
+    return null;
+  }
+}
+
 export async function listDigests(): Promise<{ id: string; week: string }[]> {
   const vaultRoot = resolveVaultRoot();
   const ddir = path.join(vaultRoot, 'Digests');

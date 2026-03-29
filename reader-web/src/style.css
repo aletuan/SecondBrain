@@ -1457,6 +1457,11 @@ main {
   color: var(--accent);
 }
 
+.btn-ghost:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
 .mock-table-wrap {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1668,6 +1673,111 @@ tr.capture-row:focus-visible {
   color: var(--muted);
 }
 
+.stat .stat__label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat__hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 9px;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: color-mix(in srgb, var(--muted) 88%, var(--paper-read));
+}
+
+.stat__hint code {
+  font-size: 9px;
+  color: var(--signal);
+}
+
+.stat-block--overview {
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.stat-block--overview .stat--tile-threads {
+  grid-column: 1 / -1;
+}
+
+.stat--tile {
+  position: relative;
+  padding: 0.65rem 0.7rem 0.65rem 0.95rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 88%, var(--elevated));
+  border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  transition:
+    border-color 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
+}
+
+.stat--tile::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+  background: var(--stat-tile-accent, var(--line));
+  opacity: 0.95;
+}
+
+.stat--tile:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--stat-tile-accent, var(--line)) 45%, var(--line));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.stat--tile:focus-within {
+  outline: none;
+}
+
+.stat--tile-total {
+  --stat-tile-accent: color-mix(in srgb, var(--paper-read) 55%, var(--line));
+}
+
+.stat--tile-comments {
+  --stat-tile-accent: var(--signal);
+}
+
+.stat--tile-yt {
+  --stat-tile-accent: #f43f5e;
+}
+
+.stat--tile-x {
+  --stat-tile-accent: #38bdf8;
+}
+
+.stat--tile-threads {
+  --stat-tile-accent: #c084fc;
+}
+
+.stat--tile b {
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+[data-theme='light'] .stat--tile {
+  background: color-mix(in srgb, var(--panel) 94%, var(--elevated));
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04) inset;
+}
+
+[data-theme='light'] .stat--tile:hover {
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.05) inset,
+    0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
 .digest-timeline {
   display: flex;
   flex-direction: column;
@@ -1763,6 +1873,173 @@ tr.capture-row:focus-visible {
   padding: 0.35rem 0.55rem !important;
   font-size: 9px !important;
   flex-shrink: 0;
+}
+
+.btn-reingest {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line)) !important;
+  color: color-mix(in srgb, var(--warn) 95%, var(--paper-read)) !important;
+}
+
+.btn-reingest:hover {
+  border-color: color-mix(in srgb, var(--warn) 75%, var(--line)) !important;
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel)) !important;
+}
+
+/**
+ * Inline frontmatter action — cùng họ với `.btn-reingest` (accent + hover)
+ * nhưng dùng `--signal` (metadata / chỉnh sửa an toàn).
+ * Nhãn tiếng Việt: không uppercase để đọc tự nhiên trong ô grid.
+ */
+.btn-categories-edit.btn-ghost {
+  text-transform: none;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--signal) 48%, var(--line)) !important;
+  color: color-mix(in srgb, var(--signal) 88%, var(--paper-read)) !important;
+}
+
+.btn-categories-edit.btn-ghost:hover {
+  border-color: color-mix(in srgb, var(--signal) 72%, var(--line)) !important;
+  color: var(--paper-read) !important;
+  background: color-mix(in srgb, var(--signal) 12%, var(--panel)) !important;
+}
+
+.btn-categories-edit.btn-ghost:focus-visible {
+  outline-color: color-mix(in srgb, var(--signal) 65%, transparent);
+}
+
+.cap-reingest-dlg {
+  max-width: 26rem;
+  padding: 1.25rem 1.35rem;
+  margin: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--paper-read);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.cap-reingest-dlg::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.cap-reingest-dlg__title {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--paper-read);
+}
+
+.cap-reingest-dlg__body {
+  margin: 0 0 1.1rem;
+  font-size: 13px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--muted) 55%, var(--paper-read));
+}
+
+.cap-reingest-dlg__body code {
+  font-size: 11px;
+  color: var(--signal);
+}
+
+.cap-reingest-dlg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cap-categories-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  width: 100%;
+}
+
+.cap-categories-chips {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+#cap-categories-edit {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.cap-categories-dlg {
+  max-width: min(26rem, 92vw);
+  margin: auto;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--paper-read);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.cap-categories-dlg::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.cap-categories-dlg__title {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--paper-read);
+}
+
+.cap-categories-dlg-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+}
+
+.cap-categories-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.cap-categories-label input {
+  margin-top: 0.2rem;
+}
+
+.cap-categories-dlg__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cap-reingest-runner {
+  margin-bottom: 1rem;
+}
+
+.ingest-agent-status--ok.cap-reingest-runner .cap-reingest-done-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 9px;
+  opacity: 0.85;
+  color: color-mix(in srgb, var(--muted) 65%, var(--signal));
 }
 
 .detail-toc {

@@ -1,0 +1,10 @@
+# Copy to config/categories.yaml to override locally (gitignored).
+items:
+  - id: machine-learning
+    label: Machine Learning
+  - id: data-engineering
+    label: Data Engineering
+  - id: management
+    label: Management
+  - id: uncategorized
+    label: Khác / Chưa phân loại
