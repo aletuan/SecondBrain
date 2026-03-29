@@ -1144,19 +1144,65 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
   `;
 }
 
+function parseCaptureHostname(url: string): string {
+  try {
+    return new URL(url.trim()).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isYoutubeCapture(r: CaptureListItem): boolean {
+  if (r.youtube_video_id) return true;
+  const h = parseCaptureHostname(r.url);
+  return h.includes('youtube.com') || h === 'youtu.be';
+}
+
+function isXCapture(r: CaptureListItem): boolean {
+  if (r.fetch_method === 'x_api') return true;
+  const h = parseCaptureHostname(r.url);
+  return h === 'x.com' || h === 'twitter.com' || h.endsWith('.twitter.com');
+}
+
+function isThreadsCapture(r: CaptureListItem): boolean {
+  return parseCaptureHostname(r.url).includes('threads.net');
+}
+
+function totalReactionEntries(rows: CaptureListItem[]): number {
+  return rows.reduce((s, r) => s + (r.reaction_count ?? 0), 0);
+}
+
 function sideCaptures(rows: CaptureListItem[]): string {
   const n = rows.length;
-  const yt = rows.filter((r) => r.youtube_video_id).length;
+  const yt = rows.filter(isYoutubeCapture).length;
+  const xCount = rows.filter(isXCapture).length;
+  const threads = rows.filter(isThreadsCapture).length;
+  const reactions = totalReactionEntries(rows);
   return `
     <div class="ingest-label" style="margin-bottom:0.5rem">Tổng quan</div>
-    <div class="stat-block">
-      <div class="stat"><b>${n}</b><span>Captures</span></div>
-      <div class="stat"><b>${yt}</b><span>YouTube</span></div>
+    <div class="stat-block stat-block--overview" role="group" aria-label="Thống kê thư viện captures">
+      <div class="stat stat--tile stat--tile-total">
+        <b>${n}</b><span class="stat__label">Captures</span>
+      </div>
+      <div class="stat stat--tile stat--tile-comments">
+        <b>${reactions}</b><span class="stat__label">Phản hồi</span>
+        <span class="stat__hint">mục trong <code>.comment</code></span>
+      </div>
+      <div class="stat stat--tile stat--tile-yt">
+        <b>${yt}</b><span class="stat__label">YouTube</span>
+      </div>
+      <div class="stat stat--tile stat--tile-x">
+        <b>${xCount}</b><span class="stat__label">X / Twitter</span>
+      </div>
+      <div class="stat stat--tile stat--tile-threads">
+        <b>${threads}</b><span class="stat__label">Threads</span>
+      </div>
     </div>
     <div class="digest-block">
       <h4>Gợi ý</h4>
       <ul>
         <li>Mở note trong Obsidian, refresh reader để xem thay đổi</li>
+        <li>Phản hồi = tổng dòng đánh giá trong các file <code>.comment</code>; nguồn X nhận diện qua <code>fetch_method</code> hoặc host URL.</li>
       </ul>
     </div>
   `;
