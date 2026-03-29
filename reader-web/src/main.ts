@@ -1506,15 +1506,19 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
   return `
     <div class="view view-ingest active">
       <section class="ingest-zone" aria-label="URL input">
-        <div class="ingest-label">Ingest</div>
+        <div class="recent-captures-bar recent-captures-bar--library">
+          <div class="recent-captures-bar__titles">
+            <h2 class="section-title" id="ingest-zone-heading">Ingest</h2>
+          </div>
+        </div>
+        <div class="sources" aria-label="Configured sources">
+          <span class="chip on">X API</span>
+          <span class="chip on">Apify</span>
+          <span class="chip on">Readability</span>
+          <span class="chip on">YouTube</span>
+        </div>
         <div class="${ingestShellClass}">${ingestInner}</div>
       </section>
-      <div class="sources" aria-label="Configured sources">
-        <span class="chip on">X API</span>
-        <span class="chip on">Apify</span>
-        <span class="chip on">Readability</span>
-        <span class="chip on">YouTube</span>
-      </div>
       <div class="recent-captures-bar">
         <div class="recent-captures-bar__titles">
           <h2 class="section-title" id="recent-captures-heading">Recent captures</h2>
@@ -1542,11 +1546,6 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
     </tr>`,
     )
     .join('');
-  const isFiltered =
-    captureListFilter.categoryId !== null || captureListFilter.source !== 'all';
-  const statusLine = isFiltered
-    ? `${filteredRows.length} matching filters · ${allRows.length} in vault`
-    : `${allRows.length} items in vault`;
   const emptyVault = allRows.length === 0;
   const emptyFiltered = filteredRows.length === 0 && allRows.length > 0;
   const tableOrEmpty = emptyVault
@@ -1565,14 +1564,12 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
             <button type="button" class="btn-ghost" id="lib-page-next" aria-label="Next page">Next →</button>
           </nav>`;
   return `
-    <header class="masthead">
-      <h1>Library<br /><em>captures.</em></h1>
-      <div class="status-strip">
-        <div class="pulse">${statusLine}</div>
-        <div>Click a row for detail</div>
-      </div>
-    </header>
     <div class="view active">
+      <div class="recent-captures-bar recent-captures-bar--library">
+        <div class="recent-captures-bar__titles">
+          <h2 class="section-title" id="library-view-heading">Library captures</h2>
+        </div>
+      </div>
       ${sideCaptures(allRows)}
       <div class="toolbar toolbar--captures">
         <div class="search-wrap">
@@ -2412,14 +2409,12 @@ function renderDigestsList(
     ? ''
     : ' disabled title="Requires Brain CLI and READER_ALLOW_INGEST (see /api/health)"';
   return `
-    <header class="masthead">
-      <h1>History<br /><em>digest.</em></h1>
-      <div class="status-strip">
-        <div class="pulse">${items.length} week(s)</div>
-        <div>Click a card to read</div>
-      </div>
-    </header>
     <div class="view active">
+      <div class="recent-captures-bar recent-captures-bar--library">
+        <div class="recent-captures-bar__titles">
+          <h2 class="section-title" id="digests-view-heading">History digest</h2>
+        </div>
+      </div>
       <div class="toolbar digest-list-toolbar">
         <span class="ingest-label">Digest history</span>
         <div class="digest-list-toolbar__actions">
@@ -2462,14 +2457,11 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
       </section>`
       : '';
   return `
-    <header class="masthead">
-      <h1>Digest<br /><em>${esc(week)}</em></h1>
-      <div class="status-strip">
-        <div class="pulse">Digest detail</div>
-        <div class="status-strip-mono"><code style="color:var(--signal)">Digests/${esc(week)}.md</code></div>
-      </div>
-    </header>
     <div class="view active digest-view">
+      <header class="view-page-head">
+        <h1 class="view-page-title">Digest <em>${esc(week)}</em></h1>
+        <p class="view-page-meta view-page-meta--mono"><code>Digests/${esc(week)}.md</code></p>
+      </header>
       <div class="toolbar detail-toolbar digest-toolbar">
         <button type="button" class="btn-ghost" id="dig-back">← Digest list</button>
         <span class="ingest-label digest-toolbar__file">Digests/${esc(week)}.md</span>
@@ -2610,7 +2602,6 @@ async function route() {
     }
     if (view === 'captures') {
       main.innerHTML = `
-        <header class="masthead"><h1>Library<br /><em>captures.</em></h1></header>
         <div class="view active">
           <div class="mock-table-wrap"><table class="mock-table"><thead><tr>
             <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>

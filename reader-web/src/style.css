@@ -116,6 +116,7 @@ html[data-theme] body,
 html[data-theme] .app,
 html[data-theme] main,
 html[data-theme] .app-nav,
+html[data-theme] .view-page-head,
 html[data-theme] .masthead,
 html[data-theme] .mobile-topbar,
 html[data-theme] .nav-drawer,
@@ -387,6 +388,10 @@ html[data-theme] .app-nav__status {
   }
 
   .masthead h1 {
+    max-width: none;
+  }
+
+  .view-page-title {
     max-width: none;
   }
 
@@ -789,6 +794,50 @@ main {
   color: var(--accent);
 }
 
+/* Compact page title (replaces large masthead on list/detail views) */
+.view-page-head {
+  margin-bottom: 1.35rem;
+}
+
+.view-page-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.35rem, 3.2vw, 1.95rem);
+  line-height: 1.12;
+  margin: 0 0 0.45rem;
+  letter-spacing: -0.02em;
+  color: var(--paper-read);
+}
+
+.view-page-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.view-page-meta {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  line-height: 1.45;
+}
+
+.view-page-meta + .view-page-meta {
+  margin-top: 0.2rem;
+}
+
+.view-page-meta--mono {
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.view-page-meta--mono code {
+  font-size: 10px;
+  color: var(--signal);
+}
+
 .status-strip {
   text-align: right;
   font-size: 11px;
@@ -929,24 +978,19 @@ main {
 }
 
 .ingest-zone {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   margin-bottom: 3rem;
 }
 
-.ingest-zone::before {
-  content: '';
-  position: absolute;
-  left: -100vw;
-  top: 50%;
-  width: 200vw;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--line) 20%, var(--line) 80%, transparent);
-  pointer-events: none;
+/* Uniform vertical rhythm inside Ingest: title rail → source chips → shell (avoid stacked margins). */
+.ingest-zone > .recent-captures-bar {
+  margin-bottom: 0;
 }
 
-.ingest-zone > .ingest-label {
-  display: block;
-  margin-bottom: 0.85rem;
+.ingest-zone > .sources {
+  margin-bottom: 0;
 }
 
 .ingest-shell {
@@ -1472,6 +1516,12 @@ main {
   font-weight: 400;
   margin: 0 0 1.25rem;
   letter-spacing: -0.02em;
+  color: var(--paper-read);
+}
+
+.section-title em {
+  font-style: italic;
+  color: var(--accent);
 }
 
 /* Home recent captures: editorial rail + CTA (distinct from generic link rows) */
@@ -1498,6 +1548,11 @@ main {
 
 .recent-captures-bar .section-title {
   margin-bottom: 0;
+}
+
+/* Library view: same rail as home “Recent captures”, without the CTA column */
+.recent-captures-bar--library {
+  justify-content: flex-start;
 }
 
 .recent-captures-cta {
@@ -2525,7 +2580,7 @@ tr.capture-row:focus-visible {
   padding-bottom: 3rem;
 }
 
-/* Frontmatter meta only (title lives in .masthead) */
+/* Frontmatter meta only (page title is .view-page-title / article headings) */
 .digest-detail-meta-band {
   position: relative;
   margin: 0 0 1.25rem;
