@@ -775,18 +775,38 @@ function layoutShell(): string {
     </div>
   </nav>
   <div class="app">
-    <aside class="rail" aria-label="Chuyển view">
-      <div class="rail-inner">
-        <div class="mark" title="Second brain reader"></div>
-        <button type="button" class="nav-dot active" data-route="home" aria-label="Ingest" title="Ingest"></button>
-        <button type="button" class="nav-dot" data-route="captures" aria-label="Captures" title="Captures"></button>
-        <button type="button" class="nav-dot" data-route="digests" aria-label="Digests" title="Digests"></button>
+    <nav class="app-nav" aria-label="Điều hướng ứng dụng">
+      <div class="app-nav__inner">
+        <div class="app-nav__mark-wrap">
+          <div class="mark" title="Second brain reader"></div>
+        </div>
+        <div class="app-nav__section">
+          <h2 class="app-nav__section-title">Chế độ</h2>
+          <div class="app-nav__views">
+            <button type="button" class="app-nav-route active" data-route="home">Ingest</button>
+            <button type="button" class="app-nav-route" data-route="captures">Captures</button>
+            <button type="button" class="app-nav-route" data-route="digests">Digests</button>
+          </div>
+        </div>
+        <div class="app-nav__section">
+          <h2 class="app-nav__section-title">Danh mục</h2>
+          <ul id="app-nav-categories" class="app-nav__list app-nav__list--categories" aria-label="Lọc theo category">
+            <li class="app-nav__loading">Đang tải…</li>
+          </ul>
+        </div>
+        <div class="app-nav__section">
+          <h2 class="app-nav__section-title">Nguồn</h2>
+          <div class="app-nav__sources" role="group" aria-label="Lọc theo nguồn">
+            <button type="button" class="app-nav-source" data-source="all" aria-pressed="true">Tất cả</button>
+            <button type="button" class="app-nav-source" data-source="youtube" aria-pressed="false">YouTube</button>
+            <button type="button" class="app-nav-source" data-source="x" aria-pressed="false">X / Twitter</button>
+            <button type="button" class="app-nav-source" data-source="threads" aria-pressed="false">Threads</button>
+            <button type="button" class="app-nav-source" data-source="other" aria-pressed="false">Khác</button>
+          </div>
+        </div>
       </div>
-    </aside>
+    </nav>
     <main id="main"></main>
-    <aside class="side" aria-label="Bảng phụ theo view">
-      <div id="side-inner"></div>
-    </aside>
   </div>
   `;
 }
@@ -1055,7 +1075,7 @@ function navKey(view: string): string {
 
 function updateNavActive(view: string) {
   const key = navKey(view);
-  document.querySelectorAll('.nav-dot').forEach((btn) => {
+  document.querySelectorAll('.app-nav-route').forEach((btn) => {
     const r = (btn as HTMLElement).dataset.route;
     btn.classList.toggle('active', r === key);
   });
@@ -2321,7 +2341,7 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
 }
 
 function bindRail() {
-  document.querySelectorAll('.nav-dot').forEach((btn) => {
+  document.querySelectorAll('.app-nav-route').forEach((btn) => {
     btn.addEventListener('click', () => {
       const r = (btn as HTMLElement).dataset.route;
       if (r === 'home') setHash('home');
