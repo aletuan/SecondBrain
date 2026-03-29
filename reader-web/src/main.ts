@@ -9,6 +9,7 @@ import {
   type MergedTranscriptLine,
 } from './transcriptParse.js';
 import { parseListField } from '../vault/parseListField.js';
+import { isThreadsCapture, isXCapture, isYoutubeCapture } from './captureFilters.js';
 
 /** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
 type YtPlayerApi = {
@@ -1119,30 +1120,6 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
       </p>
     </div>
   `;
-}
-
-function parseCaptureHostname(url: string): string {
-  try {
-    return new URL(url.trim()).hostname.replace(/^www\./i, '').toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-function isYoutubeCapture(r: CaptureListItem): boolean {
-  if (r.youtube_video_id) return true;
-  const h = parseCaptureHostname(r.url);
-  return h.includes('youtube.com') || h === 'youtu.be';
-}
-
-function isXCapture(r: CaptureListItem): boolean {
-  if (r.fetch_method === 'x_api') return true;
-  const h = parseCaptureHostname(r.url);
-  return h === 'x.com' || h === 'twitter.com' || h.endsWith('.twitter.com');
-}
-
-function isThreadsCapture(r: CaptureListItem): boolean {
-  return parseCaptureHostname(r.url).includes('threads.net');
 }
 
 function totalReactionEntries(rows: CaptureListItem[]): number {
@@ -2511,12 +2488,12 @@ async function route() {
       setSideInner(sideCapture(d));
       document.querySelector('#cap-back')?.addEventListener('click', () => setHash('captures'));
       const titleLine = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
-      const isYoutubeCapture =
+      const omitNoteImages =
         Boolean(d.youtubeVideoId) ||
         d.noteFm.source === 'youtube' ||
         d.sourceFm.source === 'youtube';
       const noteHtml = noteToHtml(stripLeadingH1IfMatches(d.noteBody, titleLine), d.id, {
-        omitImages: isYoutubeCapture,
+        omitImages: omitNoteImages,
       });
       const prose = document.querySelector('#note-prose');
 
