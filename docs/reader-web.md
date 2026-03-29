@@ -10,6 +10,11 @@ A working app lives under [`reader-web/`](../reader-web/): **Vite** + vanilla TS
 
 **YouTube timeline:** the standalone demo [`visualizations/reader-youtube-timeline.html`](visualizations/reader-youtube-timeline.html) is optional reference only; the reader app implements embed + milestones + seek inside the capture detail screen (aligned with the main mock below).
 
+## Layout (shell)
+
+- **Grid:** A fixed **left nav** (`.app-nav`) holds mode switches (Ingest · Captures · Digests), **category** links populated from `GET /api/taxonomy/categories`, and **source** toggles (e.g. YouTube / X / Threads). The **main** column (`#main`) is the only content column — there is **no** separate right-hand “side” panel. Context blocks that used to target `#side-inner` (stats, CLI hints) render **inside** the main column, typically in `.main-aux-blocks`.
+- **Captures:** `GET /api/captures` returns `categories: string[]` per row; the client applies `captureFilters` (source + optional category id). When every row is filtered out, the table shows an empty state with **Xóa bộ lọc**.
+
 ## Design references (UX / layout)
 
 - [`visualizations/second-brain-mock-ui.html`](visualizations/second-brain-mock-ui.html) — primary layout reference for the app

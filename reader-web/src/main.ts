@@ -9,7 +9,14 @@ import {
   type MergedTranscriptLine,
 } from './transcriptParse.js';
 import { parseListField } from '../vault/parseListField.js';
-import { isThreadsCapture, isXCapture, isYoutubeCapture } from './captureFilters.js';
+import {
+  filterCaptures,
+  type CaptureListFilters,
+  type SourceFilter,
+  isThreadsCapture,
+  isXCapture,
+  isYoutubeCapture,
+} from './captureFilters.js';
 
 /** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
 type YtPlayerApi = {
@@ -21,6 +28,10 @@ type YtPlayerApi = {
 
 let ytCaptureCleanup: (() => void) | null = null;
 let filmstripLightboxCleanup: (() => void) | null = null;
+
+/** Full library for Captures view; client filters apply on top. */
+let capturesListAll: CaptureListItem[] = [];
+let captureListFilter: CaptureListFilters = { categoryId: null, source: 'all' };
 
 function loadYoutubeIframeApi(): Promise<void> {
   const w = window as unknown as {
@@ -748,11 +759,6 @@ function formatFmCellValue(key: string, v: string | boolean, tagList: string[]):
   return `<span class="fm-value-text">${esc(s)}</span>`;
 }
 
-function setSideInner(html: string) {
-  const el = document.querySelector('#side-inner');
-  if (el) el.innerHTML = html;
-}
-
 function layoutShell(): string {
   return `
   <header class="mobile-topbar">
@@ -760,7 +766,6 @@ function layoutShell(): string {
       <span class="burger" aria-hidden="true"></span>
     </button>
     <span class="mobile-brand">Second brain</span>
-    ${themeSwitcherHtml()}
   </header>
   <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" aria-hidden="true"></div>
   <nav id="nav-drawer" class="nav-drawer" aria-label="Menu điều hướng" aria-hidden="true">
@@ -773,6 +778,7 @@ function layoutShell(): string {
       <button type="button" class="drawer-link" data-route="captures">Captures</button>
       <button type="button" class="drawer-link" data-route="digests">Digests</button>
     </div>
+    <div class="drawer-theme" aria-label="Giao diện">${themeSwitcherHtml()}</div>
   </nav>
   <div class="app">
     <nav class="app-nav" aria-label="Điều hướng ứng dụng">
@@ -803,6 +809,7 @@ function layoutShell(): string {
             <button type="button" class="app-nav-source" data-source="threads" aria-pressed="false">Threads</button>
             <button type="button" class="app-nav-source" data-source="other" aria-pressed="false">Khác</button>
           </div>
+          <div class="app-nav__theme" aria-label="Giao diện">${themeSwitcherHtml()}</div>
         </div>
       </div>
     </nav>
@@ -1118,6 +1125,97 @@ function bindMobileNav() {
   });
 }
 
+function onCategoryNavClick(e: MouseEvent) {
+  const t = (e.target as HTMLElement).closest('button.app-nav-cat');
+  if (!t) return;
+  const raw = (t as HTMLElement).dataset.categoryId;
+  captureListFilter.categoryId = raw === undefined || raw === '' ? null : raw;
+  syncCapturesNavFilterUi();
+  if (parseHash().view === 'captures') mountCapturesView();
+}
+
+function syncCapturesNavFilterUi() {
+  document.querySelectorAll('.app-nav-source').forEach((el) => {
+    const s = (el as HTMLElement).dataset.source as SourceFilter | undefined;
+    if (!s) return;
+    el.setAttribute('aria-pressed', captureListFilter.source === s ? 'true' : 'false');
+  });
+  document.querySelectorAll('.app-nav-cat').forEach((el) => {
+    const id = (el as HTMLElement).dataset.categoryId ?? '';
+    const cur = captureListFilter.categoryId ?? '';
+    const isSel = id === cur;
+    el.classList.toggle('is-active', isSel);
+    if (isSel) el.setAttribute('aria-current', 'true');
+    else el.removeAttribute('aria-current');
+  });
+}
+
+function bindSourceFilterButtons() {
+  document.querySelectorAll('.app-nav-source').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const s = (btn as HTMLElement).dataset.source as SourceFilter | undefined;
+      if (!s) return;
+      captureListFilter.source = s;
+      syncCapturesNavFilterUi();
+      if (parseHash().view === 'captures') mountCapturesView();
+    });
+  });
+}
+
+async function loadTaxonomyCategoriesNav() {
+  const ul = document.getElementById('app-nav-categories');
+  if (!ul) return;
+  try {
+    const r = await fetch('/api/taxonomy/categories');
+    if (!r.ok) throw new Error(String(r.status));
+    const data = (await r.json()) as { items?: { id: string; label: string }[] };
+    const list = data.items ?? [];
+    const liAll =
+      '<li><button type="button" class="app-nav-cat" data-category-id="">Tất cả</button></li>';
+    const liRest = list
+      .map(
+        (t) =>
+          `<li><button type="button" class="app-nav-cat" data-category-id="${escAttr(t.id)}">${esc(t.label)}</button></li>`,
+      )
+      .join('');
+    ul.innerHTML = liAll + liRest;
+  } catch {
+    ul.innerHTML = `<li class="app-nav__loading">Không tải được danh mục</li><li><button type="button" class="app-nav-cat" data-category-id="">Tất cả</button></li>`;
+  }
+  syncCapturesNavFilterUi();
+}
+
+function bindCaptureRows(main: HTMLElement) {
+  const openRow = (tr: HTMLElement) => {
+    const cid = tr.dataset.id;
+    if (cid) setHash('capture', cid);
+  };
+  main.querySelectorAll('tr.capture-row').forEach((tr) => {
+    tr.addEventListener('click', () => openRow(tr as HTMLElement));
+    tr.addEventListener('keydown', (ev: Event) => {
+      const ke = ev as KeyboardEvent;
+      if (ke.key === 'Enter' || ke.key === ' ') {
+        ke.preventDefault();
+        openRow(tr as HTMLElement);
+      }
+    });
+  });
+}
+
+function mountCapturesView() {
+  const main = document.querySelector<HTMLElement>('#main')!;
+  const filtered = filterCaptures(capturesListAll, captureListFilter);
+  main.innerHTML = renderCapturesTable(capturesListAll, filtered);
+  document.querySelector('#back-home')?.addEventListener('click', () => setHash('home'));
+  bindLibrarySearch();
+  bindCaptureRows(main);
+  document.getElementById('lib-clear-filters')?.addEventListener('click', () => {
+    captureListFilter = { categoryId: null, source: 'all' };
+    syncCapturesNavFilterUi();
+    mountCapturesView();
+  });
+}
+
 function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
   return `
     <div>
@@ -1412,7 +1510,6 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
       : '';
   return `
     <header class="masthead">
-      ${themeSwitcherHtml()}
       <h1><span>Bộ nhớ</span><br /><em>thứ hai.</em></h1>
       <div class="status-strip">
         <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest sẵn sàng' : 'Ingest · kiểm tra CLI'}</div>
@@ -1442,13 +1539,14 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
         <a href="#/captures" class="recent-captures-cta">Toàn bộ thư viện<span class="recent-captures-cta__arrow" aria-hidden="true"> →</span></a>
       </div>
       <div class="cards" role="region" aria-labelledby="recent-captures-heading">${cards}</div>
-      <p class="hint home-captures-hint">Click thẻ để mở chi tiết · rail <em>Captures</em> hoặc nút thư viện phía trên.</p>
+      <p class="hint home-captures-hint">Click thẻ để mở chi tiết · menu <em>Captures</em> hoặc nút thư viện phía trên.</p>
+      <div class="main-aux-blocks">${sideHome(h, recent.length, vaultCaptureTotal)}</div>
     </div>
   `;
 }
 
-function renderCapturesTable(rows: CaptureListItem[]): string {
-  const body = rows
+function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureListItem[]): string {
+  const body = filteredRows
     .map(
       (r) => `
     <tr class="capture-row" tabindex="0" data-id="${esc(r.id)}" data-slug="${esc(friendlySlugFromCaptureId(r.id))}">
@@ -1461,30 +1559,41 @@ function renderCapturesTable(rows: CaptureListItem[]): string {
     </tr>`,
     )
     .join('');
+  const isFiltered =
+    captureListFilter.categoryId !== null || captureListFilter.source !== 'all';
+  const statusLine = isFiltered
+    ? `${filteredRows.length} mục khớp bộ lọc · ${allRows.length} trong vault`
+    : `${allRows.length} mục trong vault`;
+  const emptyVault = allRows.length === 0;
+  const emptyFiltered = filteredRows.length === 0 && allRows.length > 0;
+  const tableOrEmpty = emptyVault
+    ? '<p class="hint">Chưa có capture.</p>'
+    : emptyFiltered
+      ? `<div class="captures-empty-filter">
+          <p class="hint">Không có capture khớp bộ lọc.</p>
+          <button type="button" class="btn-ghost" id="lib-clear-filters">Xóa bộ lọc</button>
+        </div>`
+      : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
+            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Đánh giá</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
+          </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`;
   return `
     <header class="masthead">
-      ${themeSwitcherHtml()}
       <h1>Thư viện<br /><em>captures.</em></h1>
       <div class="status-strip">
-        <div class="pulse">${rows.length} mục trong vault</div>
+        <div class="pulse">${statusLine}</div>
         <div>Click hàng để chi tiết</div>
       </div>
     </header>
     <div class="view active">
+      ${sideCaptures(allRows)}
       <div class="toolbar">
         <div class="search-wrap">
           <input type="search" id="lib-search" placeholder="Tìm theo tiêu đề, slug, URL, nguồn…" aria-label="Tìm captures" />
         </div>
         <button type="button" class="btn-ghost" id="back-home">← Ingest</button>
       </div>
-      ${
-        rows.length === 0
-          ? '<p class="hint">Chưa có capture.</p>'
-          : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Đánh giá</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
-          </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`
-      }
-      <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · hàng có thể mở bằng Enter khi focus.</p>
+      ${tableOrEmpty}
+      <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · menu trái · hàng có thể mở bằng Enter khi focus.</p>
     </div>
   `;
 }
@@ -2172,6 +2281,7 @@ function renderCaptureDetail(
       ${reingestBtn}
       <button type="button" class="btn-ghost btn-tiny" id="cap-copy-path" data-path="${escAttr(vaultPath)}">Copy path</button>
     </div>
+    <div class="main-aux-blocks capture-detail-aux">${sideCapture(d)}</div>
     ${reingestBlock}
     <div class="view active">
     <nav class="detail-toc" aria-label="Trên trang này">${tocLinks}</nav>
@@ -2266,7 +2376,6 @@ function renderDigestsList(
     : ' disabled title="Cần Brain CLI và READER_ALLOW_INGEST (xem /api/health)"';
   return `
     <header class="masthead">
-      ${themeSwitcherHtml()}
       <h1>Lịch sử<br /><em>digest.</em></h1>
       <div class="status-strip">
         <div class="pulse">${items.length} tuần</div>
@@ -2288,6 +2397,7 @@ function renderDigestsList(
           : `<div class="digest-timeline">${cards}</div>`
       }
       <p class="hint lib-toolbar-hint">Giống CLI: gom capture có <code>ingested_at</code> trong cửa sổ <code>--since</code> (mặc định 7d), ghi <code>Digests/YYYY-Www.md</code>.</p>
+      <div class="main-aux-blocks">${sideDigests(items, digestAvailable)}</div>
     </div>
   `;
 }
@@ -2316,7 +2426,6 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
       : '';
   return `
     <header class="masthead">
-      ${themeSwitcherHtml()}
       <h1>Digest<br /><em>${esc(week)}</em></h1>
       <div class="status-strip">
         <div class="pulse">Chi tiết digest</div>
@@ -2336,6 +2445,7 @@ function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: 
         </div>
         ${challengeBlock}
       </article>
+      <div class="main-aux-blocks">${sideDigestDetail(week, challengeMarkdown != null)}</div>
     </div>
   `;
 }
@@ -2374,7 +2484,6 @@ async function route() {
       const allCaps = capData.captures;
       const recent = allCaps.slice(0, HOME_RECENT_CAPTURE_LIMIT);
       main.innerHTML = renderHome(h, recent, allCaps.length);
-      setSideInner(sideHome(h, recent.length, allCaps.length));
 
       main.querySelectorAll('.card[data-card-id]').forEach((el) => {
         el.addEventListener('click', () => {
@@ -2471,24 +2580,8 @@ async function route() {
           </tr></thead><tbody>${skeletonTableRowsHtml(5)}</tbody></table></div>
         </div>`;
       const { captures } = await fetchJson<{ captures: CaptureListItem[] }>('/api/captures');
-      main.innerHTML = renderCapturesTable(captures);
-      setSideInner(sideCaptures(captures));
-      document.querySelector('#back-home')?.addEventListener('click', () => setHash('home'));
-      bindLibrarySearch();
-      const openRow = (tr: HTMLElement) => {
-        const cid = tr.dataset.id;
-        if (cid) setHash('capture', cid);
-      };
-      main.querySelectorAll('tr.capture-row').forEach((tr) => {
-        tr.addEventListener('click', () => openRow(tr as HTMLElement));
-        tr.addEventListener('keydown', (ev: Event) => {
-          const ke = ev as KeyboardEvent;
-          if (ke.key === 'Enter' || ke.key === ' ') {
-            ke.preventDefault();
-            openRow(tr as HTMLElement);
-          }
-        });
-      });
+      capturesListAll = captures;
+      mountCapturesView();
       return;
     }
     if (view === 'capture' && id) {
@@ -2505,7 +2598,6 @@ async function route() {
       main.innerHTML = renderCaptureDetail(d, {
         reingestAvailable: h.ingestAvailable && Boolean(h.ingestSse),
       });
-      setSideInner(sideCapture(d));
       document.querySelector('#cap-back')?.addEventListener('click', () => setHash('captures'));
       const titleLine = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
       const omitNoteImages =
@@ -2585,7 +2677,6 @@ async function route() {
       ]);
       const digestOk = Boolean(h.digestAvailable ?? h.ingestAvailable);
       main.innerHTML = renderDigestsList(digests, digestOk);
-      setSideInner(sideDigests(digests, digestOk));
       document.querySelector('#back-home-d')?.addEventListener('click', () => setHash('home'));
       const digestRun = main.querySelector<HTMLButtonElement>('#digest-run');
       const digestHint = main.querySelector<HTMLElement>('#digest-run-hint');
@@ -2639,19 +2730,21 @@ async function route() {
         fetchChallengeMarkdown(id),
       ]);
       main.innerHTML = renderDigestDetail(data.week, data.markdown, challengeMd);
-      setSideInner(sideDigestDetail(data.week, challengeMd !== null));
       document.querySelector('#dig-back')?.addEventListener('click', () => setHash('digests'));
       return;
     }
   } catch (e) {
     main.innerHTML = `<div class="err">${esc(e instanceof Error ? e.message : String(e))}</div>`;
-    setSideInner('');
   }
 }
 
 export function initApp() {
   app.innerHTML = layoutShell();
   bindRail();
+  bindSourceFilterButtons();
+  document.getElementById('app-nav-categories')?.addEventListener('click', onCategoryNavClick);
+  syncCapturesNavFilterUi();
+  void loadTaxonomyCategoriesNav();
   bindMobileNav();
   window.addEventListener('hashchange', () => route());
   void route();
