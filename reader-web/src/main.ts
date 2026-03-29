@@ -2345,9 +2345,6 @@ function renderDigestsList(
       <div class="meta">${esc(x.week)}</div>
       <h3>Digest — ${esc(x.week)}</h3>
       <p>Markdown trong vault tại <code style="color:var(--signal)">Digests/${esc(x.week)}.md</code></p>
-      <div class="tag-row" style="margin-top:1rem">
-        <span class="tag">[[Digests/${esc(x.week)}]]</span>
-      </div>
     </button>`,
     )
     .join('');
