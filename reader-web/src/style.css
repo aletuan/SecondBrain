@@ -1820,8 +1820,70 @@ tr.capture-row:focus-visible {
   gap: 0.5rem;
 }
 
+.cap-categories-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.cap-categories-dlg {
+  max-width: min(420px, 92vw);
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--elevated);
+  color: var(--paper);
+}
+
+.cap-categories-dlg::backdrop {
+  background: var(--overlay);
+}
+
+.cap-categories-dlg__title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-family: var(--font-display);
+}
+
+.cap-categories-dlg-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+}
+
+.cap-categories-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.cap-categories-label input {
+  margin-top: 0.2rem;
+}
+
+.cap-categories-dlg__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .cap-reingest-runner {
   margin-bottom: 1rem;
+}
+
+.ingest-agent-status--ok.cap-reingest-runner .cap-reingest-done-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 9px;
+  opacity: 0.85;
+  color: color-mix(in srgb, var(--muted) 65%, var(--signal));
 }
 
 .detail-toc {

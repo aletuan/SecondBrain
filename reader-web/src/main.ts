@@ -690,12 +690,17 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
   }
 }
 
-const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at']);
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at', 'categories']);
 
 /** YAML keys superseded by the Đánh giá row (stats from `.comment`, same as library table). */
 function isEvaluationVoteFmKey(k: string): boolean {
   const n = k.trim().toLowerCase();
   return n === 'evaluation' || n === 'vote';
+}
+
+/** Parse `categories` from note (same shapes as `tags`). */
+function parseCategoryList(raw: string | boolean | undefined): string[] {
+  return parseTagList(raw);
 }
 
 /** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
@@ -738,6 +743,16 @@ function renderCaptureTagChips(tags: string[]): string {
     .map((t) => `<span class="capture-tag">${esc(formatTagForDisplay(t))}</span>`)
     .join('');
   return `<div class="capture-tags capture-tags--fm" aria-label="Thẻ (tags)">${chips}</div>`;
+}
+
+function renderCategoryChipsPlain(ids: string[]): string {
+  if (ids.length === 0) return '<span class="fm-value-empty">—</span>';
+  return ids
+    .map(
+      (id) =>
+        `<span class="capture-tag cap-category-chip" data-id="${escAttr(id)}">${esc(formatTagForDisplay(id))}</span>`,
+    )
+    .join('');
 }
 
 /** One cell in frontmatter table (tags = chips; boolean = pill; text = body). */
@@ -1653,7 +1668,8 @@ function bindCaptureReingest(captureId: string, detail: CaptureDetail, h: Health
   const confirmBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-confirm');
   const st = document.querySelector<HTMLElement>('#cap-reingest-status');
   const stMsg = document.querySelector<HTMLElement>('#cap-reingest-status-msg');
-  if (!cancelBtn || !confirmBtn || !st || !stMsg) return;
+  const stFoot = document.querySelector<HTMLElement>('#cap-reingest-status-footer');
+  if (!cancelBtn || !confirmBtn || !st || !stMsg || !stFoot) return;
 
   const yt = Boolean(detail.youtubeVideoId);
   openBtn.addEventListener('click', () => dlg.showModal());
@@ -1671,9 +1687,11 @@ function bindCaptureReingest(captureId: string, detail: CaptureDetail, h: Health
       .join(' ');
     ingestAgentResetSteps(st);
     stMsg.textContent = 'Đang chạy pipeline ingest lại';
+    stFoot.innerHTML = '';
+    stFoot.style.whiteSpace = '';
     openBtn.disabled = true;
     try {
-      await postReingestWithSse(captureId, (ev) => {
+      const out = await postReingestWithSse(captureId, (ev) => {
         if (ev.kind === 'phase') applyIngestSseToPanel(st, ev);
       });
       ingestAgentMarkAllDone(st);
@@ -1685,8 +1703,11 @@ function bindCaptureReingest(captureId: string, detail: CaptureDetail, h: Health
       ]
         .filter(Boolean)
         .join(' ');
-      stMsg.textContent = 'Hoàn tất · đã làm mới capture.';
-      setHash('capture', captureId);
+      stMsg.textContent = 'Hoàn tất · capture đã ghi.';
+      stFoot.style.whiteSpace = '';
+      stFoot.innerHTML = `<button type="button" class="btn-link" id="cap-reingest-done-cap">${esc(out.captureId)}</button><span class="ingest-agent-status__path mono-sm">${esc(out.captureDir)}</span><span class="cap-reingest-done-hint">Đang tải lại trang để hiển thị nội dung mới…</span>`;
+      document.querySelector('#cap-reingest-done-cap')?.addEventListener('click', () => setHash('capture', out.captureId));
+      window.setTimeout(() => setHash('capture', captureId), 1600);
     } catch (e) {
       ingestAgentMarkActiveError(st);
       st.className = [
@@ -1698,8 +1719,10 @@ function bindCaptureReingest(captureId: string, detail: CaptureDetail, h: Health
         .filter(Boolean)
         .join(' ');
       const raw = e instanceof Error ? e.message : String(e);
-      const { friendly } = ingestFailurePresentation(raw);
+      const { friendly, detail } = ingestFailurePresentation(raw);
       stMsg.textContent = friendly;
+      stFoot.textContent = detail;
+      stFoot.style.whiteSpace = 'pre-wrap';
     } finally {
       openBtn.disabled = false;
     }
@@ -1800,6 +1823,82 @@ async function bindCaptureReactions(captureId: string): Promise<void> {
   await load();
 }
 
+async function bindCaptureCategories(captureId: string): Promise<void> {
+  const dlg = document.querySelector<HTMLDialogElement>('#cap-categories-dlg');
+  const fields = document.querySelector<HTMLDivElement>('#cap-categories-dlg-fields');
+  const chipsWrap = document.querySelector<HTMLSpanElement>('#cap-categories-chips');
+  const editBtn = document.querySelector<HTMLButtonElement>('#cap-categories-edit');
+  const cancelBtn = document.querySelector<HTMLButtonElement>('#cap-categories-cancel');
+  const saveBtn = document.querySelector<HTMLButtonElement>('#cap-categories-save');
+  if (!dlg || !fields || !chipsWrap || !editBtn || !cancelBtn || !saveBtn) return;
+  const chipBox = chipsWrap;
+
+  let taxonomy: { id: string; label: string }[] = [];
+  try {
+    const r = await fetch('/api/taxonomy/categories');
+    if (r.ok) {
+      const j = (await r.json()) as { items?: { id: string; label: string }[] };
+      taxonomy = j.items ?? [];
+    }
+  } catch {
+    /* ignore */
+  }
+  const labelMap = new Map(taxonomy.map((t) => [t.id, t.label]));
+
+  function refreshChipLabels(ids: string[]) {
+    if (ids.length === 0) {
+      chipBox.innerHTML = '<span class="fm-value-empty">—</span>';
+      return;
+    }
+    chipBox.innerHTML = ids
+      .map((id) => {
+        const lab = labelMap.get(id) ?? id;
+        return `<span class="capture-tag cap-category-chip" data-id="${escAttr(id)}">${esc(formatTagForDisplay(lab))}</span>`;
+      })
+      .join('');
+  }
+
+  function parseIdsFromChips(): string[] {
+    return Array.from(chipBox.querySelectorAll<HTMLElement>('.cap-category-chip'))
+      .map((el) => el.dataset.id ?? '')
+      .filter(Boolean);
+  }
+
+  refreshChipLabels(parseIdsFromChips());
+
+  editBtn.addEventListener('click', () => {
+    const selected = new Set(parseIdsFromChips());
+    fields.innerHTML = taxonomy
+      .map(
+        (t) =>
+          `<label class="cap-categories-label"><input type="checkbox" name="cat" value="${escAttr(t.id)}" ${selected.has(t.id) ? 'checked' : ''} /> ${esc(t.label)}</label>`,
+      )
+      .join('');
+    dlg.showModal();
+  });
+
+  cancelBtn.addEventListener('click', () => dlg.close());
+
+  saveBtn.addEventListener('click', async () => {
+    const checked = Array.from(
+      fields.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
+    ).map((i) => i.value);
+    const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/categories`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: checked }),
+    });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      window.alert(j.error ?? 'Lưu thất bại');
+      return;
+    }
+    const j = (await r.json()) as { categories: string[] };
+    dlg.close();
+    refreshChipLabels(j.categories);
+  });
+}
+
 function renderCaptureDetail(
   d: CaptureDetail,
   opts?: { reingestAvailable?: boolean },
@@ -1891,12 +1990,22 @@ function renderCaptureDetail(
       </div>`;
 
   const tagList = parseTagList(d.noteFm.tags);
+  const categoryIds = parseCategoryList(d.noteFm.categories);
   const fmEntries = Object.entries(d.noteFm).filter(
     ([k]) => !FM_SKIP_IN_GRID.has(k) && !isEvaluationVoteFmKey(k),
   );
   const ratingRow = `<div class="fm-row fm-row--rating">
         <dt class="fm-grid__key">Đánh giá</dt>
         <dd class="fm-grid__value">${formatRatingDisplay(d.reaction_avg, d.reaction_count)}</dd>
+      </div>`;
+  const categoryRow = `<div class="fm-row fm-row--categories">
+        <dt class="fm-grid__key">categories</dt>
+        <dd class="fm-grid__value">
+          <div class="cap-categories-wrap" id="cap-categories-wrap">
+            <span class="cap-categories-chips" id="cap-categories-chips">${renderCategoryChipsPlain(categoryIds)}</span>
+            <button type="button" class="btn-ghost btn-tiny" id="cap-categories-edit">Chỉnh</button>
+          </div>
+        </dd>
       </div>`;
   const fmNoteInner = fmEntries
     .map(
@@ -1909,8 +2018,8 @@ function renderCaptureDetail(
     .join('');
   const fmNote =
     fmEntries.length > 0
-      ? `${ratingRow}${fmNoteInner}`
-      : `${ratingRow}<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
+      ? `${ratingRow}${categoryRow}${fmNoteInner}`
+      : `${ratingRow}${categoryRow}<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
 
   const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
     .trim();
@@ -1972,10 +2081,10 @@ function renderCaptureDetail(
     ? `
     <dialog id="cap-reingest-dlg" class="cap-reingest-dlg">
       <h2 class="cap-reingest-dlg__title" id="cap-reingest-dlg-title">Ingest lại capture này?</h2>
-      <p class="cap-reingest-dlg__body">Pipeline sẽ <strong>ghi đè</strong> <code>note.md</code>, <code>source.md</code> và thư mục <code>assets/</code> theo URL trong frontmatter. File <code>.comment</code> (đánh giá) và <code>milestones.yaml</code> (nếu có) được giữ.</p>
+      <p class="cap-reingest-dlg__body">Pipeline sẽ <strong>ghi đè</strong> <code>*.note.md</code>, <code>*.source.md</code> và thư mục <code>assets/</code> theo URL trong frontmatter. File <code>.comment</code> (đánh giá) và <code>milestones.yaml</code> (nếu có) được giữ.</p>
       <div class="cap-reingest-dlg__actions">
         <button type="button" class="btn-ghost" id="cap-reingest-cancel" value="cancel">Hủy</button>
-        <button type="button" class="btn-ingest" id="cap-reingest-confirm">Xác nhận · ingest lại</button>
+        <button type="button" class="btn-ingest" id="cap-reingest-confirm">Ingest Lại</button>
       </div>
     </dialog>
     <div
@@ -2025,6 +2134,7 @@ function renderCaptureDetail(
           </span>
         </li>
       </ol>
+      <div class="ingest-agent-status__footer" id="cap-reingest-status-footer"></div>
     </div>`
     : '';
 
@@ -2095,6 +2205,14 @@ function renderCaptureDetail(
         <p class="hint cap-reactions-loading">Đang tải phản hồi…</p>
       </div>
     </div>
+    <dialog id="cap-categories-dlg" class="cap-categories-dlg">
+      <h3 class="cap-categories-dlg__title">Chọn category</h3>
+      <div id="cap-categories-dlg-fields" class="cap-categories-dlg-fields"></div>
+      <div class="cap-categories-dlg__actions">
+        <button type="button" class="btn-ghost" id="cap-categories-cancel">Hủy</button>
+        <button type="button" class="btn-ingest" id="cap-categories-save">Lưu</button>
+      </div>
+    </dialog>
     </div>
   `;
 }
@@ -2430,6 +2548,7 @@ async function route() {
       }
       bindCaptureReingest(d.id, d, h);
       void bindCaptureReactions(d.id);
+      void bindCaptureCategories(d.id);
       return;
     }
     if (view === 'digests') {

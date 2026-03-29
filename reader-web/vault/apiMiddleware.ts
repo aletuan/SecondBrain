@@ -5,7 +5,13 @@ import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
+  allowedCategoryIdsSorted,
+  loadCategoryTaxonomy,
+  setCategoriesInNoteFrontmatter,
+} from './categoriesIO.js';
+import {
   getCapture,
+  getCaptureNotePath,
   getChallenge,
   getCommentPath,
   getDigest,
@@ -79,6 +85,21 @@ type ParsedIngestBody = { ok: true; url: string } | { ok: false; status: number;
 type ParsedDigestBody =
   | { ok: true; since: string; noLlm: boolean }
   | { ok: false; status: number; error: string };
+
+function parseCategoriesPatchBody(
+  body: unknown,
+):
+  | { ok: true; categories: string[] }
+  | { ok: false; status: number; error: string } {
+  if (body == null || typeof body !== 'object') {
+    return { ok: false, status: 400, error: 'expected JSON object' };
+  }
+  const c = (body as { categories?: unknown }).categories;
+  if (!Array.isArray(c) || !c.every(x => typeof x === 'string')) {
+    return { ok: false, status: 400, error: 'categories must be string array' };
+  }
+  return { ok: true, categories: c.map(x => x.trim()).filter(Boolean) };
+}
 
 function parseDigestJsonBody(body: unknown): ParsedDigestBody {
   const sinceDefault = '7d';
@@ -444,6 +465,16 @@ export function vaultApiMiddleware() {
         return;
       }
 
+      if (req.method === 'GET' && urlRaw === '/api/taxonomy/categories') {
+        try {
+          const items = await loadCategoryTaxonomy();
+          sendJson(res, 200, { items });
+        } catch (e) {
+          sendJson(res, 500, { error: e instanceof Error ? e.message : String(e) });
+        }
+        return;
+      }
+
       const digestM = /^\/api\/digests\/([^/]+)$/.exec(urlRaw);
       if (req.method === 'GET' && digestM) {
         const slug = decodeURIComponent(digestM[1]!);
@@ -564,6 +595,51 @@ export function vaultApiMiddleware() {
           return;
         }
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      const capCatM = /^\/api\/captures\/([^/]+)\/categories$/.exec(urlRaw);
+      if (req.method === 'PATCH' && capCatM) {
+        const id = decodeURIComponent(capCatM[1]!);
+        if (!(await getCapture(id))) {
+          sendJson(res, 404, { error: 'not found' });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch (e) {
+          sendJson(res, 400, { error: e instanceof Error ? e.message : 'bad json' });
+          return;
+        }
+        const parsed = parseCategoriesPatchBody(body);
+        if (!parsed.ok) {
+          sendJson(res, parsed.status, { error: parsed.error });
+          return;
+        }
+        let entries: Awaited<ReturnType<typeof loadCategoryTaxonomy>>;
+        try {
+          entries = await loadCategoryTaxonomy();
+        } catch (e) {
+          sendJson(res, 500, { error: e instanceof Error ? e.message : String(e) });
+          return;
+        }
+        const allowed = new Set(allowedCategoryIdsSorted(entries));
+        const filtered = [...new Set(parsed.categories.filter(cid => allowed.has(cid)))].sort(
+          (a, b) => a.localeCompare(b),
+        );
+        const notePath = await getCaptureNotePath(id);
+        if (!notePath) {
+          sendJson(res, 404, { error: 'note not found' });
+          return;
+        }
+        try {
+          await setCategoriesInNoteFrontmatter(notePath, filtered);
+        } catch (e) {
+          sendJson(res, 500, { error: e instanceof Error ? e.message : String(e) });
+          return;
+        }
+        sendJson(res, 200, { ok: true, categories: filtered });
         return;
       }
 
