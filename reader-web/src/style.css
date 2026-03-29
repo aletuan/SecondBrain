@@ -1650,6 +1650,11 @@ main {
   margin-bottom: 1.25rem;
 }
 
+/* Captures: space between overview stats (sideCaptures) and search / back row */
+.toolbar.toolbar--captures {
+  margin-top: 1.35rem;
+}
+
 .toolbar .ingest-label {
   margin: 0;
   flex: 1 1 auto;
@@ -1729,6 +1734,35 @@ main {
   background: var(--panel);
   overflow-x: auto;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.lib-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--elevated);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.lib-pagination__status {
+  min-width: 0;
+  text-align: center;
+  color: color-mix(in srgb, var(--muted) 35%, var(--paper-read));
+}
+
+.lib-pagination .btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .mock-table {

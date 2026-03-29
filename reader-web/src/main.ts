@@ -33,6 +33,8 @@ let filmstripLightboxCleanup: (() => void) | null = null;
 /** Full library for Captures view; client filters apply on top. */
 let capturesListAll: CaptureListItem[] = [];
 let captureListFilter: CaptureListFilters = { categoryId: null, source: 'all' };
+/** 1-based; client-side pagination for the captures table (search resets to 1). */
+let libraryTablePage = 1;
 
 function loadYoutubeIframeApi(): Promise<void> {
   const w = window as unknown as {
@@ -1183,11 +1185,12 @@ function bindCaptureRows(main: HTMLElement) {
 }
 
 function mountCapturesView() {
+  libraryTablePage = 1;
   const main = document.querySelector<HTMLElement>('#main')!;
   const filtered = filterCaptures(capturesListAll, captureListFilter);
   main.innerHTML = renderCapturesTable(capturesListAll, filtered);
   document.querySelector('#back-home')?.addEventListener('click', () => setHash('home'));
-  bindLibrarySearch();
+  bindLibraryTable();
   bindCaptureRows(main);
   document.getElementById('lib-clear-filters')?.addEventListener('click', () => {
     captureListFilter = { categoryId: null, source: 'all' };
@@ -1249,13 +1252,6 @@ function sideCaptures(rows: CaptureListItem[]): string {
       <div class="stat stat--tile stat--tile-threads">
         <b>${threads}</b><span class="stat__label">Threads</span>
       </div>
-    </div>
-    <div class="digest-block">
-      <h4>Gợi ý</h4>
-      <ul>
-        <li>Mở note trong Obsidian, refresh reader để xem thay đổi</li>
-        <li>Phản hồi = tổng dòng đánh giá trong các file <code>.comment</code>; nguồn X nhận diện qua <code>fetch_method</code> hoặc host URL.</li>
-      </ul>
     </div>
   `;
 }
@@ -1339,6 +1335,7 @@ function skeletonProseHtml(): string {
 
 /** Max recent capture cards on home (grid shows up to 3×3 on wide desktop). */
 const HOME_RECENT_CAPTURE_LIMIT = 9;
+const LIBRARY_PAGE_SIZE = 10;
 
 const CAPTURE_FOLDER_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -1555,7 +1552,12 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
         </div>`
       : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
             <th scope="col">Tiêu đề</th><th scope="col">Nguồn</th><th scope="col">Đánh giá</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Mở</span></th>
-          </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>`;
+          </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>
+          <nav class="lib-pagination" id="lib-pagination" aria-label="Phân trang thư viện">
+            <button type="button" class="btn-ghost" id="lib-page-prev" aria-label="Trang trước">← Trước</button>
+            <span class="lib-pagination__status" id="lib-page-status" aria-live="polite"></span>
+            <button type="button" class="btn-ghost" id="lib-page-next" aria-label="Trang sau">Sau →</button>
+          </nav>`;
   return `
     <header class="masthead">
       <h1>Thư viện<br /><em>captures.</em></h1>
@@ -1566,32 +1568,84 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
     </header>
     <div class="view active">
       ${sideCaptures(allRows)}
-      <div class="toolbar">
+      <div class="toolbar toolbar--captures">
         <div class="search-wrap">
           <input type="search" id="lib-search" placeholder="Tìm theo tiêu đề, slug, URL, nguồn…" aria-label="Tìm captures" />
         </div>
         <button type="button" class="btn-ghost" id="back-home">← Ingest</button>
       </div>
       ${tableOrEmpty}
-      <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · menu trái · hàng có thể mở bằng Enter khi focus.</p>
+      <p class="hint lib-toolbar-hint">Lọc theo ô tìm kiếm · menu trái · ${LIBRARY_PAGE_SIZE} mục mỗi trang · hàng mở bằng Enter khi focus.</p>
     </div>
   `;
 }
 
-function bindLibrarySearch() {
+function updateLibraryTableVisibility(): void {
+  const tbody = document.getElementById('lib-tbody');
+  const input = document.querySelector<HTMLInputElement>('#lib-search');
+  const nav = document.getElementById('lib-pagination');
+  if (!tbody || !input) return;
+  const q = input.value.trim().toLowerCase();
+  const rows = [...tbody.querySelectorAll<HTMLElement>('tr.capture-row')];
+  const matches: HTMLElement[] = [];
+  for (const tr of rows) {
+    const t = tr.textContent?.toLowerCase() ?? '';
+    const slug = tr.dataset.slug?.toLowerCase() ?? '';
+    const id = tr.dataset.id?.toLowerCase() ?? '';
+    const match = !q || t.includes(q) || slug.includes(q) || id.includes(q);
+    if (match) matches.push(tr);
+  }
+  const n = matches.length;
+  const totalPages = n === 0 ? 0 : Math.ceil(n / LIBRARY_PAGE_SIZE);
+  if (totalPages > 0 && libraryTablePage > totalPages) libraryTablePage = totalPages;
+  if (libraryTablePage < 1) libraryTablePage = 1;
+  const start = (libraryTablePage - 1) * LIBRARY_PAGE_SIZE;
+  const end = start + LIBRARY_PAGE_SIZE;
+  const matchIndex = new Map<HTMLElement, number>();
+  matches.forEach((tr, i) => matchIndex.set(tr, i));
+  for (const tr of rows) {
+    const idx = matchIndex.get(tr);
+    if (idx === undefined) {
+      tr.style.display = 'none';
+    } else {
+      tr.style.display = idx >= start && idx < end ? '' : 'none';
+    }
+  }
+  if (nav) {
+    const prev = nav.querySelector<HTMLButtonElement>('#lib-page-prev');
+    const next = nav.querySelector<HTMLButtonElement>('#lib-page-next');
+    const status = nav.querySelector<HTMLElement>('#lib-page-status');
+    if (prev) prev.disabled = libraryTablePage <= 1 || totalPages === 0;
+    if (next) next.disabled = totalPages === 0 || libraryTablePage >= totalPages;
+    if (status) {
+      if (n === 0) {
+        status.textContent = 'Không có mục khớp';
+      } else {
+        const from = start + 1;
+        const to = Math.min(end, n);
+        status.textContent = `Trang ${libraryTablePage} / ${totalPages} · ${from}–${to} / ${n}`;
+      }
+    }
+  }
+}
+
+function bindLibraryTable(): void {
   const input = document.querySelector<HTMLInputElement>('#lib-search');
   const tbody = document.getElementById('lib-tbody');
   if (!input || !tbody) return;
   input.addEventListener('input', () => {
-    const q = input.value.trim().toLowerCase();
-    tbody.querySelectorAll('tr').forEach((tr) => {
-      const el = tr as HTMLElement;
-      const t = tr.textContent?.toLowerCase() ?? '';
-      const slug = el.dataset.slug?.toLowerCase() ?? '';
-      const id = el.dataset.id?.toLowerCase() ?? '';
-      el.style.display = !q || t.includes(q) || slug.includes(q) || id.includes(q) ? '' : 'none';
-    });
+    libraryTablePage = 1;
+    updateLibraryTableVisibility();
   });
+  document.getElementById('lib-page-prev')?.addEventListener('click', () => {
+    libraryTablePage -= 1;
+    updateLibraryTableVisibility();
+  });
+  document.getElementById('lib-page-next')?.addEventListener('click', () => {
+    libraryTablePage += 1;
+    updateLibraryTableVisibility();
+  });
+  updateLibraryTableVisibility();
 }
 
 function renderSubRows(lines: MergedTranscriptLine[]): string {
