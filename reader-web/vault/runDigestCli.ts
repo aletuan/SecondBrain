@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { envForBrainChild } from './brainDotenv.js';
 import { assertIngestEnvironment } from './runIngestCli.js';
 
 function collectStream(stream: NodeJS.ReadableStream): Promise<string> {
@@ -54,9 +55,10 @@ export async function runDigestCli(options: DigestCliOptions): Promise<{
   const args = [tsxCli, cliTs, 'digest', '--since', since];
   if (options.noLlm) args.push('--no-llm');
 
+  const childEnv = await envForBrainChild(brainRoot, vaultRoot);
   const child = spawn(process.execPath, args, {
     cwd: brainRoot,
-    env: { ...process.env, VAULT_ROOT: vaultRoot },
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

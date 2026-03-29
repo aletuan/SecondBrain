@@ -5,19 +5,31 @@ import { ingestApify } from '../adapters/apify.js';
 import { ingestHttpReadability } from '../adapters/httpReadability.js';
 import { fetchXThread } from '../adapters/xApi.js';
 import { extractYoutubeVideoId, ingestYouTubeViaApify } from '../adapters/youtube.js';
+import { getAllowedCategoryIdsSorted, loadCategoriesFromRepo } from '../config/categories.js';
 import { readRoutingYamlSync } from '../config/routingFile.js';
 import type { OpenAIClientLike } from '../llm/enrich.js';
 import { enrichNote, extractTags, resolveEnrichModel } from '../llm/enrich.js';
+import { extractCategories } from '../llm/extractCategories.js';
 import { enrichMaxCharsFromEnv, truncateSourceForEnrich } from '../llm/enrichSource.js';
 import { translateTranscriptSegments } from '../llm/translateTranscript.js';
 import { loadRouting, resolveStrategy } from '../router.js';
 import type { CaptureBundle } from '../types/capture.js';
-import { addTagsToNoteFrontmatter, downloadImagesToAssets, getCaptureFiles, writeCapture } from '../vault/writer.js';
+import {
+  addTagsToNoteFrontmatter,
+  assertCaptureDirUnderVault,
+  downloadImagesToAssets,
+  getCaptureFiles,
+  overwriteCaptureAtDir,
+  setCategoriesInNoteFrontmatter,
+  writeCapture,
+} from '../vault/writer.js';
 import type { IngestPhaseProgressEvent } from './ingestProgress.js';
 
 export async function runIngest(options: {
   url: string;
   cwd?: string;
+  /** If set, overwrite this existing capture folder instead of creating a new one. */
+  captureDir?: string;
   /** Emitted at real pipeline boundaries (Reader SSE / `--progress-json`). */
   onProgress?: (ev: IngestPhaseProgressEvent) => void;
 }): Promise<string> {
@@ -84,7 +96,15 @@ export async function runIngest(options: {
   }
 
   phase({ v: 1, kind: 'phase', phase: 'vault', state: 'active' });
-  const { captureDir } = await writeCapture(vaultRoot, bundle);
+  let captureDir: string;
+  if (options.captureDir) {
+    const abs = assertCaptureDirUnderVault(vaultRoot, options.captureDir);
+    await overwriteCaptureAtDir(abs, bundle, { ingestedAt: new Date() });
+    captureDir = abs;
+  } else {
+    const { captureDir: d } = await writeCapture(vaultRoot, bundle);
+    captureDir = d;
+  }
   await downloadImagesToAssets(bundle, captureDir);
   phase({ v: 1, kind: 'phase', phase: 'vault', state: 'done' });
   const { notePath, sourcePath } = await getCaptureFiles(captureDir);
@@ -97,7 +117,8 @@ export async function runIngest(options: {
     const body = raw.replace(/^---[\s\S]*?---\s*/, '');
     const excerpt = truncateSourceForEnrich(body, enrichMaxCharsFromEnv());
     const enrichModel = resolveEnrichModel();
-    const [, tags] = await Promise.all([
+    const categoryAllowedIds = getAllowedCategoryIdsSorted(loadCategoriesFromRepo(cwd));
+    const [, tags, categories] = await Promise.all([
       enrichNote({
         notePath,
         sourceExcerpt: excerpt,
@@ -107,8 +128,10 @@ export async function runIngest(options: {
         client: enrichClient,
       }),
       extractTags(excerpt, enrichClient, enrichModel),
+      extractCategories(excerpt, enrichClient, enrichModel, categoryAllowedIds),
     ]);
     await addTagsToNoteFrontmatter(notePath, tags);
+    await setCategoriesInNoteFrontmatter(notePath, categories);
     phase({ v: 1, kind: 'phase', phase: 'llm', state: 'done' });
   }
 

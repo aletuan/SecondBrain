@@ -244,6 +244,141 @@ export async function writeCapture(
   return { captureDir, relativeFolder: relativeFolder.split(path.sep).join('/') };
 }
 
+/** Folder basename: `YYYY-MM-DD--slug--[a-f0-9]{6}` */
+const CAPTURE_FOLDER_NAME_RE = /^\d{4}-\d{2}-\d{2}--.+--[a-f0-9]{6}$/;
+
+/** Single-line YAML frontmatter (same subset as reader-web `stripFrontmatter`). */
+function stripSimpleYamlFrontmatter(raw: string): { fm: Record<string, string | boolean>; body: string } {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\s*/.exec(raw);
+  if (!m) return { fm: {}, body: raw };
+  const fm: Record<string, string | boolean> = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([\w-]+):\s*(.+)$/.exec(line.trim());
+    if (!kv) continue;
+    const k = kv[1]!;
+    let v = kv[2]!.trim();
+    if (v === 'true') {
+      fm[k] = true;
+      continue;
+    }
+    if (v === 'false') {
+      fm[k] = false;
+      continue;
+    }
+    if (
+      (v.startsWith('"') && v.endsWith('"')) ||
+      (v.startsWith("'") && v.endsWith("'"))
+    ) {
+      v = v.slice(1, -1);
+    }
+    fm[k] = v;
+  }
+  return { fm, body: raw.slice(m[0].length) };
+}
+
+/**
+ * Ensures `captureDirInput` resolves to a folder under `<vaultRoot>/Captures/<id>/`
+ * with a valid capture folder name.
+ */
+export function assertCaptureDirUnderVault(vaultRoot: string, captureDirInput: string): string {
+  const capturesRoot = path.resolve(path.join(vaultRoot, 'Captures'));
+  const resolved = path.resolve(captureDirInput);
+  const rel = path.relative(capturesRoot, resolved);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error('capture-dir must be a directory under vault Captures/');
+  }
+  const base = path.basename(resolved);
+  if (!CAPTURE_FOLDER_NAME_RE.test(base)) {
+    throw new Error(
+      `capture-dir folder name must match YYYY-MM-DD--slug--hash (6 hex); got "${base}"`,
+    );
+  }
+  return resolved;
+}
+
+/** Removes `assets/` under the capture (images re-fetched on next ingest). Preserves `.comment`, `milestones.yaml`. */
+export async function clearCaptureAssetsDir(captureDir: string): Promise<void> {
+  const assetsDir = path.join(captureDir, 'assets');
+  try {
+    await fs.rm(assetsDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Overwrites existing `*.source.md` / `*.note.md` in place (same basenames as `getCaptureFiles`).
+ * Clears `assets/`; caller should run `downloadImagesToAssets` after.
+ */
+export async function overwriteCaptureAtDir(
+  captureDirAbs: string,
+  bundle: CaptureBundle,
+  options?: { ingestedAt?: Date },
+): Promise<void> {
+  const ingested = options?.ingestedAt ?? new Date(bundle.fetchedAt);
+  const { sourcePath, notePath } = await getCaptureFiles(captureDirAbs);
+
+  const baseFm: Record<string, string | boolean> = {
+    type: 'capture',
+    url: bundle.canonicalUrl,
+    ingested_at: ingested.toISOString(),
+    fetch_method: bundle.fetchMethod,
+    publish: false,
+  };
+  if (bundle.source === 'youtube') {
+    baseFm.source = 'youtube';
+    if (bundle.youtubeVideoId) baseFm.youtube_video_id = bundle.youtubeVideoId;
+    baseFm.transcript_locale = bundle.transcriptSegmentsVi?.length ? 'en,vi' : 'en';
+    if (bundle.transcriptSegmentsVi?.length) baseFm.transcript_vi = true;
+  }
+
+  const sourceBody = buildSourceMarkdownBody(bundle);
+  const sourceMd = formatFrontmatter(baseFm) + sourceBody;
+
+  const noteFm: Record<string, string | boolean> = {
+    type: 'capture',
+    url: bundle.canonicalUrl,
+    ingested_at: ingested.toISOString(),
+    fetch_method: bundle.fetchMethod,
+    publish: false,
+  };
+  if (bundle.source === 'youtube') {
+    noteFm.source = 'youtube';
+    if (bundle.youtubeVideoId) noteFm.youtube_video_id = bundle.youtubeVideoId;
+  }
+
+  const noteMd = formatFrontmatter(noteFm) + `# ${bundle.title}\n\n`;
+
+  await fs.writeFile(sourcePath, sourceMd, 'utf8');
+  await fs.writeFile(notePath, noteMd, 'utf8');
+  await clearCaptureAssetsDir(captureDirAbs);
+}
+
+/** Reads first valid `http(s)` URL from note then source frontmatter. */
+export async function readIngestUrlFromCaptureDir(captureDir: string): Promise<string> {
+  const { notePath, sourcePath } = await getCaptureFiles(captureDir);
+  for (const p of [notePath, sourcePath]) {
+    let raw: string;
+    try {
+      raw = await fs.readFile(p, 'utf8');
+    } catch {
+      continue;
+    }
+    const { fm } = stripSimpleYamlFrontmatter(raw);
+    const u = fm.url;
+    if (typeof u === 'string' && u.trim()) {
+      const s = u.trim();
+      try {
+        const parsed = new URL(s);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return s;
+      } catch {
+        /* try next file */
+      }
+    }
+  }
+  throw new Error('reingest: no valid http(s) url in note/source frontmatter');
+}
+
 /** Inserts `tags: [...]` into the YAML frontmatter of note.md. No-op if tags is empty. */
 export async function addTagsToNoteFrontmatter(
   notePath: string,
@@ -255,6 +390,27 @@ export async function addTagsToNoteFrontmatter(
   // Insert before closing --- of frontmatter
   const updated = content.replace(/^(---\n[\s\S]*?)(---)/m, `$1${tagsLine}\n$2`);
   await fs.writeFile(notePath, updated, 'utf8');
+}
+
+/** Sets or replaces `categories: [...]` in note frontmatter. Omits the key when ids is empty. */
+export async function setCategoriesInNoteFrontmatter(
+  notePath: string,
+  ids: string[],
+): Promise<void> {
+  const content = await fs.readFile(notePath, 'utf8');
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\s*/m.exec(content);
+  if (!m) throw new Error('setCategoriesInNoteFrontmatter: missing YAML frontmatter');
+  const inner = m[1] ?? '';
+  const after = content.slice(m[0].length);
+  const lines = inner.split(/\r?\n/);
+  const kept = lines.filter(line => !/^\s*categories:\s*/.test(line));
+  const body = kept.join('\n').replace(/\s+$/, '');
+  const catsLine =
+    ids.length > 0
+      ? `categories: [${ids.map(id => JSON.stringify(id)).join(', ')}]`
+      : '';
+  const newInner = catsLine ? `${body}\n${catsLine}\n` : `${body}\n`;
+  await fs.writeFile(notePath, `---\n${newInner}---\n${after}`, 'utf8');
 }
 
 /** Fetch remote images into `assets/` and append Obsidian embeds to `note.md`. */

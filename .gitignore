@@ -30,6 +30,9 @@ node_modules/
 # Local routing (copy from config/routing.example.yaml)
 config/routing.yaml
 
+# Local category taxonomy (copy from config/categories.example.yaml)
+config/categories.yaml
+
 # Local Obsidian vault at repo root only (captures, digests — user data)
 # (Hidden in IDE file tree; diagrams also live under docs/diagrams/*.excalidraw)
 /vault/

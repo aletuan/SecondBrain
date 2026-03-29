@@ -15,40 +15,61 @@ const DEFAULT_SYSTEM = `You translate English transcript segments to Vietnamese.
 Rules:
 - Preserve conversational tone.
 - Keep technical terms in English when standard (API, SaaS, Claude Code, Jira, etc.).
-- Output EXACTLY one Vietnamese line per input line. Same count. Never merge or skip.
-- Reply with a JSON array only: ["trans1", "trans2", ...] — no other text.
+- Output EXACTLY one Vietnamese string per input line. Same count. Never merge or skip.
+- Reply with a single JSON object only: {"lines":["trans1","trans2",...]} — same length as input. No markdown, no prose before or after.
 - If a line is [Music] or similar, output the same.`;
 
 function sanitizeControlChars(s: string): string {
   return s.replace(/[\x00-\x1f\x7f]/g, ' ');
 }
 
-/** Extract first JSON string array from model output (handles fences, trailing text). */
-export function extractJsonStringArray(raw: string): string[] {
+/** Strip optional markdown code fence from model output. */
+function stripMarkdownFence(raw: string): string {
   let r = raw.trim();
-  if (r.startsWith('```')) {
-    r = r.split('\n', 2)[1] ?? r;
-    r = r.split('```')[0]?.trim() ?? r;
-  }
-  const parseArray = (s: string): string[] | null => {
+  if (!r.startsWith('```')) return r;
+  const withoutFirst = r.split('\n').slice(1).join('\n');
+  const end = withoutFirst.indexOf('```');
+  r = (end === -1 ? withoutFirst : withoutFirst.slice(0, end)).trim();
+  return r;
+}
+
+/**
+ * Extract Vietnamese line strings from model output: JSON object `{"lines":[...]}` (preferred),
+ * or a raw JSON array, or first parseable array substring.
+ */
+export function extractJsonStringArray(raw: string): string[] {
+  let r = stripMarkdownFence(raw.trim());
+
+  const parseValue = (s: string): string[] | null => {
+    let parsed: unknown;
     try {
-      const out = JSON.parse(s) as unknown;
-      if (Array.isArray(out)) return out.map((x) => String(x ?? '').trim());
+      parsed = JSON.parse(s) as unknown;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('control character') || msg.includes('Invalid control')) {
         try {
-          const out = JSON.parse(sanitizeControlChars(s)) as unknown;
-          if (Array.isArray(out)) return out.map((x) => String(x ?? '').trim());
+          parsed = JSON.parse(sanitizeControlChars(s)) as unknown;
         } catch {
           return null;
         }
+      } else {
+        return null;
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return parsed.map((x) => String(x ?? '').trim());
+    }
+    if (parsed && typeof parsed === 'object') {
+      const o = parsed as Record<string, unknown>;
+      for (const key of ['lines', 'translations', 'vi'] as const) {
+        const v = o[key];
+        if (Array.isArray(v)) return v.map((x) => String(x ?? '').trim());
       }
     }
     return null;
   };
 
-  const direct = parseArray(r);
+  const direct = parseValue(r);
   if (direct) return direct;
 
   let depth = 0;
@@ -62,13 +83,16 @@ export function extractJsonStringArray(raw: string): string[] {
       depth -= 1;
       if (depth === 0 && start >= 0) {
         const slice = r.slice(start, i + 1);
-        const inner = parseArray(slice);
+        const inner = parseValue(slice);
         if (inner) return inner;
       }
     }
   }
 
-  throw new Error('translateTranscript: expected JSON array in model output');
+  const snippet = r.length > 220 ? `${r.slice(0, 220)}…` : r;
+  throw new Error(
+    `translateTranscript: expected JSON object {"lines":[...]} or JSON array in model output (got: ${snippet.replace(/\s+/g, ' ')})`,
+  );
 }
 
 export type TranslateTranscriptOptions = {
@@ -98,15 +122,30 @@ export async function translateTranscriptSegments(
   for (let i = 0; i < segments.length; i += batchSize) {
     const batch = segments.slice(i, i + batchSize);
     const texts = batch.map((s) => (s.text.trim() ? s.text : ' '));
-    const userContent = `Translate these ${texts.length} lines to Vietnamese. Reply with JSON array of ${texts.length} strings.\n\n${texts.map((t, j) => `${j + 1}. ${t}`).join('\n')}`;
+    const userContent = `Translate these ${texts.length} lines to Vietnamese. Reply with JSON only: {"lines":[...]} with exactly ${texts.length} strings (same order).\n\n${texts.map((t, j) => `${j + 1}. ${t}`).join('\n')}`;
 
-    const res = await opts.client.chat.completions.create({
+    const baseParams = {
       model: opts.model,
       messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userContent },
+        { role: 'system' as const, content: system },
+        { role: 'user' as const, content: userContent },
       ],
-    });
+    };
+
+    let res: Awaited<ReturnType<OpenAIClientLike['chat']['completions']['create']>>;
+    try {
+      res = await opts.client.chat.completions.create({
+        ...baseParams,
+        response_format: { type: 'json_object' },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/response_format|json_object|unsupported.*format/i.test(msg)) {
+        res = await opts.client.chat.completions.create(baseParams);
+      } else {
+        throw e;
+      }
+    }
     const raw = res.choices[0]?.message?.content?.trim();
     if (!raw) throw new Error('translateTranscript: empty completion');
     let arr = extractJsonStringArray(raw);

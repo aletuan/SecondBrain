@@ -9,6 +9,8 @@ export type CaptureListItem = {
   reaction_avg: number | null;
   reaction_count: number;
   youtube_video_id?: string;
+  /** From note frontmatter `categories`; empty array if unset. */
+  categories: string[];
 };
 
 /** One line in `{slug}.comment` (vault Markdown timeline). */

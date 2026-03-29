@@ -21,6 +21,16 @@ describe('extractJsonStringArray', () => {
   it('extracts first array when extra trailing text', () => {
     expect(extractJsonStringArray('["ok"] trailing')).toEqual(['ok']);
   });
+
+  it('parses JSON object with lines key', () => {
+    expect(extractJsonStringArray('{"lines":["a","b"]}')).toEqual(['a', 'b']);
+  });
+
+  it('strips fence around JSON object', () => {
+    expect(
+      extractJsonStringArray('```json\n{"lines":["x"]}\n```'),
+    ).toEqual(['x']);
+  });
 });
 
 describe('parseEnTranscriptFromSourceMarkdown', () => {
@@ -67,7 +77,7 @@ describe('translateTranscriptSegments', () => {
             choices: [
               {
                 message: {
-                  content: JSON.stringify(['Một', 'Hai']),
+                  content: JSON.stringify({ lines: ['Một', 'Hai'] }),
                 },
               },
             ],
