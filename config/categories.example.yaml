@@ -4,6 +4,8 @@ items:
     label: Machine Learning
   - id: data-engineering
     label: Data Engineering
+  - id: security
+    label: Security
   - id: management
     label: Management
   - id: uncategorized

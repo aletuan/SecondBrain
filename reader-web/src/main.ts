@@ -1154,7 +1154,12 @@ function onCategoryNavClick(e: MouseEvent) {
   const raw = (t as HTMLElement).dataset.categoryId;
   captureListFilter.categoryId = raw === undefined || raw === '' ? null : raw;
   syncCapturesNavFilterUi();
-  if (parseHash().view === 'captures') mountCapturesView();
+  if (parseHash().view === 'captures') {
+    mountCapturesView();
+  } else {
+    setHash('captures');
+  }
+  closeMobileNav();
 }
 
 function syncCapturesNavFilterUi() {
@@ -1180,7 +1185,12 @@ function bindSourceFilterButtons() {
       if (!s) return;
       captureListFilter.source = s;
       syncCapturesNavFilterUi();
-      if (parseHash().view === 'captures') mountCapturesView();
+      if (parseHash().view === 'captures') {
+        mountCapturesView();
+      } else {
+        setHash('captures');
+      }
+      closeMobileNav();
     });
   });
 }

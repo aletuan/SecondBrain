@@ -10,6 +10,8 @@ const exampleFixture = `items:
     label: Machine Learning
   - id: data-engineering
     label: Data Engineering
+  - id: security
+    label: Security
   - id: management
     label: Management
   - id: uncategorized
@@ -19,9 +21,9 @@ const exampleFixture = `items:
 describe('parseCategoriesYaml', () => {
   it('parses items with id and label', () => {
     const entries = parseCategoriesYaml(exampleFixture);
-    expect(entries).toHaveLength(4);
+    expect(entries).toHaveLength(5);
     expect(entries.map(e => e.id)).toContain('uncategorized');
-    expect(new Set(entries.map(e => e.id)).size).toBe(4);
+    expect(new Set(entries.map(e => e.id)).size).toBe(5);
   });
 
   it('throws on duplicate ids', () => {
@@ -43,6 +45,7 @@ describe('getAllowedCategoryIdsSorted', () => {
       'data-engineering',
       'machine-learning',
       'management',
+      'security',
       'uncategorized',
     ]);
   });
