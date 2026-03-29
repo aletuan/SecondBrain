@@ -17,6 +17,7 @@ import {
   isXCapture,
   isYoutubeCapture,
 } from './captureFilters.js';
+import { transformDigestCapturesWikilinks } from './digestWikilinks.js';
 
 /** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
 type YtPlayerApi = {
@@ -599,28 +600,6 @@ class DigestProseRenderer extends DigestHeadingRenderer {
     }
     return super.link(token);
   }
-}
-
-/**
- * CLI digest lines use Obsidian wikilinks: `[[Captures/<id>/note|Title]]`.
- * Marked does not parse those; convert to markdown links the SPA understands.
- */
-function transformDigestCapturesWikilinks(markdown: string): string {
-  const mdLink = (folder: string, display: string) => {
-    const id = folder.trim();
-    const raw = display.trim() || id;
-    const label = raw
-      .replace(/\\/g, '\\\\')
-      .replace(/\[/g, '\\[')
-      .replace(/\]/g, '\\]');
-    return `[${label}](#/capture/${encodeURIComponent(id)})`;
-  };
-  let s = markdown;
-  s = s.replace(/\[\[Captures\/(.+?)\/note\|([^\]]+)\]\]/g, (_, folder: string, alias: string) =>
-    mdLink(folder, alias),
-  );
-  s = s.replace(/\[\[Captures\/(.+?)\/note\]\]/g, (_, folder: string) => mdLink(folder, folder));
-  return s;
 }
 
 function markdownToProseHtml(markdown: string, opts?: { h2IdPrefix?: string }): string {
