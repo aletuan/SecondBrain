@@ -315,7 +315,7 @@ html[data-theme] .status-strip {
     text-align: left;
     padding: 0.5rem 0.85rem;
     border: 1px solid transparent;
-    border-left: 3px solid var(--line);
+    border-left: 3px solid transparent;
     border-radius: var(--radius);
     background: transparent;
     color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
@@ -347,12 +347,13 @@ html[data-theme] .status-strip {
   .drawer-link:hover,
   .drawer-link:focus-visible {
     color: var(--paper-read);
-    background: var(--elevated);
+    background: color-mix(in srgb, var(--signal) 8%, transparent);
+    border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
   }
 
   .drawer-link:focus-visible {
     outline: none;
-    border-left-color: var(--dot);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--dot) 35%, transparent);
   }
 
   .drawer-link.active {
@@ -507,7 +508,7 @@ html[data-theme] .status-strip {
   text-align: left;
   padding: var(--nav-item-py) var(--nav-item-px);
   border: 1px solid transparent;
-  border-left: var(--nav-rail) solid var(--line);
+  border-left: var(--nav-rail) solid transparent;
   border-radius: var(--nav-item-radius);
   background: transparent;
   color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
@@ -516,9 +517,9 @@ html[data-theme] .status-strip {
   font-weight: 500;
   cursor: pointer;
   transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .app-nav-route[data-route='home'] {
@@ -535,8 +536,9 @@ html[data-theme] .status-strip {
 
 .app-nav-route:hover,
 .app-nav-route:focus-visible {
-  background: var(--elevated);
+  background: var(--nav-filter-hover-bg);
   color: var(--paper-read);
+  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
   outline: none;
 }
 
@@ -577,7 +579,7 @@ html[data-theme] .status-strip {
   text-align: left;
   padding: var(--nav-item-py) var(--nav-item-px);
   border: 1px solid transparent;
-  border-left: var(--nav-rail) solid var(--line);
+  border-left: var(--nav-rail) solid transparent;
   border-radius: var(--nav-item-radius);
   background: transparent;
   color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
@@ -586,16 +588,16 @@ html[data-theme] .status-strip {
   font-weight: 500;
   cursor: pointer;
   transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .app-nav-source:hover,
 .app-nav-source:focus-visible {
-  background: var(--elevated);
+  background: var(--nav-filter-hover-bg);
   color: var(--paper-read);
-  border-left-color: color-mix(in srgb, var(--signal) 55%, var(--line));
+  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
   outline: none;
 }
 
@@ -786,11 +788,13 @@ main {
   }
 }
 
-/* ── Theme switcher ─────────────────────────────────────── */
+/* ── Theme switcher (segmented control; subtle tray so icons read as one widget) ── */
 .theme-switcher {
-  display: flex;
+  display: inline-flex;
   gap: 2px;
-  background: rgba(128, 128, 128, 0.10);
+  max-width: 100%;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--line) 28%, transparent);
   border-radius: 6px;
   padding: 3px;
 }
@@ -808,11 +812,11 @@ main {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .theme-btn:hover {
-  background: rgba(128, 128, 128, 0.15);
+  background: color-mix(in srgb, var(--line) 45%, transparent);
   color: var(--paper);
 }
 .theme-btn.active {
-  background: rgba(128, 128, 128, 0.22);
+  background: color-mix(in srgb, var(--line) 62%, transparent);
   color: var(--paper);
 }
 .theme-btn svg {
@@ -835,22 +839,12 @@ main {
   border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 
-.app-nav__theme .theme-switcher {
-  width: 100%;
-  justify-content: center;
-}
-
 .drawer-theme {
   flex-shrink: 0;
   margin-top: 0.25rem;
   padding: 0.85rem 1rem 1rem;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
   border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-}
-
-.drawer-theme .theme-switcher {
-  width: 100%;
-  justify-content: center;
 }
 
 .view {
