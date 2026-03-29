@@ -313,16 +313,17 @@ html[data-theme] .status-strip {
     display: block;
     width: 100%;
     text-align: left;
-    padding: 0.95rem 1.25rem;
-    border: none;
-    border-left: 3px solid transparent;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid transparent;
+    border-left: 3px solid var(--line);
+    border-radius: var(--radius);
     background: transparent;
-    color: var(--muted);
-    font-family: var(--font-mono);
-    font-size: 12px;
+    color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
+    font-family: inherit;
+    font-size: 13px;
     font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: normal;
+    text-transform: none;
     cursor: pointer;
     touch-action: manipulation;
     transition:
@@ -357,7 +358,8 @@ html[data-theme] .status-strip {
   .drawer-link.active {
     color: var(--paper-read);
     border-left-color: var(--dot);
-    background: color-mix(in srgb, var(--dot) 14%, transparent);
+    background: color-mix(in srgb, var(--dot) 12%, transparent);
+    font-weight: 600;
   }
 
   main {
@@ -407,7 +409,15 @@ html[data-theme] .status-strip {
   }
 }
 
+/* Shared geometry for all nav controls (modes · categories · sources) */
 .app-nav {
+  --nav-rail: 3px;
+  --nav-item-py: 0.5rem;
+  --nav-item-px: 0.65rem;
+  --nav-item-fs: 13px;
+  --nav-item-radius: var(--radius);
+  --nav-filter-active-bg: color-mix(in srgb, var(--signal) 12%, transparent);
+  --nav-filter-hover-bg: color-mix(in srgb, var(--signal) 8%, transparent);
   position: relative;
   isolation: isolate;
   background: var(--panel);
@@ -439,47 +449,76 @@ html[data-theme] .status-strip {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 1.35rem;
+  gap: 0;
   flex: 1;
   min-width: 0;
 }
 
 .app-nav__mark-wrap {
   display: flex;
-  justify-content: center;
-  padding-bottom: 0.15rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+}
+
+.app-nav__brand-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--muted) 88%, var(--paper-read));
+}
+
+.app-nav__section {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+}
+
+.app-nav__section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .app-nav__section-title {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 9px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.5rem;
+  font-weight: 500;
 }
 
 .app-nav__views {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .app-nav-route {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0.5rem 0.6rem;
+  padding: var(--nav-item-py) var(--nav-item-px);
   border: 1px solid transparent;
-  border-left: 3px solid var(--line);
+  border-left: var(--nav-rail) solid var(--line);
+  border-radius: var(--nav-item-radius);
   background: transparent;
-  color: var(--paper-read);
+  color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
   font: inherit;
-  font-size: 14px;
+  font-size: var(--nav-item-fs);
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .app-nav-route[data-route='home'] {
@@ -497,6 +536,7 @@ html[data-theme] .status-strip {
 .app-nav-route:hover,
 .app-nav-route:focus-visible {
   background: var(--elevated);
+  color: var(--paper-read);
   outline: none;
 }
 
@@ -507,19 +547,22 @@ html[data-theme] .status-strip {
 .app-nav-route.active {
   border-left-color: var(--app-nav-accent, var(--accent));
   background: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 12%, transparent);
+  color: var(--paper-read);
+  font-weight: 600;
 }
 
 .app-nav__list {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 13px;
+  font-size: var(--nav-item-fs);
   line-height: 1.45;
 }
 
 .app-nav__list--categories .app-nav__loading {
   color: var(--muted);
   font-size: 12px;
+  padding: var(--nav-item-py) 0;
 }
 
 .app-nav__sources {
@@ -532,28 +575,39 @@ html[data-theme] .status-strip {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--elevated);
-  color: var(--paper-read);
+  padding: var(--nav-item-py) var(--nav-item-px);
+  border: 1px solid transparent;
+  border-left: var(--nav-rail) solid var(--line);
+  border-radius: var(--nav-item-radius);
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
   font: inherit;
-  font-size: 12px;
+  font-size: var(--nav-item-fs);
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .app-nav-source:hover,
 .app-nav-source:focus-visible {
-  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+  background: var(--elevated);
+  color: var(--paper-read);
+  border-left-color: color-mix(in srgb, var(--signal) 55%, var(--line));
   outline: none;
 }
 
+.app-nav-source:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--signal) 30%, transparent);
+}
+
 .app-nav-source[aria-pressed='true'] {
-  border-color: var(--signal);
-  background: color-mix(in srgb, var(--signal) 10%, var(--elevated));
+  border-left-color: var(--signal);
+  background: var(--nav-filter-active-bg);
+  color: var(--paper-read);
+  font-weight: 600;
 }
 
 .app-nav__list--categories li {
@@ -564,28 +618,39 @@ html[data-theme] .status-strip {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0.35rem 0.5rem;
+  padding: var(--nav-item-py) var(--nav-item-px);
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-left: var(--nav-rail) solid transparent;
+  border-radius: var(--nav-item-radius);
   background: transparent;
-  color: var(--paper-read);
+  color: color-mix(in srgb, var(--muted) 28%, var(--paper-read));
   font: inherit;
-  font-size: 12px;
+  font-size: var(--nav-item-fs);
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .app-nav-cat:hover,
 .app-nav-cat:focus-visible {
-  background: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 10%, transparent);
+  background: var(--nav-filter-hover-bg);
+  color: var(--paper-read);
+  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
   outline: none;
 }
 
+.app-nav-cat:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--signal) 30%, transparent);
+}
+
 .app-nav-cat.is-active {
-  background: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 16%, transparent);
-  border-color: var(--line);
+  border-left-color: var(--signal);
+  background: var(--nav-filter-active-bg);
+  color: var(--paper-read);
+  font-weight: 600;
 }
 
 .main-aux-blocks {
@@ -622,6 +687,12 @@ html[data-theme] .status-strip {
 @keyframes markSpin {
   to {
     transform: rotate(405deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark {
+    animation: none;
   }
 }
 
@@ -1874,12 +1945,51 @@ tr.capture-row:focus-visible {
 }
 
 .stat-block--overview {
-  grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+  align-items: stretch;
 }
 
-.stat-block--overview .stat--tile-threads {
-  grid-column: 1 / -1;
+@media (max-width: 52rem) {
+  .stat-block--overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 28rem) {
+  .stat-block--overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stat-block--overview .stat--tile {
+  padding: 0.4rem 0.45rem 0.4rem 0.72rem;
+  border-radius: 6px;
+}
+
+.stat-block--overview .stat--tile:hover {
+  transform: translateY(-1px);
+}
+
+.stat-block--overview .stat--tile b {
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.stat-block--overview .stat__label {
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  margin-top: 0.1rem;
+}
+
+.stat-block--overview .stat__hint {
+  margin-top: 0.12rem;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.stat-block--overview .stat__hint code {
+  font-size: 8px;
 }
 
 .stat--tile {

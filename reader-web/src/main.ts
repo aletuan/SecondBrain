@@ -785,6 +785,7 @@ function layoutShell(): string {
       <div class="app-nav__inner">
         <div class="app-nav__mark-wrap">
           <div class="mark" title="Second brain reader"></div>
+          <p class="app-nav__brand-label">Reader</p>
         </div>
         <div class="app-nav__section">
           <h2 class="app-nav__section-title">Chế độ</h2>
@@ -1258,7 +1259,7 @@ function sideCaptures(rows: CaptureListItem[]): string {
       </div>
       <div class="stat stat--tile stat--tile-comments">
         <b>${reactions}</b><span class="stat__label">Phản hồi</span>
-        <span class="stat__hint">mục trong <code>.comment</code></span>
+        <span class="stat__hint" title="Tổng mục trong các file .comment (đánh giá)"><code>.comment</code></span>
       </div>
       <div class="stat stat--tile stat--tile-yt">
         <b>${yt}</b><span class="stat__label">YouTube</span>
