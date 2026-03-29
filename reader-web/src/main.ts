@@ -782,6 +782,7 @@ function layoutShell(): string {
       <div class="app-nav__inner">
         <div class="app-nav__mark-wrap">
           <h1 class="app-nav__title" id="app-nav-title"><span>Second</span> <em>brain.</em></h1>
+          <div class="app-nav__theme" aria-label="Theme">${themeSwitcherHtml()}</div>
         </div>
         <div class="app-nav__section">
           <h2 class="app-nav__section-title">Views</h2>
@@ -806,7 +807,6 @@ function layoutShell(): string {
             <button type="button" class="app-nav-source" data-source="threads" aria-pressed="false">Threads</button>
             <button type="button" class="app-nav-source" data-source="other" aria-pressed="false">Other</button>
           </div>
-          <div class="app-nav__theme" aria-label="Theme">${themeSwitcherHtml()}</div>
           <div class="app-nav__status-wrap">
             <div class="status-strip app-nav__status" id="app-nav-status" aria-live="polite"></div>
           </div>
@@ -865,8 +865,10 @@ type Health = {
 function appNavStatusHtml(h: Health): string {
   return `
     <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest ready' : 'Ingest · check CLI'}</div>
-    <div>Obsidian · local reader</div>
-    <div class="app-nav__vault-line"><span class="app-nav__vault-label">vault</span> · <code>${esc(h.vaultRoot)}</code></div>
+    <div class="app-nav__vault-block status-strip-mono" title="Obsidian · local reader">
+      <span class="app-nav__vault-label">Vault</span>
+      <code class="app-nav__vault-path">${esc(h.vaultRoot)}</code>
+    </div>
   `;
 }
 

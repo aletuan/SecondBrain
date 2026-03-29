@@ -510,13 +510,36 @@ html[data-theme] .app-nav__status {
   margin-bottom: 0.25rem;
 }
 
-.app-nav__vault-line {
-  margin-top: 0.3rem;
+.app-nav__vault-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  max-width: 100%;
   line-height: 1.35;
 }
 
 .app-nav__vault-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: none;
   color: var(--warn);
+}
+
+.app-nav__vault-path {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  letter-spacing: 0.03em;
+  word-break: break-all;
+  white-space: normal;
+  color: color-mix(in srgb, var(--paper-read) 82%, var(--muted));
 }
 
 .app-nav__brand-label {
@@ -927,14 +950,14 @@ main {
   stroke-linejoin: round;
 }
 
-/* Theme: ngay dưới nút nguồn cuối (trong section Nguồn) / dưới drawer links */
+/* Theme: dưới logo (mark-wrap); drawer vẫn dùng .drawer-theme */
 .app-nav__theme {
   position: relative;
   z-index: 1;
   flex-shrink: 0;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .app-nav__status-wrap {
@@ -2066,7 +2089,7 @@ tr.capture-row:focus-visible {
 
 .stat-block--overview {
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.45rem;
+  gap: 1rem 1.1rem;
   align-items: stretch;
 }
 
