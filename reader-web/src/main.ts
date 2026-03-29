@@ -1479,12 +1479,6 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
           })
           .join('');
 
-  const n = recent.length;
-  const total = vaultCaptureTotal;
-  const totalSuffix =
-    total > n
-      ? `<span class="section-title__total" aria-hidden="true"> / ${String(total).padStart(2, '0')} in vault</span><span class="visually-hidden"> of ${total} captures in vault</span>`
-      : '';
   return `
     <header class="masthead">
       <h1><span>Second</span><br /><em>brain.</em></h1>
@@ -1507,11 +1501,7 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
       </div>
       <div class="recent-captures-bar">
         <div class="recent-captures-bar__titles">
-          <h2 class="section-title section-title--home-recent" id="recent-captures-heading">
-            Recent captures
-            <span class="section-title__num">${String(n).padStart(2, '0')}</span>${totalSuffix}
-          </h2>
-          <p class="recent-captures-bar__sub">Up to ${HOME_RECENT_CAPTURE_LIMIT} newest · up to 3 columns on wide screens</p>
+          <h2 class="section-title" id="recent-captures-heading">Recent captures</h2>
         </div>
         <a href="#/captures" class="recent-captures-cta">Open library<span class="recent-captures-cta__arrow" aria-hidden="true"> →</span></a>
       </div>

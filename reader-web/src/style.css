@@ -1419,35 +1419,11 @@ main {
   letter-spacing: -0.02em;
 }
 
-.section-title__num {
-  color: var(--signal);
-  font-family: var(--font-mono);
-  font-size: 0.5em;
-  vertical-align: super;
-  margin-left: 0.2rem;
-  letter-spacing: 0.06em;
-}
-
-.section-title__total {
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.42em;
-  font-weight: 500;
-  vertical-align: super;
-  margin-left: 0.15rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.section-title--home-recent {
-  margin-bottom: 0.35rem;
-}
-
 /* Home recent captures: editorial rail + CTA (distinct from generic link rows) */
 .recent-captures-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem 1.5rem;
   margin-bottom: 1.35rem;
@@ -1465,18 +1441,12 @@ main {
   min-width: 0;
 }
 
-.recent-captures-bar__sub {
-  margin: 0;
-  font-size: 10px;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.recent-captures-bar .section-title {
+  margin-bottom: 0;
 }
 
 .recent-captures-cta {
   flex: 0 0 auto;
-  align-self: flex-end;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
