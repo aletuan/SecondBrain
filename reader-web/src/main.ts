@@ -512,6 +512,21 @@ function formatIngestedUi(iso: string): string {
   }).format(d);
 }
 
+/** Home tile: ISO for `<time datetime>` + label text (matches detail view formatting). */
+function captureListIngestedForCard(r: CaptureListItem): { iso: string; text: string } {
+  const raw = r.ingested_at?.trim();
+  if (raw) {
+    const t = Date.parse(raw);
+    if (!Number.isNaN(t)) return { iso: raw, text: formatIngestedUi(raw) };
+  }
+  const m = /^(\d{4}-\d{2}-\d{2})--/.exec(r.id);
+  if (m) {
+    const iso = `${m[1]}T12:00:00+07:00`;
+    return { iso, text: formatIngestedUi(iso) };
+  }
+  return { iso: '', text: '—' };
+}
+
 /** Obsidian-style YAML frontmatter (single-line scalar values only). */
 function parseSimpleYamlFrontmatter(md: string): { front: Record<string, string>; body: string } | null {
   const lines = md.replace(/^\uFEFF?/, '').split(/\r?\n/);
@@ -1330,8 +1345,7 @@ function skeletonCardsHtml(count: number): string {
     <div class="skeleton-card">
       <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
       <div class="skeleton skeleton-card__line skeleton-card__line--title"></div>
-      <div class="skeleton skeleton-card__line skeleton-card__line--url"></div>
-      <div class="skeleton skeleton-card__line skeleton-card__line--tag"></div>
+      <div class="skeleton skeleton-card__line skeleton-card__line--ingested"></div>
     </div>`).join('');
 }
 
@@ -1486,6 +1500,7 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
               : r.url && isLikelyXOrTwitterUrl(r.url)
                 ? 'x'
                 : 'article';
+            const ing = captureListIngestedForCard(r);
             return `
         <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
           <div class="card-meta">
@@ -1493,11 +1508,10 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
             <span>${esc(r.fetch_method || '—')}</span>
           </div>
           <h3>${esc(r.title)}</h3>
-          <p>${esc(r.url ? r.url.slice(0, 96) + (r.url.length > 96 ? '…' : '') : r.id)}</p>
           ${
-            r.youtube_video_id
-              ? '<div class="tag-row"><span class="tag">youtube</span></div>'
-              : ''
+            ing.iso
+              ? `<time class="card-ingested" datetime="${escAttr(ing.iso)}">${esc(ing.text)}</time>`
+              : `<span class="card-ingested">${esc(ing.text)}</span>`
           }
         </button>`;
           })

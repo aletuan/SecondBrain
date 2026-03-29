@@ -1693,17 +1693,23 @@ main {
   font-family: var(--font-display);
   font-size: 1.2rem;
   font-weight: 400;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.35rem;
   line-height: 1.28;
   color: var(--paper-read);
 }
 
-.card p {
-  flex: 1 1 auto;
-  margin: 0;
-  color: color-mix(in srgb, var(--muted) 72%, var(--paper-read));
-  font-size: 13px;
-  line-height: 1.62;
+/* Compact ingest time (single line, below title). */
+time.card-ingested,
+span.card-ingested {
+  display: block;
+  margin-top: auto;
+  padding-top: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--muted);
 }
 
 .tag-row {
@@ -4171,7 +4177,7 @@ tr.capture-row:focus-visible {
   background: var(--panel);
   border: 1px solid var(--line);
   padding: 1.25rem;
-  min-height: 120px;
+  min-height: 124px;
 }
 
 .skeleton-card__line {
@@ -4181,8 +4187,11 @@ tr.capture-row:focus-visible {
 
 .skeleton-card__line--meta { width: 40%; }
 .skeleton-card__line--title { width: 70%; height: 0.9rem; }
-.skeleton-card__line--url { width: 90%; }
-.skeleton-card__line--tag { width: 25%; }
+.skeleton-card__line--ingested {
+  width: 62%;
+  height: 0.55rem;
+  margin-top: auto;
+}
 
 .skeleton-row td {
   padding: 1rem 1.1rem;
