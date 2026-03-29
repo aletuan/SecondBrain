@@ -343,23 +343,11 @@ html[data-theme] .app-nav__status {
       border-color 0.15s;
   }
 
-  .drawer-link[data-route='home'] {
-    --dot: var(--accent);
-  }
-
-  .drawer-link[data-route='captures'] {
-    --dot: var(--signal);
-  }
-
-  .drawer-link[data-route='digests'] {
-    --dot: var(--warn);
-  }
-
   .drawer-link:hover,
   .drawer-link:focus-visible {
     color: var(--paper-read);
-    background: color-mix(in srgb, var(--signal) 8%, transparent);
-    border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
+    background: color-mix(in srgb, var(--dot) 8%, transparent);
+    border-left-color: color-mix(in srgb, var(--dot) 45%, transparent);
   }
 
   .drawer-link:focus-visible {
@@ -580,6 +568,7 @@ html[data-theme] .app-nav__status {
 }
 
 .app-nav-route {
+  --app-nav-accent: var(--accent);
   display: block;
   width: 100%;
   text-align: left;
@@ -599,23 +588,11 @@ html[data-theme] .app-nav__status {
     color 0.15s ease;
 }
 
-.app-nav-route[data-route='home'] {
-  --app-nav-accent: var(--accent);
-}
-
-.app-nav-route[data-route='captures'] {
-  --app-nav-accent: var(--signal);
-}
-
-.app-nav-route[data-route='digests'] {
-  --app-nav-accent: var(--warn);
-}
-
 .app-nav-route:hover,
 .app-nav-route:focus-visible {
-  background: var(--nav-filter-hover-bg);
+  background: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 8%, transparent);
   color: var(--paper-read);
-  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
+  border-left-color: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 45%, transparent);
   outline: none;
 }
 
@@ -650,6 +627,7 @@ html[data-theme] .app-nav__status {
   gap: 3px;
 }
 
+/* Source filters: signal rail (green) — not accent, so distinct from Categories above. */
 .app-nav-source {
   display: block;
   width: 100%;
@@ -672,7 +650,7 @@ html[data-theme] .app-nav__status {
 
 .app-nav-source:hover,
 .app-nav-source:focus-visible {
-  background: var(--nav-filter-hover-bg);
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
   color: var(--paper-read);
   border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
   outline: none;
@@ -713,21 +691,22 @@ html[data-theme] .app-nav__status {
     color 0.15s ease;
 }
 
+/* Categories: warn rail (amber) — not accent (Views) or signal (Source). */
 .app-nav-cat:hover,
 .app-nav-cat:focus-visible {
-  background: var(--nav-filter-hover-bg);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
   color: var(--paper-read);
-  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
+  border-left-color: color-mix(in srgb, var(--warn) 55%, transparent);
   outline: none;
 }
 
 .app-nav-cat:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--signal) 30%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 35%, transparent);
 }
 
 .app-nav-cat.is-active {
-  border-left-color: var(--signal);
-  background: var(--nav-filter-active-bg);
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
   color: var(--paper-read);
   font-weight: 600;
 }
