@@ -1,7 +1,7 @@
 # Design: Reader-web layout 2 cột (nav + main) + lọc client (Categories / Nguồn)
 
 **Ngày:** 2026-03-29  
-**Trạng thái:** Đã duyệt qua brainstorming — chờ implementation plan (`writing-plans`) và triển khai.
+**Trạng thái:** Đã duyệt — implementation plan: [`docs/superpowers/plans/2026-03-29-reader-two-column-layout.md`](../plans/2026-03-29-reader-two-column-layout.md).
 
 **Liên quan:**
 
