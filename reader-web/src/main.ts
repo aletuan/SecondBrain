@@ -694,7 +694,7 @@ function isLikelyXOrTwitterUrl(url: string): boolean {
   }
 }
 
-const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at', 'categories']);
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at', 'categories', 'type']);
 
 /** YAML keys superseded by the Rating row (stats from `.comment`, same as library table). */
 function isEvaluationVoteFmKey(k: string): boolean {
@@ -2251,7 +2251,6 @@ function renderCaptureDetail(
   }
   const metaLine = metaParts.join('<span class="detail-meta-sep" aria-hidden="true">·</span>');
 
-  const vaultPath = `${d.vaultRoot.replace(/\/+$/, '')}/Captures/${d.id}`;
   const bc = captureBreadcrumbLabel(d.id);
 
   const tocLinks = [
@@ -2342,7 +2341,6 @@ function renderCaptureDetail(
       <button type="button" class="btn-ghost" id="cap-back">← Library</button>
       <span class="detail-breadcrumb" title="${escAttr(d.id)}">Captures / ${esc(bc)}</span>
       ${reingestBtn}
-      <button type="button" class="btn-ghost btn-tiny" id="cap-copy-path" data-path="${escAttr(vaultPath)}">Copy path</button>
     </div>
     <div class="main-aux-blocks capture-detail-aux">${sideCapture(d)}</div>
     ${reingestBlock}
@@ -2668,24 +2666,6 @@ async function route() {
       });
       const prose = document.querySelector('#note-prose');
 
-      const copyBtn = document.querySelector<HTMLButtonElement>('#cap-copy-path');
-      copyBtn?.addEventListener('click', async () => {
-        const p = copyBtn.dataset.path ?? copyBtn.getAttribute('data-path');
-        if (!p) return;
-        const label = copyBtn.textContent;
-        try {
-          await navigator.clipboard.writeText(p);
-          copyBtn.textContent = 'Copied';
-          window.setTimeout(() => {
-            copyBtn.textContent = label ?? 'Copy path';
-          }, 1600);
-        } catch {
-          copyBtn.textContent = 'Copy failed';
-          window.setTimeout(() => {
-            copyBtn.textContent = label ?? 'Copy path';
-          }, 2000);
-        }
-      });
       if (prose) {
         prose.innerHTML = noteHtml;
         wrapConsecutiveProseImagesInFilmstrips(prose);
