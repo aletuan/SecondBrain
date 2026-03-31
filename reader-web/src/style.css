@@ -343,23 +343,11 @@ html[data-theme] .app-nav__status {
       border-color 0.15s;
   }
 
-  .drawer-link[data-route='home'] {
-    --dot: var(--accent);
-  }
-
-  .drawer-link[data-route='captures'] {
-    --dot: var(--signal);
-  }
-
-  .drawer-link[data-route='digests'] {
-    --dot: var(--warn);
-  }
-
   .drawer-link:hover,
   .drawer-link:focus-visible {
     color: var(--paper-read);
-    background: color-mix(in srgb, var(--signal) 8%, transparent);
-    border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
+    background: color-mix(in srgb, var(--dot) 8%, transparent);
+    border-left-color: color-mix(in srgb, var(--dot) 45%, transparent);
   }
 
   .drawer-link:focus-visible {
@@ -580,6 +568,7 @@ html[data-theme] .app-nav__status {
 }
 
 .app-nav-route {
+  --app-nav-accent: var(--accent);
   display: block;
   width: 100%;
   text-align: left;
@@ -599,23 +588,11 @@ html[data-theme] .app-nav__status {
     color 0.15s ease;
 }
 
-.app-nav-route[data-route='home'] {
-  --app-nav-accent: var(--accent);
-}
-
-.app-nav-route[data-route='captures'] {
-  --app-nav-accent: var(--signal);
-}
-
-.app-nav-route[data-route='digests'] {
-  --app-nav-accent: var(--warn);
-}
-
 .app-nav-route:hover,
 .app-nav-route:focus-visible {
-  background: var(--nav-filter-hover-bg);
+  background: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 8%, transparent);
   color: var(--paper-read);
-  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
+  border-left-color: color-mix(in srgb, var(--app-nav-accent, var(--accent)) 45%, transparent);
   outline: none;
 }
 
@@ -650,6 +627,7 @@ html[data-theme] .app-nav__status {
   gap: 3px;
 }
 
+/* Source filters: signal rail (green) — not accent, so distinct from Categories above. */
 .app-nav-source {
   display: block;
   width: 100%;
@@ -672,7 +650,7 @@ html[data-theme] .app-nav__status {
 
 .app-nav-source:hover,
 .app-nav-source:focus-visible {
-  background: var(--nav-filter-hover-bg);
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
   color: var(--paper-read);
   border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
   outline: none;
@@ -713,21 +691,22 @@ html[data-theme] .app-nav__status {
     color 0.15s ease;
 }
 
+/* Categories: warn rail (amber) — not accent (Views) or signal (Source). */
 .app-nav-cat:hover,
 .app-nav-cat:focus-visible {
-  background: var(--nav-filter-hover-bg);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
   color: var(--paper-read);
-  border-left-color: color-mix(in srgb, var(--signal) 45%, transparent);
+  border-left-color: color-mix(in srgb, var(--warn) 55%, transparent);
   outline: none;
 }
 
 .app-nav-cat:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--signal) 30%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 35%, transparent);
 }
 
 .app-nav-cat.is-active {
-  border-left-color: var(--signal);
-  background: var(--nav-filter-active-bg);
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
   color: var(--paper-read);
   font-weight: 600;
 }
@@ -1759,9 +1738,15 @@ span.card-ingested {
   margin-bottom: 1.25rem;
 }
 
-/* Captures: space between overview stats (sideCaptures) and search / back row */
+/* Captures: search aligned end (no home button) */
 .toolbar.toolbar--captures {
   margin-top: 1.35rem;
+  justify-content: flex-end;
+}
+
+.toolbar.toolbar--captures .search-wrap {
+  flex: 0 1 420px;
+  max-width: min(420px, 100%);
 }
 
 .toolbar .ingest-label {
@@ -1845,33 +1830,99 @@ span.card-ingested {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--line) 35%, transparent);
 }
 
+/* Library pagination: editorial “folio” strip — distinct from table chrome, accent on current page */
 .lib-pagination {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem 1rem;
+  gap: 0.65rem;
   margin-top: 1rem;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--line);
+  padding: 0.85rem 0 0;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--elevated) 35%, transparent) 0%,
+    transparent 72%
+  );
+}
+
+.lib-pagination__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
   border-radius: var(--radius);
-  background: var(--elevated);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 85%, var(--ink));
+  color: var(--paper-read);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.2s var(--ease-out),
+    background 0.2s var(--ease-out),
+    color 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
 }
 
-.lib-pagination__status {
-  min-width: 0;
-  text-align: center;
-  color: color-mix(in srgb, var(--muted) 35%, var(--paper-read));
+.lib-pagination__chev {
+  font-size: 1.35rem;
+  font-weight: 300;
+  translate: 0 -0.05em;
 }
 
-.lib-pagination .btn-ghost:disabled {
-  opacity: 0.45;
+.lib-pagination__btn:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.lib-pagination__btn:not(:disabled):focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.lib-pagination__btn:disabled {
+  opacity: 0.38;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.lib-pagination__meter {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.15em;
+  min-width: 4.25rem;
+  padding: 0.4rem 0.7rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 55%, var(--panel));
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+}
+
+.lib-pagination__cur {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.lib-pagination__sep {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--muted) 55%, var(--line));
+}
+
+.lib-pagination__total {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--muted) 25%, var(--paper-read));
 }
 
 .mock-table {
