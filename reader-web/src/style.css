@@ -1738,9 +1738,15 @@ span.card-ingested {
   margin-bottom: 1.25rem;
 }
 
-/* Captures: space between overview stats (sideCaptures) and search / back row */
+/* Captures: search aligned end (no home button) */
 .toolbar.toolbar--captures {
   margin-top: 1.35rem;
+  justify-content: flex-end;
+}
+
+.toolbar.toolbar--captures .search-wrap {
+  flex: 0 1 420px;
+  max-width: min(420px, 100%);
 }
 
 .toolbar .ingest-label {
@@ -1824,33 +1830,99 @@ span.card-ingested {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--line) 35%, transparent);
 }
 
+/* Library pagination: editorial “folio” strip — distinct from table chrome, accent on current page */
 .lib-pagination {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem 1rem;
+  gap: 0.65rem;
   margin-top: 1rem;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--line);
+  padding: 0.85rem 0 0;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--elevated) 35%, transparent) 0%,
+    transparent 72%
+  );
+}
+
+.lib-pagination__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
   border-radius: var(--radius);
-  background: var(--elevated);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 85%, var(--ink));
+  color: var(--paper-read);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.2s var(--ease-out),
+    background 0.2s var(--ease-out),
+    color 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
 }
 
-.lib-pagination__status {
-  min-width: 0;
-  text-align: center;
-  color: color-mix(in srgb, var(--muted) 35%, var(--paper-read));
+.lib-pagination__chev {
+  font-size: 1.35rem;
+  font-weight: 300;
+  translate: 0 -0.05em;
 }
 
-.lib-pagination .btn-ghost:disabled {
-  opacity: 0.45;
+.lib-pagination__btn:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.lib-pagination__btn:not(:disabled):focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.lib-pagination__btn:disabled {
+  opacity: 0.38;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.lib-pagination__meter {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.15em;
+  min-width: 4.25rem;
+  padding: 0.4rem 0.7rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 55%, var(--panel));
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+}
+
+.lib-pagination__cur {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.lib-pagination__sep {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--muted) 55%, var(--line));
+}
+
+.lib-pagination__total {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--muted) 25%, var(--paper-read));
 }
 
 .mock-table {

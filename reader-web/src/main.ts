@@ -1240,7 +1240,6 @@ function mountCapturesView() {
   const main = document.querySelector<HTMLElement>('#main')!;
   const filtered = filterCaptures(capturesListAll, captureListFilter);
   main.innerHTML = renderCapturesTable(capturesListAll, filtered);
-  document.querySelector('#back-home')?.addEventListener('click', () => setHash('home'));
   bindLibraryTable();
   bindCaptureRows(main);
   document.getElementById('lib-clear-filters')?.addEventListener('click', () => {
@@ -1584,10 +1583,18 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
       : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
             <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
           </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>
-          <nav class="lib-pagination" id="lib-pagination" aria-label="Library pagination">
-            <button type="button" class="btn-ghost" id="lib-page-prev" aria-label="Previous page">← Prev</button>
-            <span class="lib-pagination__status" id="lib-page-status" aria-live="polite"></span>
-            <button type="button" class="btn-ghost" id="lib-page-next" aria-label="Next page">Next →</button>
+          <nav class="lib-pagination" id="lib-pagination" aria-label="Library pagination" hidden>
+            <button type="button" class="lib-pagination__btn" id="lib-page-prev" aria-label="Previous page">
+              <span aria-hidden="true" class="lib-pagination__chev">‹</span>
+            </button>
+            <div class="lib-pagination__meter" aria-live="polite" aria-atomic="true">
+              <span class="lib-pagination__cur" id="lib-page-cur"></span>
+              <span class="lib-pagination__sep" aria-hidden="true">/</span>
+              <span class="lib-pagination__total" id="lib-page-total"></span>
+            </div>
+            <button type="button" class="lib-pagination__btn" id="lib-page-next" aria-label="Next page">
+              <span aria-hidden="true" class="lib-pagination__chev">›</span>
+            </button>
           </nav>`;
   return `
     <div class="view active">
@@ -1601,10 +1608,8 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
         <div class="search-wrap">
           <input type="search" id="lib-search" placeholder="Search title, slug, URL, source…" aria-label="Search captures" />
         </div>
-        <button type="button" class="btn-ghost" id="back-home">← Home</button>
       </div>
       ${tableOrEmpty}
-      <p class="hint lib-toolbar-hint">Filter with search · left menu · ${LIBRARY_PAGE_SIZE} items per page · open row with Enter when focused.</p>
     </div>
   `;
 }
@@ -1643,17 +1648,16 @@ function updateLibraryTableVisibility(): void {
   if (nav) {
     const prev = nav.querySelector<HTMLButtonElement>('#lib-page-prev');
     const next = nav.querySelector<HTMLButtonElement>('#lib-page-next');
-    const status = nav.querySelector<HTMLElement>('#lib-page-status');
-    if (prev) prev.disabled = libraryTablePage <= 1 || totalPages === 0;
-    if (next) next.disabled = totalPages === 0 || libraryTablePage >= totalPages;
-    if (status) {
-      if (n === 0) {
-        status.textContent = 'No matching items';
-      } else {
-        const from = start + 1;
-        const to = Math.min(end, n);
-        status.textContent = `Page ${libraryTablePage} / ${totalPages} · ${from}–${to} / ${n}`;
-      }
+    const curEl = nav.querySelector<HTMLElement>('#lib-page-cur');
+    const totEl = nav.querySelector<HTMLElement>('#lib-page-total');
+    if (totalPages <= 1) {
+      nav.hidden = true;
+    } else {
+      nav.hidden = false;
+      if (prev) prev.disabled = libraryTablePage <= 1;
+      if (next) next.disabled = libraryTablePage >= totalPages;
+      if (curEl) curEl.textContent = String(libraryTablePage);
+      if (totEl) totEl.textContent = String(totalPages);
     }
   }
 }
