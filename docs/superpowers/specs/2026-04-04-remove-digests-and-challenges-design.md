@@ -1,7 +1,7 @@
 # Design: Remove digest and challenge features
 
 **Date:** 2026-04-04  
-**Status:** Approved by product owner — pending implementation plan (`writing-plans`).
+**Status:** Design approved — implementation plan is the next artifact (`writing-plans` after human review of this file).
 
 **Context:** Remove weekly digest generation (`pnpm digest`), reading challenges (`pnpm challenge`), and all reader-web surfaces that list or render digests/challenges. Vault cleanup for existing `Digests/` and `Challenges/` notes is a **manual** step using the **Obsidian CLI** (vault is gitignored).
 
@@ -11,7 +11,7 @@
 
 1. **CLI:** Remove `digest` and `challenge` commands and their implementation; remove `pnpm digest` and `pnpm challenge` from root `package.json`.
 2. **Reader web:** Remove Digests navigation, routes `#/digests` and `#/digest/:week`, “Generate digest” UI, and challenge rendering; remove related API routes and server helpers.
-3. **Documentation:** Update `CLAUDE.md`, `README.md`, `docs/reader-web.md`, `reader-web/README.md`; remove `DIGEST_LLM_MAX_CHARS` from env tables where listed.
+3. **Documentation:** Update `CLAUDE.md`, `README.md`, `docs/reader-web.md`, `reader-web/README.md`; remove `DIGEST_LLM_MAX_CHARS` from env tables where listed. Do a **repo-wide pass** on user-facing docs (e.g. ripgrep `digest`, `challenge`, `Digests`, `Challenges`, case-insensitive) so opening blurbs, `OPENAI_API_KEY` copy, workflow steps, and screenshot blocks (e.g. reader digests image) are not left stale.
 4. **Stale links:** Hash routes `#/digests` and `#/digest/…` should **normalize to `#/captures`** (replace state + render captures) so bookmarks do not call removed APIs.
 
 **Non-goals:** Replacing digest/challenge with another workflow; automating vault deletion from the Brain repo; keeping deprecated CLI stubs.
@@ -28,7 +28,7 @@
 | Delete | `src/digest/isoWeek.ts` |
 | Delete | `src/challenge/fromDigest.ts` |
 | Delete tests | `tests/digest.test.ts`, `tests/digest/chunk.test.ts`, `tests/digest/isoWeek.test.ts`, `tests/challenge/fromDigest.test.ts` |
-| Edit | `src/cli.ts` — remove `digest` and `challenge` command registrations and imports from deleted modules |
+| Edit | `src/cli.ts` — remove `digest` and `challenge` command registrations and imports from deleted modules; update the root Commander **`.description()`** (currently mentions digest) to match ingest-only scope |
 | Edit | `package.json` — remove `"digest"` and `"challenge"` scripts |
 
 ### 2.2 Reader web — server
@@ -100,4 +100,4 @@ The Brain repo **does not** delete vault files. After deploying code removal, cl
 
 ## 7. Next step
 
-After this spec is reviewed and the product owner confirms the committed file: invoke **`writing-plans`** to produce `docs/superpowers/plans/2026-04-04-remove-digests-and-challenges.md` (or equivalent dated plan) with ordered implementation tasks.
+After the **human** has skimmed this committed spec and confirmed no further edits: invoke **`writing-plans`** to produce `docs/superpowers/plans/2026-04-04-remove-digests-and-challenges.md` (or equivalent dated plan) with ordered implementation tasks.
