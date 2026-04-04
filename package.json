@@ -10,8 +10,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "ingest": "tsx src/cli.ts ingest",
-    "digest": "tsx src/cli.ts digest",
-    "challenge": "tsx src/cli.ts challenge",
     "translate-transcript": "tsx src/cli.ts translate-transcript",
     "suggest-milestones": "tsx src/cli.ts suggest-milestones",
     "verify-keys": "tsx scripts/verify-keys.ts",

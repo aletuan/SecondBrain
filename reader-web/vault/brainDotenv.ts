@@ -4,7 +4,7 @@ import path from 'node:path';
 
 /**
  * Read Brain repo `.env` without mutating `process.env`.
- * Used so Vite-driven ingest/digest children get the same keys as `pnpm ingest` from repo root.
+ * Used so Vite-driven ingest children get the same keys as `pnpm ingest` from repo root.
  */
 export async function readBrainDotenv(brainRoot: string): Promise<Record<string, string>> {
   const envPath = path.join(brainRoot, '.env');

@@ -6,13 +6,13 @@ The second-brain **reader web** is a **separate** application from this CLI. It 
 
 A working app lives under [`reader-web/`](../reader-web/): **Vite** + vanilla TS, dev server with Connect middleware exposing read routes plus ingest against the Brain CLI repo (`READER_BRAIN_ROOT`, default parent of `reader-web/`) with `VAULT_ROOT` aligned to the reader vault — same files Obsidian sees. Treat ingest as **local-only** (do not expose the dev server to the internet); use `READER_ALLOW_INGEST=0` to disable. See [`reader-web/README.md`](../reader-web/README.md).
 
-**Ingest API:** **`POST /api/ingest`** remains a single round-trip (JSON result); body **`{ "url": "…" }`** only. **`POST /api/digest`** runs the Brain `digest` command against the same vault (optional JSON `since` / `noLlm`); the digests list screen exposes a **Tạo digest** button when ingest is allowed. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (same body, returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks real pipeline phases from the CLI (`tsx … ingest --progress-json`). Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request sends **SIGTERM** to the child process.
+**Ingest API:** **`POST /api/ingest`** remains a single round-trip (JSON result); body **`{ "url": "…" }`** only. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (same body, returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks real pipeline phases from the CLI (`tsx … ingest --progress-json`). Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request sends **SIGTERM** to the child process.
 
 **YouTube timeline:** the standalone demo [`visualizations/reader-youtube-timeline.html`](visualizations/reader-youtube-timeline.html) is optional reference only; the reader app implements embed + milestones + seek inside the capture detail screen (aligned with the main mock below).
 
 ## Layout (shell)
 
-- **Grid:** A fixed **left nav** (`.app-nav`) holds mode switches (Ingest · Captures · Digests), **category** links populated from `GET /api/taxonomy/categories`, and **source** toggles (e.g. YouTube / X / Threads). The **main** column (`#main`) is the only content column — there is **no** separate right-hand “side” panel. Context blocks that used to target `#side-inner` (stats, CLI hints) render **inside** the main column, typically in `.main-aux-blocks`.
+- **Grid:** A fixed **left nav** (`.app-nav`) holds mode switches (Ingest · Captures), **category** links populated from `GET /api/taxonomy/categories`, and **source** toggles (e.g. YouTube / X / Threads). The **main** column (`#main`) is the only content column — there is **no** separate right-hand “side” panel. Context blocks that used to target `#side-inner` (stats, CLI hints) render **inside** the main column, typically in `.main-aux-blocks`.
 - **Captures:** `GET /api/captures` returns `categories: string[]` per row; the client applies `captureFilters` (source + optional category id). When every row is filtered out, the table shows an empty state with **Xóa bộ lọc**.
 
 ## Design references (UX / layout)
@@ -50,12 +50,6 @@ Path pattern (CLI output):
 4. **Milestones:** If `milestones.yaml` exists, parse the `milestones` list (`t` in seconds, `label`, optional `kind: chapter | highlight`). Use for a timeline and **seek**:
    - **Simple seek (legacy embed):** set iframe `src` to `...&start={t}&autoplay=1` (reloads player).
    - **Smooth seek (subtitle panel path):** `player.seekTo(t, true)` via IFrame API.
-
-### Digest / challenge
-
-- Digests: `vault/Digests/YYYY-Www.md`
-- Challenges: `vault/Challenges/YYYY-Www.md` (from `pnpm challenge`)
-- Reader API: `GET /api/digests/:week` (markdown), `GET /api/challenges/:week` (404 if missing). On digest detail (`#/digest/YYYY-Www`), the UI loads both and renders the challenge section below the digest when the file exists. **Captures** lines with vault wikilinks `[[Captures/…/note|…]]` are turned into in-app links `#/capture/<id>` when rendering (vault file unchanged). Further layout options: [`reader-web-digest-capture-display-options.md`](reader-web-digest-capture-display-options.md).
 
 ## CLI helpers related to reader data
 

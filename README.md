@@ -1,6 +1,6 @@
 # Second brain CLI
 
-TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`), optionally enriches notes with **OpenAI**, and writes **weekly digests** (`Digests/YYYY-Www.md`). Routing is YAML: HTTP + Readability, Apify actors, or an X API stub.
+TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`) and optionally enriches notes with **OpenAI**. Routing is YAML: HTTP + Readability, Apify actors, or an X API stub.
 
 ## Setup
 
@@ -22,15 +22,10 @@ touch .env   # create at repo root; add keys from the Environment table (never c
 | `pnpm exec tsx src/cli.ts ingest [options] <url>` | **Recommended** when passing options (avoids pnpm injecting an extra `--` into argv). Use `--progress-json` for machine-readable phase lines on stderr (Reader SSE). |
 | `pnpm translate-transcript -- --capture vault/Captures/…` | Add or replace `## Transcript (vi)` on an existing capture. |
 | `pnpm suggest-milestones -- --capture vault/Captures/… --max-sec 600` | Merge LLM-suggested `milestones.yaml` (YouTube). |
-| `pnpm digest` | Build digest for the current ISO week (UTC) under `vault/Digests/`. |
-| `pnpm digest -- --since 7d` | Only include captures whose `note.md` frontmatter `ingested_at` falls in the lookback window. |
-| `pnpm digest -- --no-llm` | Skip the LLM “Tổng quan” section. |
 | `pnpm test` / `pnpm typecheck` | Tests and TypeScript check. |
 | `pnpm verify-keys` | Kiểm tra nhanh **OpenAI** / **Apify** / **X** bearer (đọc `.env`, không in key). |
 | `pnpm verify-apify-youtube` | Thử **APIFY_TOKEN** + chạy actor YouTube trong routing trên một video mặc định (tốn Apify). `pnpm verify-apify-youtube --token-only` chỉ kiểm tra token. Có thể truyền URL: `pnpm verify-apify-youtube 'https://youtu.be/…'`. |
 | `pnpm verify-x-tweet [id]` | Gọi `GET /2/tweets/:id` (app-only). Mặc định id ví dụ nếu không truyền. |
-| `pnpm exec tsx src/cli.ts challenge --week 2026-W12` | Sinh `vault/Challenges/2026-W12.md` từ digest (cần `OPENAI_API_KEY`). |
-| `pnpm exec tsx src/cli.ts challenge --digest vault/Digests/2026-W12.md` | Cùng mục đích, chỉ định file digest. |
 
 Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 
@@ -38,7 +33,7 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENAI_API_KEY` | For LLM | Summaries on `note.md`, digest overview, and **default** YouTube transcript EN→VI batch when segments exist. |
+| `OPENAI_API_KEY` | For LLM | Summaries on `note.md` and **default** YouTube transcript EN→VI batch when segments exist. |
 | `OPENAI_MODEL` | No | Default `gpt-4o-mini`. |
 | `ENRICH_MODEL` | No | Optional model **only** for ingest note enrichment (else `OPENAI_MODEL`). |
 | `ENRICH_MAX_CHARS` | No | Max chars of `source.md` body for enrich (default 12000; long text uses head+tail). |
@@ -50,7 +45,6 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 | `CAPTURE_IMAGE_MAX_BYTES` | No | Per-image download cap (default 2_000_000). |
 | `YT_TRANSLATE_BATCH` | No | Transcript translation: lines per OpenAI call (default 20). |
 | `YT_TRANSLATE_MODEL` | No | Optional model override for translation only. |
-| `DIGEST_LLM_MAX_CHARS` | No | Digest: soft max chars of excerpts before chunked LLM + merge (default 12000). |
 
 ## Testing integrations (OpenAI / Apify / X)
 
@@ -71,8 +65,6 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 5. **Apify:** cần URL khớp route `apify` trong `config/routing.yaml` + `actorId` hợp lệ + `APIFY_TOKEN`. Với **`youtube.com` / `youtu.be`**, CLI gọi luồng **YouTube transcript**: actor phải trả về transcript (field dạng `subtitles` / `captions` / `transcript` / `text` — xem `src/adapters/youtube.ts`). Pin actor **YouTube có transcript** trong Apify Console; có thể dùng cùng `actorId` cho cả hai host trong `routing.example.yaml`.
 
 6. **X trong CLI:** ingest URL `…/status/<id>` — API v2 với `tweet.fields=note_tweet,article`. **Note tweet:** nếu `note_tweet.text` dài hơn `text` → chỉ dùng API. **X Article:** object `article` thường chỉ có `title` (tier Basic); nếu có thêm field nội dung (`text`, `markdown`, …) thì dùng luôn. Có `article.title` thì **không** scrape `x.com/i/article` (hay bị chặn); capture ghi title + link. Link ngoài X vẫn fetch HTTP + Readability. `pnpm verify-x-tweet [id]` để xem JSON.
-
-7. **Digest:** `pnpm exec tsx src/cli.ts digest --since 7d` (hoặc `pnpm run digest -- --since 7d`).
 
 ## Apify adapter (website-style actors)
 
@@ -106,10 +98,6 @@ Home (ingest + recent captures):
 Captures library:
 
 ![Reader web — captures library](screenshots/reader-captures.png)
-
-Digests:
-
-![Reader web — digests](screenshots/reader-digests.png)
 
 ## MVP limits
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A TypeScript CLI that ingests URLs into an Obsidian vault with AI enrichment. URLs are routed to adapters (HTTP/Readability, Apify, X API v2), normalised into a `CaptureBundle`, written to the vault, and optionally enriched via OpenAI. Also generates weekly digests and reading challenges.
+A TypeScript CLI that ingests URLs into an Obsidian vault with AI enrichment. URLs are routed to adapters (HTTP/Readability, Apify, X API v2), normalised into a `CaptureBundle`, written to the vault, and optionally enriched via OpenAI.
 
 ## Commands
 
@@ -17,9 +17,6 @@ pnpm ingest <url>                     # Ingest (LLM on note.md + YouTube Vi tran
 pnpm exec tsx src/cli.ts ingest [options] <url>          # Prefer for options, e.g. --progress-json (avoids stray `--` in argv)
 pnpm translate-transcript -- --capture path/to/Captures/…   # Add/replace ## Transcript (vi) on disk
 pnpm suggest-milestones -- --capture path/to/Captures/… --max-sec 600
-pnpm digest                           # Generate weekly digest (current ISO week)
-pnpm digest -- --since 7d             # Digest with lookback window
-pnpm challenge --week 2026-W12        # Generate reading challenge from digest
 ```
 
 **Reader web** (optional, separate package): `cd reader-web && pnpm install && pnpm dev` (or repo root `pnpm reader:dev`) — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader-web/README.md` and `docs/reader-web.md`.
@@ -35,10 +32,8 @@ Run a single test file: `pnpm vitest run tests/path/to/file.test.ts`
 - **Normaliser** (`src/normaliser.ts`): Raw HTML → `CaptureBundle` (title, text, images, code blocks)
 - **Vault Writer** (`src/vault/writer.ts`): Writes `Captures/YYYY-MM-DD--slug--hash/` with `source.md`, `note.md`, `assets/`
 - **LLM Enrichment** (`src/llm/enrich.ts`): Appends Vietnamese-language sections (Tóm tắt, Insight, Câu hỏi mở) to `note.md` via OpenAI
-- **Digest** (`src/digest.ts`): Collects captures by date window, generates `Digests/YYYY-Www.md` with wikilinks and LLM overview (chunks + merge when `DIGEST_LLM_MAX_CHARS` exceeded)
 - **Translate transcript** (`src/llm/translateTranscript.ts`): Batch EN→VI for YouTube segments (aligned with `youtube-crawl-translate` JSON-array pattern)
 - **Milestones** (`src/youtube/milestones.ts`, `suggestMilestones.ts`): `milestones.yaml` + optional LLM suggestions
-- **Challenge** (`src/challenge/fromDigest.ts`): Generates reading comprehension questions from digest via OpenAI JSON
 
 **Core type**: `CaptureBundle` in `src/types/capture.ts` — the normalised data structure that flows through the pipeline.
 
@@ -71,4 +66,3 @@ Set in `.env` at repo root (create the file; variables below):
 | `CAPTURE_IMAGE_MAX_BYTES` | Per-image download size limit |
 | `YT_TRANSLATE_BATCH` | Lines per batch for transcript translation (default 20) |
 | `YT_TRANSLATE_MODEL` | Optional model override for translation |
-| `DIGEST_LLM_MAX_CHARS` | Digest excerpt blob soft limit before multi-pass LLM |

@@ -1,6 +1,5 @@
 import './style.css';
-import { marked, Renderer } from 'marked';
-import type { Tokens } from 'marked';
+import { marked } from 'marked';
 import type { CaptureDetail, CaptureListItem, ReactionEntry } from './types.js';
 import { ratingStarsOnly } from '../vault/reactionsMarkdown.js';
 import {
@@ -17,7 +16,7 @@ import {
   isXCapture,
   isYoutubeCapture,
 } from './captureFilters.js';
-import { transformDigestCapturesWikilinks } from './digestWikilinks.js';
+import { normalizeLegacyReaderHash } from './hashRoute.js';
 
 /** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
 type YtPlayerApi = {
@@ -527,126 +526,6 @@ function captureListIngestedForCard(r: CaptureListItem): { iso: string; text: st
   return { iso: '', text: '—' };
 }
 
-/** Obsidian-style YAML frontmatter (single-line scalar values only). */
-function parseSimpleYamlFrontmatter(md: string): { front: Record<string, string>; body: string } | null {
-  const lines = md.replace(/^\uFEFF?/, '').split(/\r?\n/);
-  if (lines[0]?.trim() !== '---') return null;
-  const front: Record<string, string> = {};
-  let i = 1;
-  let closed = false;
-  for (; i < lines.length; i += 1) {
-    const line = lines[i] ?? '';
-    if (line.trim() === '---') {
-      closed = true;
-      i += 1;
-      break;
-    }
-    const kv = /^([\w-]+):\s*(.*)$/.exec(line);
-    if (kv) {
-      let v = kv[2]!.trim();
-      if (
-        (v.startsWith('"') && v.endsWith('"')) ||
-        (v.startsWith("'") && v.endsWith("'"))
-      ) {
-        v = v.slice(1, -1);
-      }
-      front[kv[1]!] = v;
-    }
-  }
-  if (!closed) return null;
-  const body = lines.slice(i).join('\n');
-  return { front, body };
-}
-
-function stripDigestBodyLeadingH1(md: string, week: string): string {
-  const w = week.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`^#\\s+Digest\\s+${w}\\s*(?:\\r?\\n)+`, 'im');
-  return md.trimStart().replace(re, '');
-}
-
-function slugifyDigestHeading(text: string): string {
-  const t = text
-    .trim()
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return t || 'section';
-}
-
-/**
- * Marked requires a full Renderer (incl. `text`, `link`, …). A plain `{ heading }` object
- * replaces the default and breaks inline parsing → "renderer.text is not a function".
- */
-class DigestHeadingRenderer extends Renderer {
-  constructor(private readonly h2IdPrefix: string) {
-    super();
-  }
-
-  override heading(token: Tokens.Heading): string {
-    if (token.depth === 2) {
-      const inner = this.parser.parseInline(token.tokens);
-      const slug = slugifyDigestHeading(token.text);
-      return `<h2 id="${this.h2IdPrefix}-${slug}" class="digest-h2">${inner}</h2>\n`;
-    }
-    return super.heading(token);
-  }
-}
-
-/** Adds `digest-capture-link` for in-app capture navigation from wikilink-derived anchors. */
-class DigestProseRenderer extends DigestHeadingRenderer {
-  constructor(h2IdPrefix: string) {
-    super(h2IdPrefix);
-  }
-
-  override link(token: Tokens.Link): string {
-    const { href, title, tokens } = token;
-    if (href.startsWith('#/capture/')) {
-      const inner = this.parser.parseInline(tokens);
-      const t =
-        title != null && String(title).trim() !== ''
-          ? ` title="${String(title).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
-          : '';
-      return `<a href="${href}" class="digest-capture-link"${t}>${inner}</a>`;
-    }
-    return super.link(token);
-  }
-}
-
-function markdownToProseHtml(markdown: string, opts?: { h2IdPrefix?: string }): string {
-  const pfx = opts?.h2IdPrefix;
-  if (!pfx) return marked.parse(markdown) as string;
-
-  return marked.parse(markdown, { renderer: new DigestProseRenderer(pfx) }) as string;
-}
-
-function renderDigestMetaPanel(front: Record<string, string>): string {
-  const rows: { k: string; v: string }[] = [];
-  if (front.type) rows.push({ k: 'Type', v: front.type });
-  if (front.week) rows.push({ k: 'Week', v: front.week });
-  if (front.since) rows.push({ k: 'Window', v: front.since });
-  if (front.generated_at) rows.push({ k: 'Generated', v: formatIngestedUi(front.generated_at) });
-  if (rows.length === 0) return '';
-  const cells = rows
-    .map(
-      (r) =>
-        `<div class="digest-meta__cell"><dt>${esc(r.k)}</dt><dd>${esc(r.v)}</dd></div>`,
-    )
-    .join('');
-  return `<aside class="digest-meta" aria-label="Digest metadata"><div class="digest-meta__grid">${cells}</div></aside>`;
-}
-
-function renderDigestToc(bodyMd: string): string {
-  const hasCaptures = /^##\s+Captures\s*$/im.test(bodyMd);
-  const hasTongQuan = /^##\s+Tổng quan\s*$/im.test(bodyMd);
-  if (!hasCaptures && !hasTongQuan) return '';
-  const links: string[] = [];
-  if (hasCaptures) links.push(`<a href="#digest-captures">Captures</a>`);
-  if (hasTongQuan) links.push(`<a href="#digest-tong-quan">Overview</a>`);
-  return `<nav class="digest-toc" aria-label="On this page">${links.join('')}</nav>`;
-}
-
 /** Avoid repeating the same H1 under the hero title. */
 function stripLeadingH1IfMatches(markdown: string, title: string): string {
   const trimmed = markdown.trimStart();
@@ -770,7 +649,6 @@ function layoutShell(): string {
     <div class="drawer-links">
       <button type="button" class="drawer-link active" data-route="home">Ingest</button>
       <button type="button" class="drawer-link" data-route="captures">Captures</button>
-      <button type="button" class="drawer-link" data-route="digests">Digests</button>
     </div>
     <div class="drawer-theme" aria-label="Theme">${themeSwitcherHtml()}</div>
     <div class="drawer-status-wrap">
@@ -789,7 +667,6 @@ function layoutShell(): string {
           <div class="app-nav__views">
             <button type="button" class="app-nav-route active" data-route="home">Ingest</button>
             <button type="button" class="app-nav-route" data-route="captures">Captures</button>
-            <button type="button" class="app-nav-route" data-route="digests">Digests</button>
           </div>
         </div>
         <div class="app-nav__section">
@@ -822,18 +699,14 @@ function parseHash(): { view: string; id?: string } {
   const h = (location.hash.slice(1) || '/').replace(/^\/+/, '');
   const parts = h.split('/').filter(Boolean);
   if (parts[0] === 'capture' && parts[1]) return { view: 'capture', id: decodeURIComponent(parts[1]) };
-  if (parts[0] === 'digest' && parts[1]) return { view: 'digest', id: decodeURIComponent(parts[1]) };
   if (parts[0] === 'captures') return { view: 'captures' };
-  if (parts[0] === 'digests') return { view: 'digests' };
   return { view: 'home' };
 }
 
 function setHash(view: string, id?: string) {
   if (view === 'home') location.hash = '#/';
   else if (view === 'captures') location.hash = '#/captures';
-  else if (view === 'digests') location.hash = '#/digests';
   else if (view === 'capture' && id) location.hash = `#/capture/${encodeURIComponent(id)}`;
-  else if (view === 'digest' && id) location.hash = `#/digest/${encodeURIComponent(id)}`;
 }
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -842,22 +715,11 @@ async function fetchJson<T>(path: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-/** Challenge file is optional; 404 → null without failing digest load. */
-async function fetchChallengeMarkdown(week: string): Promise<string | null> {
-  const r = await fetch(`/api/challenges/${encodeURIComponent(week)}`);
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`${r.status} /api/challenges/${week}`);
-  const j = (await r.json()) as { markdown?: string };
-  return typeof j.markdown === 'string' ? j.markdown : null;
-}
-
 type Health = {
   ok: boolean;
   vaultRoot: string;
   brainRoot: string;
   ingestAvailable: boolean;
-  /** Same gate as ingest: Brain CLI + READER_ALLOW_INGEST. */
-  digestAvailable?: boolean;
   /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
   ingestSse?: boolean;
 };
@@ -1099,7 +961,6 @@ function ingestFailurePresentation(
 
 function navKey(view: string): string {
   if (view === 'capture') return 'captures';
-  if (view === 'digest') return 'digests';
   return view;
 }
 
@@ -1142,7 +1003,6 @@ function bindMobileNav() {
       const r = (btn as HTMLElement).dataset.route;
       if (r === 'home') setHash('home');
       if (r === 'captures') setHash('captures');
-      if (r === 'digests') setHash('digests');
       closeMobileNav();
     });
   });
@@ -1252,7 +1112,7 @@ function mountCapturesView() {
 function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
   return `
     <div>
-      <div class="ingest-label">Digest &amp; vault</div>
+      <div class="ingest-label">Vault</div>
       <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.5">Same folder as Obsidian · <code style="color:var(--signal)">READER_VAULT_ROOT</code></p>
     </div>
     <div class="digest-block">
@@ -1266,8 +1126,7 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
     <div class="digest-block">
       <h4>Quick links</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.6">
-        → <code style="color:var(--signal)">Captures/…</code> in vault<br />
-        → <code style="color:var(--signal)">Digests/YYYY-Www</code>
+        → <code style="color:var(--signal)">Captures/…</code> in vault
       </p>
     </div>
   `;
@@ -1312,39 +1171,6 @@ function sideCapture(d: CaptureDetail): string {
     <div class="digest-block">
       <h4>${esc(d.id)}</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">Folder under <code style="color:var(--signal)">Captures/</code> — edit <code style="color:var(--signal)">note.md</code> in Obsidian.</p>
-    </div>
-  `;
-}
-
-function sideDigests(items: { week: string }[], digestAvailable: boolean): string {
-  const uiHint = digestAvailable
-    ? 'The <strong>Generate digest</strong> toolbar button runs the same CLI in the Brain repo (<code style="color:var(--signal)">--since 7d</code> default).'
-    : 'Enable ingest (Brain CLI + <code style="color:var(--signal)">READER_ALLOW_INGEST</code>) or run in the terminal: <code style="color:var(--signal)">pnpm digest</code>.';
-  return `
-    <div class="ingest-label">Digest</div>
-    <div class="digest-block">
-      <h4>Generate</h4>
-      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">${uiHint}</p>
-    </div>
-    <div class="digest-block">
-      <h4>Available</h4>
-      <p style="margin:0;font-size:12px;color:var(--muted)">${items.length} file(s) · click a card to read</p>
-    </div>
-  `;
-}
-
-function sideDigestDetail(week: string, hasChallenge: boolean): string {
-  const challengeHint = hasChallenge
-    ? `Loaded <code style="color:var(--signal)">Challenges/${esc(week)}.md</code> — scroll below the digest.`
-    : `No challenge file — run <code style="color:var(--signal)">pnpm challenge --week ${esc(week)}</code> then refresh.`;
-  return `
-    <div class="ingest-label">Week</div>
-    <div class="stat-block">
-      <div class="stat" style="grid-column:1/-1"><b style="font-size:1.1rem">${esc(week)}</b><span>Digests/${esc(week)}.md</span></div>
-    </div>
-    <div class="digest-block">
-      <h4>Challenge</h4>
-      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">${challengeHint}</p>
     </div>
   `;
 }
@@ -2419,101 +2245,12 @@ function renderCaptureDetail(
   `;
 }
 
-function renderDigestsList(
-  items: { id: string; week: string }[],
-  digestAvailable: boolean,
-): string {
-  const cards = items
-    .map(
-      (x) => `
-    <button type="button" class="digest-card interactive" data-week="${esc(x.week)}">
-      <div class="meta">${esc(x.week)}</div>
-      <h3>Digest — ${esc(x.week)}</h3>
-      <p>Markdown in vault at <code style="color:var(--signal)">Digests/${esc(x.week)}.md</code></p>
-    </button>`,
-    )
-    .join('');
-  const digestBtnAttrs = digestAvailable
-    ? ''
-    : ' disabled title="Requires Brain CLI and READER_ALLOW_INGEST (see /api/health)"';
-  return `
-    <div class="view active">
-      <div class="recent-captures-bar recent-captures-bar--library">
-        <div class="recent-captures-bar__titles">
-          <h2 class="section-title" id="digests-view-heading">History digest</h2>
-        </div>
-      </div>
-      <div class="toolbar digest-list-toolbar">
-        <span class="ingest-label">Digest history</span>
-        <div class="digest-list-toolbar__actions">
-          <button type="button" class="btn-ingest" id="digest-run"${digestBtnAttrs}>Generate digest</button>
-          <button type="button" class="btn-ghost" id="back-home-d">← Ingest</button>
-        </div>
-      </div>
-      <p class="hint lib-toolbar-hint" id="digest-run-hint" hidden></p>
-      ${
-        items.length === 0
-          ? `<p class="hint" id="digest-empty-hint">No digests yet — click <strong>Generate digest</strong> or run <code>pnpm digest</code>.</p>`
-          : `<div class="digest-timeline">${cards}</div>`
-      }
-      <p class="hint lib-toolbar-hint">Same as CLI: collects captures with <code>ingested_at</code> in the <code>--since</code> window (default 7d), writes <code>Digests/YYYY-Www.md</code>.</p>
-      <div class="main-aux-blocks">${sideDigests(items, digestAvailable)}</div>
-    </div>
-  `;
-}
-
-function renderDigestDetail(week: string, markdown: string, challengeMarkdown?: string | null): string {
-  const parsed = parseSimpleYamlFrontmatter(markdown);
-  const bodyMd = stripDigestBodyLeadingH1(parsed?.body ?? markdown, week);
-  const metaPanel = parsed?.front ? renderDigestMetaPanel(parsed.front) : '';
-  const toc = renderDigestToc(bodyMd);
-  const bodyHtml = markdownToProseHtml(transformDigestCapturesWikilinks(bodyMd), {
-    h2IdPrefix: 'digest',
-  });
-
-  const ch = challengeMarkdown?.trim();
-  const challengeBlock =
-    ch && ch.length > 0
-      ? `
-      <section class="digest-challenge" aria-label="Reading challenge">
-        <div class="digest-challenge__head">
-          <span class="digest-challenge__badge" aria-hidden="true">Challenge</span>
-          <h3 class="digest-challenge-title">${esc(week)}</h3>
-          <p class="digest-challenge-path"><code>Challenges/${esc(week)}.md</code></p>
-        </div>
-        <div class="prose digest-prose digest-prose--challenge">${markdownToProseHtml(ch, { h2IdPrefix: 'challenge' })}</div>
-      </section>`
-      : '';
-  return `
-    <div class="view active digest-view">
-      <header class="view-page-head">
-        <h1 class="view-page-title">Digest <em>${esc(week)}</em></h1>
-        <p class="view-page-meta view-page-meta--mono"><code>Digests/${esc(week)}.md</code></p>
-      </header>
-      <div class="toolbar detail-toolbar digest-toolbar">
-        <button type="button" class="btn-ghost" id="dig-back">← Digest list</button>
-        <span class="ingest-label digest-toolbar__file">Digests/${esc(week)}.md</span>
-      </div>
-      <article class="digest-article">
-        ${metaPanel ? `<div class="digest-detail-meta-band">${metaPanel}</div>` : ''}
-        ${toc}
-        <div class="digest-body">
-          <div class="prose digest-prose digest-prose--main">${bodyHtml}</div>
-        </div>
-        ${challengeBlock}
-      </article>
-      <div class="main-aux-blocks">${sideDigestDetail(week, challengeMarkdown != null)}</div>
-    </div>
-  `;
-}
-
 function bindRail() {
   document.querySelectorAll('.app-nav-route').forEach((btn) => {
     btn.addEventListener('click', () => {
       const r = (btn as HTMLElement).dataset.route;
       if (r === 'home') setHash('home');
       if (r === 'captures') setHash('captures');
-      if (r === 'digests') setHash('digests');
     });
   });
 }
@@ -2522,6 +2259,14 @@ async function route() {
   ytCaptureCleanup?.();
   ytCaptureCleanup = null;
   closeFilmstripImageLightbox();
+
+  const legacy = normalizeLegacyReaderHash(location.hash);
+  if (legacy) {
+    const { pathname, search } = location;
+    history.replaceState(null, '', `${pathname}${search}${legacy}`);
+    void route();
+    return;
+  }
 
   const main = document.querySelector<HTMLElement>('#main')!;
   const { view, id } = parseHash();
@@ -2710,73 +2455,7 @@ async function route() {
       }
       bindCaptureReingest(d.id, d, h);
       void bindCaptureReactions(d.id);
-      void bindCaptureCategories(d.id);
-      return;
-    }
-    if (view === 'digests') {
-      const [h, { digests }] = await Promise.all([
-        fetchJson<Health>('/api/health'),
-        fetchJson<{ digests: { id: string; week: string }[] }>('/api/digests'),
-      ]);
-      const digestOk = Boolean(h.digestAvailable ?? h.ingestAvailable);
-      updateAppNavStatus(h);
-      main.innerHTML = renderDigestsList(digests, digestOk);
-      document.querySelector('#back-home-d')?.addEventListener('click', () => setHash('home'));
-      const digestRun = main.querySelector<HTMLButtonElement>('#digest-run');
-      const digestHint = main.querySelector<HTMLElement>('#digest-run-hint');
-      if (digestRun && digestHint && digestOk) {
-        digestRun.addEventListener('click', async () => {
-          digestHint.hidden = false;
-          digestHint.className = 'hint lib-toolbar-hint digest-run-hint digest-run-hint--pending';
-          digestHint.textContent = 'Running digest (CLI)…';
-          digestRun.disabled = true;
-          digestRun.classList.add('processing');
-          try {
-            const r = await fetch('/api/digest', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({}),
-            });
-            const j = (await r.json()) as {
-              ok?: boolean;
-              weekId?: string;
-              error?: string;
-              stderr?: string;
-            };
-            if (!r.ok || !j.weekId) {
-              const tail = j.stderr?.trim() ? ` — ${j.stderr.trim().slice(-400)}` : '';
-              throw new Error((j.error ?? `HTTP ${r.status}`) + tail);
-            }
-            digestHint.className = 'hint lib-toolbar-hint digest-run-hint digest-run-hint--ok';
-            digestHint.textContent = `Created ${j.weekId}. Opening…`;
-            setHash('digest', j.weekId);
-          } catch (e) {
-            digestHint.className = 'hint lib-toolbar-hint digest-run-hint digest-run-hint--err';
-            digestHint.textContent = e instanceof Error ? e.message : String(e);
-            digestRun.disabled = false;
-            digestRun.classList.remove('processing');
-          }
-        });
-      }
-      main.querySelectorAll('.digest-card[data-week]').forEach((el) => {
-        el.addEventListener('click', () => {
-          const w = (el as HTMLElement).dataset.week;
-          if (w) setHash('digest', w);
-        });
-      });
-      return;
-    }
-    if (view === 'digest' && id) {
-      const [data, challengeMd, h] = await Promise.all([
-        fetchJson<{ week: string; markdown: string }>(
-          `/api/digests/${encodeURIComponent(id)}`,
-        ),
-        fetchChallengeMarkdown(id),
-        fetchJson<Health>('/api/health'),
-      ]);
-      updateAppNavStatus(h);
-      main.innerHTML = renderDigestDetail(data.week, data.markdown, challengeMd);
-      document.querySelector('#dig-back')?.addEventListener('click', () => setHash('digests'));
+      void       bindCaptureCategories(d.id);
       return;
     }
   } catch (e) {
