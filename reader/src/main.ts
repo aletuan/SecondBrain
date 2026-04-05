@@ -78,6 +78,13 @@ const THEME_ICONS = {
 const LIB_OPEN_CHEVRON_SVG =
   '<svg class="mock-table-open__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 6 6 6-6 6"/></svg>';
 
+/** Home capture tiles — brand marks (decorative). */
+const CARD_TILE_ICON_YT = `<span class="card-tile__icon-inner card-tile__icon-inner--yt" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" focusable="false"><path fill="currentColor" d="M10 15.5v-7l6 3.5-6 3.5z"/><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>`;
+const CARD_TILE_ICON_X = `<span class="card-tile__icon-inner card-tile__icon-inner--x" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" focusable="false" fill="currentColor"><path d="M14.23 4h3.07l-6.7 7.66L18 20h-4.77l-4.4-5.73L5.7 20H2.63l7.17-8.18L2 4h4.89l3.98 5.23L14.23 4z"/></svg></span>`;
+const CARD_TILE_ICON_ARTICLE = `<span class="card-tile__icon-inner card-tile__icon-inner--article" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span>`;
+const CARD_TILE_BUBBLE_SVG =
+  '<svg class="card-tile__bubble-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+
 type ThemeName = 'dark' | 'light' | 'solarized';
 const THEMES: ThemeName[] = ['dark', 'light', 'solarized'];
 
@@ -524,6 +531,97 @@ function captureListIngestedForCard(r: CaptureListItem): { iso: string; text: st
     return { iso, text: formatIngestedUi(iso) };
   }
   return { iso: '', text: '—' };
+}
+
+/** Compact clock + date for card header (e.g. `14:20 · Apr 5`). */
+function formatIngestedCardHeader(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  const d = new Date(t);
+  const tz = 'Asia/Ho_Chi_Minh';
+  const clock = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+  const dayPart = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+  return `${clock} · ${dayPart}`;
+}
+
+function formatFetchMethodTile(raw: string): string {
+  const t = raw.trim().toLowerCase();
+  if (!t) return '—';
+  const map: Record<string, string> = {
+    apify: 'APIFY',
+    x_api: 'X_API',
+    http_readability: 'READABILITY',
+  };
+  return map[t] ?? t.replace(/-/g, '_').toUpperCase();
+}
+
+function captureCardPlatformLabel(sourceType: 'youtube' | 'x' | 'article'): string {
+  if (sourceType === 'youtube') return 'YOUTUBE';
+  if (sourceType === 'x') return 'X';
+  return 'ARTICLE';
+}
+
+function cardTileIconHtml(sourceType: 'youtube' | 'x' | 'article'): string {
+  if (sourceType === 'youtube') return CARD_TILE_ICON_YT;
+  if (sourceType === 'x') return CARD_TILE_ICON_X;
+  return CARD_TILE_ICON_ARTICLE;
+}
+
+function primaryCategoryLabelUpper(r: CaptureListItem, labelById: Map<string, string>): string {
+  const ids = r.categories?.filter(Boolean) ?? [];
+  if (ids.length === 0) return '—';
+  const id0 = ids[0]!.trim();
+  const lab = labelById.get(id0) ?? formatTagForDisplay(id0);
+  return lab.trim().toUpperCase();
+}
+
+/** Category + ingest method on one editorial line (middot when both present). */
+function cardTileCategoryMethodLine(r: CaptureListItem, labelById: Map<string, string>): string {
+  const catU = primaryCategoryLabelUpper(r, labelById);
+  const meth = formatFetchMethodTile(r.fetch_method);
+  const hasCat = catU !== '—';
+  const hasMeth = meth !== '—';
+  if (!hasCat && !hasMeth) {
+    return `<span class="card-tile__category-row"><span class="card-tile__category card-tile__category--empty">—</span></span>`;
+  }
+  if (!hasCat && hasMeth) {
+    return `<span class="card-tile__category-row"><span class="card-tile__method card-tile__method--solo" title="Ingest adapter">${esc(meth)}</span></span>`;
+  }
+  if (hasCat && !hasMeth) {
+    return `<span class="card-tile__category-row"><span class="card-tile__category">${esc(catU)}</span></span>`;
+  }
+  return `<span class="card-tile__category-row"><span class="card-tile__category">${esc(catU)}</span><span class="card-tile__eyebrow-sep" aria-hidden="true">·</span><span class="card-tile__method" title="Ingest adapter">${esc(meth)}</span></span>`;
+}
+
+function captureCardFooterHtml(r: CaptureListItem): string {
+  const n = r.reaction_count;
+  const avg = r.reaction_avg;
+  const hasVotes = avg != null && n > 0;
+  const voteInner = hasVotes
+    ? `<span class="card-tile__vote-arrow" aria-hidden="true">▲</span><span class="card-tile__vote-score">${esc(avg.toFixed(1))}</span><span class="card-tile__vote-arrow" aria-hidden="true">▼</span>`
+    : `<span class="card-tile__vote-empty">No ratings yet</span>`;
+  const voteLabel = hasVotes
+    ? `Average rating ${avg!.toFixed(1)} from ${n} vote(s)`
+    : 'No ratings yet';
+  const rxLabel = `${n} reaction ${n === 1 ? 'entry' : 'entries'}`;
+  return `
+    <div class="card-tile__footer">
+      <div class="card-tile__rule" aria-hidden="true"></div>
+      <div class="card-tile__footer-row">
+        <div class="card-tile__votes${hasVotes ? '' : ' card-tile__votes--empty'}" aria-label="${escAttr(voteLabel)}">${voteInner}</div>
+        <div class="card-tile__comments" aria-label="${escAttr(rxLabel)}" title="${escAttr(rxLabel)}">${CARD_TILE_BUBBLE_SVG}<span class="card-tile__comment-n">${esc(String(n))}</span><span class="card-tile__comment-suffix" aria-hidden="true">entries</span></div>
+        <span class="card-tile__more" aria-hidden="true" title="Open capture">⋯</span>
+      </div>
+    </div>`;
 }
 
 /** Avoid repeating the same H1 under the hero title. */
@@ -1211,10 +1309,20 @@ function sideCapture(d: CaptureDetail): string {
 
 function skeletonCardsHtml(count: number): string {
   return Array.from({ length: count }, () => `
-    <div class="skeleton-card">
-      <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
+    <div class="skeleton-card skeleton-card--tile">
+      <div class="skeleton-card__tile-top">
+        <div class="skeleton skeleton-card__skel-icon"></div>
+        <div class="skeleton-card__skel-lines">
+          <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
+          <div class="skeleton skeleton-card__line skeleton-card__line--meta-short"></div>
+        </div>
+        <div class="skeleton skeleton-card__line skeleton-card__line--time"></div>
+      </div>
       <div class="skeleton skeleton-card__line skeleton-card__line--title"></div>
-      <div class="skeleton skeleton-card__line skeleton-card__line--ingested"></div>
+      <div class="skeleton skeleton-card__tile-foot">
+        <div class="skeleton skeleton-card__line skeleton-card__line--rule"></div>
+        <div class="skeleton skeleton-card__line skeleton-card__line--footer"></div>
+      </div>
     </div>`).join('');
 }
 
@@ -1292,7 +1400,13 @@ function formatLibraryRatingCell(r: CaptureListItem): string {
   return formatRatingDisplay(r.reaction_avg, r.reaction_count);
 }
 
-function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
+function renderHome(
+  h: Health,
+  recent: CaptureListItem[],
+  vaultCaptureTotal: number,
+  taxonomyItems: { id: string; label: string }[],
+): string {
+  const labelById = new Map(taxonomyItems.map((t) => [t.id, t.label]));
   const ingestShellClass = h.ingestAvailable ? 'ingest-shell' : 'ingest-shell ingest-shell-muted';
   const ingestInner = h.ingestAvailable
     ? `
@@ -1370,18 +1484,27 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
                 ? 'x'
                 : 'article';
             const ing = captureListIngestedForCard(r);
+            const headTime = ing.iso ? formatIngestedCardHeader(ing.iso) : '—';
+            const datetimeAttr = ing.iso?.trim() || '';
+            const cardAria = `Open capture: ${r.title}`;
             return `
-        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
-          <div class="card-meta">
-            <span>${esc(r.source)}<span class="card-source-dot" aria-hidden="true"></span></span>
-            <span>${esc(r.fetch_method || '—')}</span>
+        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}" aria-label="${escAttr(cardAria)}">
+          <div class="card-tile__header">
+            <div class="card-tile__header-main">
+              <div class="card-tile__icon-wrap" aria-hidden="true">${cardTileIconHtml(sourceType)}</div>
+              <div class="card-tile__head-text">
+                <span class="card-tile__platform">${esc(captureCardPlatformLabel(sourceType))}</span>
+                ${cardTileCategoryMethodLine(r, labelById)}
+              </div>
+            </div>
+            ${
+              datetimeAttr
+                ? `<time class="card-tile__time" datetime="${escAttr(datetimeAttr)}">${esc(headTime)}</time>`
+                : `<span class="card-tile__time">${esc(headTime)}</span>`
+            }
           </div>
-          <h3>${esc(r.title)}</h3>
-          ${
-            ing.iso
-              ? `<time class="card-ingested" datetime="${escAttr(ing.iso)}">${esc(ing.text)}</time>`
-              : `<span class="card-ingested">${esc(ing.text)}</span>`
-          }
+          <h3 class="card-tile__title">${esc(r.title)}</h3>
+          ${captureCardFooterHtml(r)}
         </button>`;
           })
           .join('');
@@ -2310,14 +2433,20 @@ async function route() {
         <div class="view active">
           <div class="cards">${skeletonCardsHtml(3)}</div>
         </div>`;
-      const [h, capData] = await Promise.all([
+      const [h, capData, taxRes] = await Promise.all([
         fetchJson<Health>('/api/health'),
         fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
+        fetch('/api/taxonomy/categories'),
       ]);
+      let taxonomyForCards: { id: string; label: string }[] = [];
+      if (taxRes.ok) {
+        const tj = (await taxRes.json()) as { items?: { id: string; label: string }[] };
+        taxonomyForCards = tj.items ?? [];
+      }
       updateAppNavStatus(h);
       const allCaps = capData.captures;
       const recent = allCaps.slice(0, HOME_RECENT_CAPTURE_LIMIT);
-      main.innerHTML = renderHome(h, recent, allCaps.length);
+      main.innerHTML = renderHome(h, recent, allCaps.length, taxonomyForCards);
 
       main.querySelectorAll('.card[data-card-id]').forEach((el) => {
         el.addEventListener('click', () => {
