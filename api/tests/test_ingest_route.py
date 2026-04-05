@@ -1,12 +1,14 @@
-"""POST /v1/ingest: auth and NDJSON progress stub (TDD)."""
+"""POST /v1/ingest: auth and NDJSON progress stream (pipeline mocked for CI)."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from brain_api.main import create_app
 from brain_api.progress import try_parse_line
+from brain_api.settings import Settings
 
 
 @pytest.fixture
@@ -20,6 +22,37 @@ def vault_dir(tmp_path: Path) -> Path:
 def client(monkeypatch: pytest.MonkeyPatch, vault_dir: Path) -> TestClient:
     monkeypatch.setenv("VAULT_ROOT", str(vault_dir))
     monkeypatch.setenv("INGEST_API_KEY", "test")
+
+    def fake_collect(
+        settings: Settings,
+        *,
+        url: str | None = None,
+        reingest_capture_dir: str | None = None,
+    ) -> list[dict[str, Any]]:
+        _ = url, reingest_capture_dir
+        cap = settings.vault_root / "Captures" / "2026-04-05--stub-slug--abc123"
+        cap.mkdir(parents=True, exist_ok=True)
+        return [
+            {"v": 1, "kind": "phase", "phase": "fetch", "state": "active"},
+            {"v": 1, "kind": "phase", "phase": "fetch", "state": "done"},
+            {"v": 1, "kind": "phase", "phase": "translate", "state": "active"},
+            {"v": 1, "kind": "phase", "phase": "translate", "state": "done"},
+            {"v": 1, "kind": "phase", "phase": "vault", "state": "active"},
+            {"v": 1, "kind": "phase", "phase": "vault", "state": "done"},
+            {"v": 1, "kind": "phase", "phase": "llm", "state": "active"},
+            {"v": 1, "kind": "phase", "phase": "llm", "state": "done"},
+            {
+                "v": 1,
+                "kind": "done",
+                "captureDir": str(cap.resolve()),
+                "captureId": cap.name,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "brain_api.routes.ingest.collect_ingest_events",
+        fake_collect,
+    )
     return TestClient(create_app())
 
 
@@ -70,8 +103,8 @@ def test_ingest_valid_key_streams_ndjson_progress(
 
     dones = [p for p in parsed if p.get("kind") == "done"]
     assert len(dones) == 1
-    assert dones[0]["captureDir"] == "/tmp/stub/Captures/x"
-    assert dones[0]["captureId"] == "stub-id"
+    assert "Captures" in dones[0]["captureDir"]
+    assert dones[0]["captureId"] == "2026-04-05--stub-slug--abc123"
 
 
 def test_ingest_reingest_capture_dir_alone_streams_stub(
