@@ -4,7 +4,7 @@
 
 **Goal:** Replace the TypeScript `cli/` ingest stack with a **Python FastAPI service** on the same machine, keep the **vault path unchanged**, and remove **all** CLI entrypoints; the reader keeps its **SSE ingest UX** by having **Connect middleware** call the Python API (server-side) instead of spawning `tsx`.
 
-**Architecture:** New package under `api/` (`pyproject.toml`, `src/brain_api/`) hosts the pipeline (router, adapters, normaliser, vault, LLM) ported from `cli/src/*`. FastAPI exposes `POST /ingest` (or job + stream) emitting the **same v1 progress JSON** as `cli/src/ingest/ingestProgress.ts`, plus **`GET` taxonomy/categories** from **bundled `api/…` YAML** (see spec §3). Reader’s `reader/vault/apiMiddleware.ts` **proxies** ingest streams and **category list** to Python (`PYTHON_INGEST_URL`); remove filesystem reads of `config/categories.yaml` from `READER_BRAIN_ROOT`. Delete `cli/` and root scripts; **Vitest** only for `reader/`; **pytest** for `api/`.
+**Architecture:** **`api/`** holds **all** ingest intelligence: **default `api/config/routing.default.yaml` + `categories.default.yaml`**, optional **`ROUTING_CONFIG_PATH`** / **`CATEGORIES_CONFIG_PATH`**, plus ported **router, adapters, normaliser, vault, LLM** from `cli/src/*`. FastAPI: **`POST` ingest** (stream, same v1 progress JSON as TS), **`GET` taxonomy**, future analysis routes. Reader **proxies** to Python (`PYTHON_INGEST_URL`); **no** ingest YAML under monorepo root `config/`. Delete `cli/` and root ingest `config/` templates; **Vitest** reader-only; **pytest** for `api/`.
 
 **Tech Stack:** Python 3.11+, FastAPI, Uvicorn, Pydantic v2, PyYAML, httpx, pytest; HTML extraction via **readability-lxml** and/or **trafilatura** (evaluate parity vs `@mozilla/readability`+jsdom); OpenAI **official Python SDK**; Apify **Python client**; X API via httpx.
 
@@ -16,7 +16,7 @@
 
 | Area | Create / keep | Remove / stop using |
 |------|----------------|---------------------|
-| Python service | `api/pyproject.toml`, `api/README.md`, `api/src/brain_api/…`, `api/config/categories.default.yaml` (or `brain_api/data/categories.default.yaml`), `routes/taxonomy.py` for **`GET /v1/taxonomy/categories`**, `routes/ingest.py`, `routes/health.py`, ported modules mirroring `cli/src/` | Root `config/categories.yaml` workflow |
+| Python service | `api/config/routing.default.yaml` (migrate from `config/routing.example.yaml`), `api/config/categories.default.yaml`, `api/src/brain_api/…`, routes **ingest / taxonomy / health**, all analysis logic | Root **`config/routing.example.yaml`**, **`config/categories.example.yaml`**, gitignored root `config/*.yaml` |
 | Tests | `api/tests/conftest.py`, `api/tests/test_progress.py`, `api/tests/test_ingest_e2e.py`, … | `cli/tests/**` |
 | Reader | `reader/vault/ingestBackend.ts` or inline in `apiMiddleware.ts` — **ingest stream** + **proxy `GET /api/taxonomy/categories` → Python** | `reader/vault/runIngestCli.ts`; middleware path that reads `config/categories*.yaml` from disk |
 | Reader | `reader/vault/paths.ts`, `brainDotenv.ts` — adjust `assertIngestEnvironment` | Check for `cli/src/cli.ts` |
@@ -87,11 +87,11 @@ def test_roundtrip_phase():
 ### Task 2: Settings & env
 
 **Files:**
-- Create: `api/src/brain_api/settings.py` (pydantic-settings: `brain_root`, `vault_root`, `openai_api_key`, `ingest_api_key`, mirror TS env names from `README` / `CLAUDE.md`)
+- Create: `api/src/brain_api/settings.py` (pydantic-settings: **`vault_root`**, `openai_api_key`, `ingest_api_key`, optional **`routing_config_path`**, **`categories_config_path`**, package root for bundled defaults)
 
-- [ ] **Step 1:** Load `READER_BRAIN_ROOT` or `BRAIN_ROOT` with default `Path.cwd()` parent logic matching `reader/vault/paths.ts` where possible.
+- [ ] **Step 1:** Resolve **`VAULT_ROOT`** from env (required for ingest). Resolve bundled YAML paths relative to **`api/`** package / `api/config/` — **do not** use `READER_BRAIN_ROOT` for routing/taxonomy files.
 
-- [ ] **Step 2:** Test: with `monkeypatch.setenv`, settings resolve expected paths.
+- [ ] **Step 2:** Test: `monkeypatch.setenv` for `VAULT_ROOT` and optional override paths.
 
 - [ ] **Step 3:** Commit `feat(api): settings from env`
 
@@ -164,13 +164,14 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 
 **Files:**
 - Create: `api/src/brain_api/router.py`, `api/src/brain_api/config/load_routing.py`
+- Create: `api/config/routing.default.yaml` (copy/adapt from repo `config/routing.example.yaml` before root removal)
 - Reference: `cli/src/router.ts`, `cli/src/config/loadRouting.ts`
 
-- [ ] **Step 1:** Load `config/routing.yaml` from `brain_root`.
+- [ ] **Step 1:** Load **default** from `api/config/routing.default.yaml`; if **`ROUTING_CONFIG_PATH`** set, use that file (replace or merge — document choice in `api/README.md`).
 
-- [ ] **Step 2:** pytest with example YAML.
+- [ ] **Step 2:** pytest with fixture YAML.
 
-- [ ] **Step 3:** Commit `feat(api): URL routing config`
+- [ ] **Step 3:** Commit `feat(api): URL routing config in api package`
 
 ---
 
@@ -194,7 +195,7 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 ### Task 8b: Category taxonomy (bundled YAML + `GET`)
 
 **Files:**
-- Create: `api/config/categories.default.yaml` (migrate content from root `config/categories.example.yaml`)
+- Create: `api/config/categories.default.yaml` (migrate from root `config/categories.example.yaml` before deleting root copy)
 - Create: `api/src/brain_api/taxonomy.py` — load default + optional `CATEGORIES_CONFIG_PATH`, export ordered `{ id, label }[]` and `allowed_ids` set
 - Create: `api/src/brain_api/routes/taxonomy.py` — `GET /v1/taxonomy/categories` → JSON list
 - Create: `api/tests/test_taxonomy.py`
@@ -300,9 +301,9 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 
 - [ ] **Step 2:** `pnpm typecheck` passes.
 
-- [ ] **Step 2b:** Deprecate root **`config/categories.example.yaml`** (delete or stub pointer); update **`.gitignore`** / `README` per spec §5.
+- [ ] **Step 2b:** Remove monorepo root **`config/routing.example.yaml`**, **`config/categories.example.yaml`**, and gitignore rules for **`config/routing.yaml`** / **`config/categories.yaml`** — or add **`config/README.md`** pointing to **`api/config/`** only.
 
-- [ ] **Step 3:** Commit `chore!: remove TypeScript CLI`
+- [ ] **Step 3:** Commit `chore!: remove TypeScript CLI and root ingest config`
 
 ---
 

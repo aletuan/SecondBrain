@@ -13,32 +13,34 @@
 2. **API for web app:** Expose **HTTP endpoints** (e.g. FastAPI) so the reader can **ingest via `fetch` + streaming** instead of subprocess + stderr JSON.
 3. **Remove CLI from the repo:** **Delete** the TS CLI surface: no `pnpm ingest`, no `cli/src/cli.ts` entry, no Commander commands for Brain ingest. Tests and docs must not assume a CLI.
 4. **Vault location unchanged:** Backend reads/writes the **same vault path** as today; no migration of capture folder layout or frontmatter contract unless explicitly scoped later.
-5. **Routing config at repo / brain root:** Service resolves **`config/routing.yaml`** from the **brain repo root** (`READER_BRAIN_ROOT` / `BRAIN_ROOT`) — URL → adapter mapping stays **operator-owned** beside the repo (committed template: `config/routing.example.yaml`). Optional later: colocate routing under `api/`; not required for v1.
-6. **Category taxonomy owned by the backend:** The **allowed category list** (`id` + `label`) is **not** maintained under monorepo root `config/` as the source of truth. The Python service ships a **default taxonomy** inside **`api/`** (bundled YAML). Optional **`CATEGORIES_CONFIG_PATH`** points to an absolute override file on the machine. **`GET …/taxonomy/categories`** returns the same ordered list the ingest LLM uses for validation. The **reader loads the list only via API** (direct fetch + CORS, or **Connect proxy** to Python — preferred for single origin).
-7. **Deprecate root category config files:** Stop treating **`config/categories.example.yaml`** / gitignored **`config/categories.yaml`** as the primary workflow; migrate the example content into **`api/`**, update `.gitignore` / docs accordingly.
+5. **All ingest config and analysis logic live under `api/`:** URL **routing** (host/path → adapter), **category taxonomy**, **LLM extract/enrich**, **normalisation**, adapters, and any future **data analysis** steps are implemented and versioned **only** in the Python package. Default YAML (e.g. **`api/config/routing.default.yaml`**, **`api/config/categories.default.yaml`**) ships in-repo; optional env **`ROUTING_CONFIG_PATH`** / **`CATEGORIES_CONFIG_PATH`** (absolute paths) override for operators without forking.
+6. **Deprecate monorepo root `config/` for ingest:** Remove or replace **`config/routing.example.yaml`**, **`config/categories.example.yaml`**, and gitignored **`config/routing.yaml`** / **`config/categories.yaml`** as the product workflow — migrate templates into **`api/config/*.default.yaml`** and document “edit `api/` or set `*_CONFIG_PATH`”. Root `config/` may be deleted entirely or hold a short **README** pointing to `api/config/` for discoverability only.
+7. **Reader is not a second brain for ingest rules:** The web app does **not** parse routing or taxonomy from disk; it obtains **taxonomy (and any future analysis metadata exposed as API)** from Python. **Vault file listing / reading** may remain on Connect middleware temporarily, but **no** ingest or classification rules live in the reader.
 
 **Non-goals (v1):**
 
 - Rewriting the reader UI in Python.
 - Moving vault to object storage or multi-tenant SaaS (may be future phases).
-- **Consolidating every reader `/api/*` route into Python** — list/detail vault reads may stay on Connect middleware; **exception:** **taxonomy/categories** is served from Python (reader proxies or calls it) so the UI and ingest share one source of truth.
+- **Mandatory** migration of **all** reader vault-read routes to Python in the first cut — acceptable to keep list/detail on Node middleware **only** for filesystem I/O, while **every rule and config** for ingest and structured analysis stays in **`api/`**.
 
 ---
 
 ## 2. Architecture (v1)
 
 ```text
-┌─────────────────┐     HTTP (ingest + stream)      ┌──────────────────────┐
-│  Reader (Vite)  │ ───────────────────────────────►│  Python API service  │
-│  + Connect      │                                 │  (FastAPI / …)       │
-│  middleware     │◄── same machine, same VAULT ───►│  reads/writes vault  │
-└─────────────────┘     (optional: other /api/*)   └──────────────────────┘
+  Reader (Vite + Connect proxy)  ──HTTP──►  `api/` FastAPI service
+        │                                        │
+        │   ingest stream, taxonomy GET,       │  routing + categories YAML
+        │   future analysis endpoints          │  adapters, normaliser, vault I/O,
+        │                                        │  LLM extract/enrich (all logic)
+        └──────────── same VAULT_ROOT ──────────┘
+        optional: reader still serves vault file list/read via middleware (no rules)
 ```
 
-- **Same machine:** Python service and reader dev server both run locally; both use the **same `VAULT_ROOT`** value pointing at the existing vault directory.
-- **Brain repo root:** Python process cwd or explicit env (e.g. `READER_BRAIN_ROOT` / `BRAIN_ROOT`) points at the SecondBrain repo so **`config/routing.yaml`** (and similar operator config) resolves as today for **URL routing**.
-- **Categories:** Default taxonomy file lives **inside `api/`** (e.g. `api/config/categories.default.yaml` or packaged under `brain_api/data/`). Optional **`CATEGORIES_CONFIG_PATH`** (absolute path) overrides for a local deployment without forking the repo. Root-level **`config/categories.example.yaml` / `config/categories.yaml`** are **deprecated** for product use once the Python API ships: remove or repoint docs to the `api/` default; stop gitignoring a root `config/categories.yaml` as the primary workflow.
-- **TS `cli/`:** Removed from the product; ingest logic **only** in Python (new package directory, e.g. `api/` or `brain_py/` — exact name is an implementation detail).
+- **Same machine:** Python and reader dev server share the **same `VAULT_ROOT`** (path Obsidian uses).
+- **`api/` owns config:** **Routing** and **categories** load from **`api/config/*.default.yaml`** (or package data) with optional **`ROUTING_CONFIG_PATH`** / **`CATEGORIES_CONFIG_PATH`**. No dependency on **`READER_BRAIN_ROOT`** for YAML — that env may remain for **reader-only** path resolution until vault routes move to Python.
+- **Single place for ingest intelligence:** All branching (which adapter, how to parse HTML, LLM prompts, category allow-list, milestones, transcript batching, etc.) lives under **`api/src/brain_api/`** (namespaced modules). **Root `config/` is not** the operational source of truth.
+- **TS `cli/`:** Removed; ingest **only** in Python.
 
 ---
 
@@ -52,9 +54,10 @@ Exact paths and field names are for implementers to align with OpenAPI; behaviou
 | **Progress** | **Stream** progress to the client using **SSE** or **chunked NDJSON**, compatible with the reader’s need for **incremental events** (same conceptual schema as today’s `--progress-json` lines: phase, errors, done). |
 | **Errors** | Non-stream failures: `4xx`/`5xx` with JSON `{ "message", "code"? }`. Stream terminal event for ingest failure. |
 | **Health** | `GET` health route for ops (optional in v1 but recommended). |
-| **Category taxonomy** | `GET` JSON: ordered list of `{ id, label }` (same shape as today’s parsed YAML). **Public read** for the reader UI (still protect with same-origin / optional auth if exposed beyond localhost). Ingest uses this list server-side only. |
+| **Category taxonomy** | `GET` JSON: ordered list of `{ id, label }`. Same-origin **proxy** from reader preferred. Ingest validates against the same server-side list. |
+| **Routing (operator)** | Not required as a separate HTTP route for v1; **internal** load from `api/config/routing.default.yaml` (+ optional `ROUTING_CONFIG_PATH`). Future: `GET` reload or admin API if needed. |
 
-**Reader integration (v1):** Replace spawn + stderr parsing with **HTTP client + stream reader** to the Python service. **Category picker:** reader calls the Python taxonomy endpoint (directly from browser with CORS, or via **Connect proxy** `GET /api/taxonomy/categories` → forward to Python — preferred so the browser does not need a second origin or extra CORS rules). **Vault listing, file read** may continue on existing middleware until merged later.
+**Reader integration (v1):** **Proxy** ingest streams and taxonomy to Python. **No** reading `config/*.yaml` from monorepo root for ingest. **Vault listing / file read** may stay on Connect middleware as **dumb I/O** only (no routing/category rules).
 
 ---
 
@@ -73,18 +76,19 @@ When implementation lands:
 - **Remove** `cli/` (or replace with empty placeholder only if legally required — default: **delete** tree).
 - **Root `package.json`:** Remove scripts that invoke `cli/src/cli.ts` (`ingest`, `translate-transcript`, `suggest-milestones`, verify scripts that depend on TS ingest if applicable). Add scripts to **run the Python service** (e.g. `uv run` / `poetry run`) as the primary dev entry for ingest.
 - **`vitest.config.ts` / `tsconfig.json`:** Drop `cli/tests` includes; remaining TS tests are **reader-only** unless new shared TS tests are added.
-- **Docs:** Update `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/reader.md`, `reader/README.md` — no CLI-first workflow; document **starting the Python API** + **reader dev**, env vars for vault + brain root, and how ingest is triggered from the UI.
-- **Categories:** Move default taxonomy into **`api/`**; remove or slim **`config/categories.example.yaml`** (or replace with a one-line pointer to `api/…`). Adjust **`.gitignore`**: drop dedicated `config/categories.yaml` if no longer used, or keep briefly with a **deprecated** comment in `README` for operators migrating existing files.
-- **CI:** Replace TS CLI test jobs with **pytest** (or chosen runner) for Python; keep reader Vitest as needed.
+- **Docs:** Update `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/reader.md`, `reader/README.md` — **single story:** run **`api/`** + reader; config lives under **`api/config/`**; env for **`VAULT_ROOT`**, API keys, optional **`ROUTING_CONFIG_PATH`** / **`CATEGORIES_CONFIG_PATH`**.
+- **Root `config/`:** Remove ingest templates from root or replace with **`config/README.md`** linking to **`api/config/`**; remove **`.gitignore`** entries for `config/routing.yaml` and `config/categories.yaml` if those paths are gone.
+- **CI:** Replace TS CLI test jobs with **pytest** for `api/`; keep reader Vitest as needed.
 
 ---
 
 ## 6. Environment variables
 
-- Reuse existing names where possible: **`VAULT_ROOT`**, **`READER_BRAIN_ROOT`** (or document alias **`BRAIN_ROOT`** = same semantics).
-- **`OPENAI_*`**, **`APIFY_TOKEN`**, **`X_BEARER_TOKEN`**, enrich limits, etc. move to **server-side only** — never exposed to the browser.
-- New: **`INGEST_API_KEY`** (or similar) for reader → Python auth on mutating routes; **`PYTHON_INGEST_ORIGIN`** or fixed port documented for reader dev proxy if used.
-- Optional: **`CATEGORIES_CONFIG_PATH`** — absolute path to a YAML file overriding the bundled default taxonomy (operator / deployment use).
+- **`VAULT_ROOT`** (required for Python ingest): same vault Obsidian uses.
+- **`OPENAI_*`**, **`APIFY_TOKEN`**, **`X_BEARER_TOKEN`**, enrich limits, etc. — **server-side only** in the Python process.
+- **`INGEST_API_KEY`** + **`PYTHON_INGEST_ORIGIN`** (or port) for reader middleware → Python.
+- Optional overrides: **`ROUTING_CONFIG_PATH`**, **`CATEGORIES_CONFIG_PATH`** — absolute paths to YAML **replacing or merging** with `api/config/*.default.yaml` (implementer defines merge vs replace).
+- **`READER_BRAIN_ROOT`**: optional for **reader** vault path helpers until all vault I/O moves to Python; **not** used by Python to find routing/taxonomy YAML once consolidation is complete.
 
 ---
 
@@ -103,10 +107,11 @@ When implementation lands:
 | Two servers in dev (reader + Python) | Document start order; optional `pnpm` script to run both |
 | Secret handling | Keys only in Python process env; reader sends only API key header |
 | UI shows categories out of sync with ingest | Single loader module on server; pytest asserts API payload matches ingest allow-list |
+| Operators had custom root `config/*.yaml` | Document one-time copy into `api/config/` or set `ROUTING_CONFIG_PATH` / `CATEGORIES_CONFIG_PATH` |
 
 ---
 
 ## 9. Next steps (process)
 
 1. **Human review** of this file (edit in-repo if needed).
-2. **`writing-plans`:** Refresh plan tasks for **taxonomy `GET`**, **`api/` default YAML**, reader **proxy** for `/api/taxonomy/categories`, and **root `config/categories*` deprecation** alongside ingest migration.
+2. **`writing-plans`:** Keep plan aligned: **routing + categories YAML under `api/config/`**, **remove root `config/` ingest files**, settings **without** brain-root YAML resolution for routing.
