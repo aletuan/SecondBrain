@@ -14,5 +14,11 @@
     "isolatedModules": true,
     "esModuleInterop": true
   },
-  "include": ["cli/src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "cli/src/**/*.ts",
+    "cli/tests/**/*.ts",
+    "reader-web/tests/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts"
+  ]
 }

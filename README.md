@@ -22,7 +22,7 @@ touch .env   # create at repo root; add keys from the Environment table (never c
 | `pnpm exec tsx cli/src/cli.ts ingest [options] <url>` | **Recommended** when passing options (avoids pnpm injecting an extra `--` into argv). Use `--progress-json` for machine-readable phase lines on stderr (Reader SSE). |
 | `pnpm translate-transcript -- --capture vault/Captures/…` | Add or replace `## Transcript (vi)` on an existing capture. |
 | `pnpm suggest-milestones -- --capture vault/Captures/… --max-sec 600` | Merge LLM-suggested `milestones.yaml` (YouTube). |
-| `pnpm test` / `pnpm typecheck` | Tests and TypeScript check. |
+| `pnpm test` / `pnpm typecheck` | Tests and TypeScript check. Tests live in **`cli/tests/`** (ingest CLI) and **`reader-web/tests/`** (reader); both run from the repo root via Vitest. |
 | `pnpm verify-keys` | Kiểm tra nhanh **OpenAI** / **Apify** / **X** bearer (đọc `.env`, không in key). |
 | `pnpm verify-apify-youtube` | Thử **APIFY_TOKEN** + chạy actor YouTube trong routing trên một video mặc định (tốn Apify). `pnpm verify-apify-youtube --token-only` chỉ kiểm tra token. Có thể truyền URL: `pnpm verify-apify-youtube 'https://youtu.be/…'`. |
 | `pnpm verify-x-tweet [id]` | Gọi `GET /2/tweets/:id` (app-only). Mặc định id ví dụ nếu không truyền. |
@@ -93,11 +93,11 @@ The **reader web app** is in [`reader-web/`](reader-web/) (`pnpm dev` after `pnp
 
 Home (ingest + recent captures):
 
-![Reader web — home](screenshots/reader-home.png)
+![Reader web — home](docs/screenshots/reader-home.png)
 
 Captures library:
 
-![Reader web — captures library](screenshots/reader-captures.png)
+![Reader web — captures library](docs/screenshots/reader-captures.png)
 
 ## MVP limits
 
