@@ -533,7 +533,7 @@ function captureListIngestedForCard(r: CaptureListItem): { iso: string; text: st
   return { iso: '', text: '—' };
 }
 
-/** Compact clock + date for card header (e.g. `14:20 · Apr 5`). */
+/** Compact clock + date for card header (e.g. `14:20 Apr 5` — single space, no separator glyph). */
 function formatIngestedCardHeader(iso: string): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return '—';
@@ -550,7 +550,7 @@ function formatIngestedCardHeader(iso: string): string {
     month: 'short',
     day: 'numeric',
   }).format(d);
-  return `${clock} · ${dayPart}`;
+  return `${clock} ${dayPart}`;
 }
 
 function formatFetchMethodTile(raw: string): string {
@@ -584,22 +584,11 @@ function primaryCategoryLabelUpper(r: CaptureListItem, labelById: Map<string, st
   return lab.trim().toUpperCase();
 }
 
-/** Category + ingest method on one editorial line (middot when both present). */
-function cardTileCategoryMethodLine(r: CaptureListItem, labelById: Map<string, string>): string {
+/** Category eyebrow only; ingest adapter is on the card `title` / aria-label to save header width. */
+function cardTileCategoryLine(r: CaptureListItem, labelById: Map<string, string>): string {
   const catU = primaryCategoryLabelUpper(r, labelById);
-  const meth = formatFetchMethodTile(r.fetch_method);
-  const hasCat = catU !== '—';
-  const hasMeth = meth !== '—';
-  if (!hasCat && !hasMeth) {
-    return `<span class="card-tile__category-row"><span class="card-tile__category card-tile__category--empty">—</span></span>`;
-  }
-  if (!hasCat && hasMeth) {
-    return `<span class="card-tile__category-row"><span class="card-tile__method card-tile__method--solo" title="Ingest adapter">${esc(meth)}</span></span>`;
-  }
-  if (hasCat && !hasMeth) {
-    return `<span class="card-tile__category-row"><span class="card-tile__category">${esc(catU)}</span></span>`;
-  }
-  return `<span class="card-tile__category-row"><span class="card-tile__category">${esc(catU)}</span><span class="card-tile__eyebrow-sep" aria-hidden="true">·</span><span class="card-tile__method" title="Ingest adapter">${esc(meth)}</span></span>`;
+  if (catU === '—') return '';
+  return `<span class="card-tile__category-row"><span class="card-tile__category">${esc(catU)}</span></span>`;
 }
 
 function captureCardFooterHtml(r: CaptureListItem): string {
@@ -1486,15 +1475,20 @@ function renderHome(
             const ing = captureListIngestedForCard(r);
             const headTime = ing.iso ? formatIngestedCardHeader(ing.iso) : '—';
             const datetimeAttr = ing.iso?.trim() || '';
-            const cardAria = `Open capture: ${r.title}`;
+            const meth = formatFetchMethodTile(r.fetch_method);
+            const methKnown = meth !== '—';
+            const cardAria = methKnown
+              ? `Open capture: ${r.title}. Ingest: ${meth}.`
+              : `Open capture: ${r.title}`;
+            const cardTitleAttr = methKnown ? `Ingest: ${meth}` : '';
             return `
-        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}" aria-label="${escAttr(cardAria)}">
+        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}" aria-label="${escAttr(cardAria)}"${cardTitleAttr ? ` title="${escAttr(cardTitleAttr)}"` : ''}>
           <div class="card-tile__header">
             <div class="card-tile__header-main">
               <div class="card-tile__icon-wrap" aria-hidden="true">${cardTileIconHtml(sourceType)}</div>
               <div class="card-tile__head-text">
                 <span class="card-tile__platform">${esc(captureCardPlatformLabel(sourceType))}</span>
-                ${cardTileCategoryMethodLine(r, labelById)}
+                ${cardTileCategoryLine(r, labelById)}
               </div>
             </div>
             ${

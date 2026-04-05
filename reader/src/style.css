@@ -1532,7 +1532,6 @@ main {
   gap: 1rem 1.5rem;
   margin-bottom: 1.35rem;
   padding: 0 0 1rem;
-  border-bottom: 1px dashed color-mix(in srgb, var(--line) 65%, var(--signal));
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--panel) 88%, var(--ink)) 0%,
@@ -1754,37 +1753,6 @@ main {
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: color-mix(in oklab, var(--signal) 78%, var(--paper-read));
-}
-
-.card-tile__category--empty {
-  font-weight: 600;
-  color: var(--muted);
-  opacity: 0.55;
-  letter-spacing: 0.12em;
-}
-
-.card-tile__eyebrow-sep {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  font-weight: 300;
-  color: var(--muted);
-  opacity: 0.55;
-  user-select: none;
-}
-
-.card-tile__method {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: color-mix(in oklab, var(--muted) 55%, var(--paper-read));
-}
-
-.card-tile__method--solo {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: color-mix(in oklab, var(--signal) 72%, var(--paper-read));
 }
 
 .card-tile__time {
