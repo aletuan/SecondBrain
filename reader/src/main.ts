@@ -1,3 +1,4 @@
+import './design-notion.css';
 import './style.css';
 import { marked } from 'marked';
 import type { CaptureDetail, CaptureListItem, ReactionEntry } from './types.js';
