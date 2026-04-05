@@ -1044,9 +1044,22 @@ function ingestFailurePresentation(
     friendly = xUrl
       ? 'OPENAI_API_KEY is required for note enrich (summary/insight). X link ingest does not use YouTube transcript.'
       : 'Valid OPENAI_API_KEY is required for YouTube transcript translation or note enrich — check Brain `.env`.';
+  } else if (
+    low.includes('context_length') ||
+    low.includes('maximum context') ||
+    low.includes('context window') ||
+    low.includes('maximum token') ||
+    low.includes('prompt is too long') ||
+    low.includes('too large for')
+  ) {
+    friendly =
+      'Model input too large — common with very long pages or huge transcripts. Try a shorter YouTube video or lower ENRICH_MAX_CHARS in `.env`.';
+  } else if (low.includes('rate_limit') || low.includes('rate limit') || low.includes('too many requests')) {
+    friendly =
+      'API rate limit — wait and retry. Long YouTube videos trigger many translation requests.';
   } else if (low.includes('capture path not detected') || low.includes('capture path missing')) {
     friendly =
-      'Ingest may have finished but the capture path could not be parsed from output — see the log detail below.';
+      'Ingest finished without a capture path — the pipeline may have failed before `done`, or the progress stream dropped. See the detail lines and API/terminal logs.';
   } else if (low.includes('routing') && (low.includes('yaml') || low.includes('config'))) {
     friendly = 'Routing config error (`config/routing.yaml`) — ensure the file exists and is valid.';
   } else if (low.includes(' 401 ') || low.includes(' 403 ') || /\b401\b/.test(low) || /\b403\b/.test(low)) {
@@ -1073,6 +1086,15 @@ function ingestFailurePresentation(
   ) {
     friendly =
       'Could not ingest X link — often X_BEARER_TOKEN, missing/deleted tweet, or API limits. See details below.';
+  }
+  const ytUrl = Boolean(context?.ingestUrl && isLikelyYoutubeUrl(context.ingestUrl) && !xUrl);
+  if (
+    ytUrl &&
+    friendly.startsWith('Could not ingest.') &&
+    !friendly.toLowerCase().includes('youtube')
+  ) {
+    friendly =
+      'YouTube ingest failed — long videos take longer (Apify + many transcript batches + enrich). See detail below and logs from `pnpm api:dev`.';
   }
   const detail = s.length > 1400 ? `${s.slice(0, 1400)}…` : s;
   return { friendly, detail };

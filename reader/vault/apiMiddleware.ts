@@ -280,7 +280,9 @@ export function vaultApiMiddleware() {
         };
         req.on('close', onReqClose);
 
+        let sseForwardedError = false;
         const forward = (ev: IngestProgressEvent) => {
+          if (ev.kind === 'error') sseForwardedError = true;
           try {
             sendSse(res, ev);
           } catch {
@@ -300,13 +302,13 @@ export function vaultApiMiddleware() {
             onProgress: forward,
             signal: ac.signal,
           });
-          if (code !== 0) {
+          if (code !== 0 && !sseForwardedError) {
             sendSse(res, {
               v: 1,
               kind: 'error',
               message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
             });
-          } else if (!captureDir) {
+          } else if (code === 0 && !captureDir && !sseForwardedError) {
             sendSse(res, {
               v: 1,
               kind: 'error',
