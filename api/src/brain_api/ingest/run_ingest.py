@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Callable
@@ -31,6 +32,8 @@ from brain_api.vault.writer import (
     write_capture,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _openai_key(settings: Settings) -> str:
     return (settings.openai_api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
@@ -50,8 +53,12 @@ def emit_ingest_events(
 ) -> None:
     """Run ingest and push NDJSON-shaped dicts through ``emit`` as each phase advances."""
     vault_root = settings.vault_root.resolve()
+    last_phase: str | None = None
 
     def phase(name: str, state: str) -> None:
+        nonlocal last_phase
+        if state == "active":
+            last_phase = name
         emit({"v": 1, "kind": "phase", "phase": name, "state": state})
 
     try:
@@ -147,7 +154,11 @@ def emit_ingest_events(
             },
         )
     except Exception as e:
-        emit({"v": 1, "kind": "error", "message": str(e)})
+        logger.exception("ingest failed (phase=%s)", last_phase)
+        err: dict[str, Any] = {"v": 1, "kind": "error", "message": str(e)}
+        if last_phase:
+            err["phase"] = last_phase
+        emit(err)
 
 
 def collect_ingest_events(

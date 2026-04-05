@@ -83,6 +83,8 @@ export async function runPythonIngestStream(
 
   const stdoutLines: string[] = [];
   let captureDir: string | null = null;
+  /** Python emits `{ kind: "error" }` in the NDJSON stream; treat as failure (avoid code 0 + missing path). */
+  let streamError: string | null = null;
 
   const res = await fetch(`${base.replace(/\/$/, '')}/v1/ingest`, {
     method: 'POST',
@@ -112,11 +114,23 @@ export async function runPythonIngestStream(
     const ev = tryParseIngestProgressLine(line);
     if (ev) {
       opts.onProgress(ev);
-      if (ev.kind === 'done') {
+      if (ev.kind === 'error') {
+        streamError = ev.message;
+      } else if (ev.kind === 'done') {
+        streamError = null;
         captureDir = ev.captureDir;
         stdoutLines.push(ev.captureDir);
       }
     }
+  }
+
+  if (streamError) {
+    return {
+      code: 1,
+      stdout: stdoutLines.join('\n'),
+      stderr: streamError,
+      captureDir: null,
+    };
   }
 
   return {

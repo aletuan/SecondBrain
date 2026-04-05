@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Any, Protocol
 
 from brain_api.types.capture import TranscriptSegment
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SYSTEM = """You translate English transcript segments to Vietnamese.
 
@@ -116,8 +119,17 @@ def translate_transcript_segments(
     bs = batch_size_from_env_or(batch_size)
     out: list[TranscriptSegment] = []
 
-    for i in range(0, len(segments), bs):
+    n_seg = len(segments)
+    for i in range(0, n_seg, bs):
         batch = segments[i : i + bs]
+        end = min(i + len(batch), n_seg)
+        logger.info(
+            "translate_transcript: batch %s–%s of %s segments (batch_size=%s)",
+            i + 1,
+            end,
+            n_seg,
+            bs,
+        )
         texts = [s.text.strip() if s.text.strip() else " " for s in batch]
         user_content = (
             f"Translate these {len(texts)} lines to Vietnamese. Reply with JSON only: "

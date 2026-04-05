@@ -1,3 +1,4 @@
+import './design-notion.css';
 import './style.css';
 import { marked } from 'marked';
 import type { CaptureDetail, CaptureListItem, ReactionEntry } from './types.js';
@@ -77,6 +78,13 @@ const THEME_ICONS = {
 /** Library row “open” affordance (row click opens detail; icon is decorative). */
 const LIB_OPEN_CHEVRON_SVG =
   '<svg class="mock-table-open__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 6 6 6-6 6"/></svg>';
+
+/** Home capture tiles — brand marks (decorative). YouTube: plate + play; X: official-style mark (currentColor). */
+const CARD_TILE_ICON_YT = `<span class="card-tile__icon-inner card-tile__icon-inner--yt" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#FF0000" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/><path fill="#FFFFFF" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></span>`;
+const CARD_TILE_ICON_X = `<span class="card-tile__icon-inner card-tile__icon-inner--x" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></span>`;
+const CARD_TILE_ICON_ARTICLE = `<span class="card-tile__icon-inner card-tile__icon-inner--article" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span>`;
+const CARD_TILE_BUBBLE_SVG =
+  '<svg class="card-tile__bubble-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
 
 type ThemeName = 'dark' | 'light' | 'solarized';
 const THEMES: ThemeName[] = ['dark', 'light', 'solarized'];
@@ -526,6 +534,86 @@ function captureListIngestedForCard(r: CaptureListItem): { iso: string; text: st
   return { iso: '', text: '—' };
 }
 
+/** Compact clock + date for card header (e.g. `14:20 Apr 5` — single space, no separator glyph). */
+function formatIngestedCardHeader(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  const d = new Date(t);
+  const tz = 'Asia/Ho_Chi_Minh';
+  const clock = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+  const dayPart = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+  return `${clock} ${dayPart}`;
+}
+
+function formatFetchMethodTile(raw: string): string {
+  const t = raw.trim().toLowerCase();
+  if (!t) return '—';
+  const map: Record<string, string> = {
+    apify: 'APIFY',
+    x_api: 'X_API',
+    http_readability: 'READABILITY',
+  };
+  return map[t] ?? t.replace(/-/g, '_').toUpperCase();
+}
+
+function captureCardPlatformLabel(sourceType: 'youtube' | 'x' | 'article'): string {
+  if (sourceType === 'youtube') return 'YOUTUBE';
+  if (sourceType === 'x') return 'X';
+  return 'ARTICLE';
+}
+
+function cardTileIconHtml(sourceType: 'youtube' | 'x' | 'article'): string {
+  if (sourceType === 'youtube') return CARD_TILE_ICON_YT;
+  if (sourceType === 'x') return CARD_TILE_ICON_X;
+  return CARD_TILE_ICON_ARTICLE;
+}
+
+function primaryCategoryLabelUpper(r: CaptureListItem, labelById: Map<string, string>): string {
+  const ids = r.categories?.filter(Boolean) ?? [];
+  if (ids.length === 0) return '—';
+  const id0 = ids[0]!.trim();
+  const lab = labelById.get(id0) ?? formatTagForDisplay(id0);
+  return lab.trim().toUpperCase();
+}
+
+/** Category eyebrow only; ingest adapter is on the card `title` / aria-label to save header width. */
+function cardTileCategoryLine(r: CaptureListItem, labelById: Map<string, string>): string {
+  const catU = primaryCategoryLabelUpper(r, labelById);
+  if (catU === '—') return '';
+  return `<span class="card-tile__category-row"><span class="card-tile__category">${esc(catU)}</span></span>`;
+}
+
+function captureCardFooterHtml(r: CaptureListItem): string {
+  const n = r.reaction_count;
+  const avg = r.reaction_avg;
+  const hasVotes = avg != null && n > 0;
+  const voteInner = hasVotes
+    ? `<span class="card-tile__vote-arrow" aria-hidden="true">▲</span><span class="card-tile__vote-score">${esc(avg.toFixed(1))}</span><span class="card-tile__vote-arrow" aria-hidden="true">▼</span>`
+    : `<span class="card-tile__vote-empty">No ratings yet</span>`;
+  const voteLabel = hasVotes
+    ? `Average rating ${avg!.toFixed(1)} from ${n} vote(s)`
+    : 'No ratings yet';
+  const rxLabel = `${n} reaction ${n === 1 ? 'entry' : 'entries'}`;
+  return `
+    <div class="card-tile__footer">
+      <div class="card-tile__rule" aria-hidden="true"></div>
+      <div class="card-tile__footer-row">
+        <div class="card-tile__votes${hasVotes ? '' : ' card-tile__votes--empty'}" aria-label="${escAttr(voteLabel)}">${voteInner}</div>
+        <div class="card-tile__comments" aria-label="${escAttr(rxLabel)}" title="${escAttr(rxLabel)}">${CARD_TILE_BUBBLE_SVG}<span class="card-tile__comment-n">${esc(String(n))}</span><span class="card-tile__comment-suffix" aria-hidden="true">entries</span></div>
+        <span class="card-tile__more" aria-hidden="true" title="Open capture">⋯</span>
+      </div>
+    </div>`;
+}
+
 /** Avoid repeating the same H1 under the hero title. */
 function stripLeadingH1IfMatches(markdown: string, title: string): string {
   const trimmed = markdown.trimStart();
@@ -957,9 +1045,22 @@ function ingestFailurePresentation(
     friendly = xUrl
       ? 'OPENAI_API_KEY is required for note enrich (summary/insight). X link ingest does not use YouTube transcript.'
       : 'Valid OPENAI_API_KEY is required for YouTube transcript translation or note enrich — check Brain `.env`.';
+  } else if (
+    low.includes('context_length') ||
+    low.includes('maximum context') ||
+    low.includes('context window') ||
+    low.includes('maximum token') ||
+    low.includes('prompt is too long') ||
+    low.includes('too large for')
+  ) {
+    friendly =
+      'Model input too large — common with very long pages or huge transcripts. Try a shorter YouTube video or lower ENRICH_MAX_CHARS in `.env`.';
+  } else if (low.includes('rate_limit') || low.includes('rate limit') || low.includes('too many requests')) {
+    friendly =
+      'API rate limit — wait and retry. Long YouTube videos trigger many translation requests.';
   } else if (low.includes('capture path not detected') || low.includes('capture path missing')) {
     friendly =
-      'Ingest may have finished but the capture path could not be parsed from output — see the log detail below.';
+      'Ingest finished without a capture path — the pipeline may have failed before `done`, or the progress stream dropped. See the detail lines and API/terminal logs.';
   } else if (low.includes('routing') && (low.includes('yaml') || low.includes('config'))) {
     friendly = 'Routing config error (`config/routing.yaml`) — ensure the file exists and is valid.';
   } else if (low.includes(' 401 ') || low.includes(' 403 ') || /\b401\b/.test(low) || /\b403\b/.test(low)) {
@@ -986,6 +1087,15 @@ function ingestFailurePresentation(
   ) {
     friendly =
       'Could not ingest X link — often X_BEARER_TOKEN, missing/deleted tweet, or API limits. See details below.';
+  }
+  const ytUrl = Boolean(context?.ingestUrl && isLikelyYoutubeUrl(context.ingestUrl) && !xUrl);
+  if (
+    ytUrl &&
+    friendly.startsWith('Could not ingest.') &&
+    !friendly.toLowerCase().includes('youtube')
+  ) {
+    friendly =
+      'YouTube ingest failed — long videos take longer (Apify + many transcript batches + enrich). See detail below and logs from `pnpm api:dev`.';
   }
   const detail = s.length > 1400 ? `${s.slice(0, 1400)}…` : s;
   return { friendly, detail };
@@ -1211,10 +1321,20 @@ function sideCapture(d: CaptureDetail): string {
 
 function skeletonCardsHtml(count: number): string {
   return Array.from({ length: count }, () => `
-    <div class="skeleton-card">
-      <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
+    <div class="skeleton-card skeleton-card--tile">
+      <div class="skeleton-card__tile-top">
+        <div class="skeleton skeleton-card__skel-icon"></div>
+        <div class="skeleton-card__skel-lines">
+          <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
+          <div class="skeleton skeleton-card__line skeleton-card__line--meta-short"></div>
+        </div>
+        <div class="skeleton skeleton-card__line skeleton-card__line--time"></div>
+      </div>
       <div class="skeleton skeleton-card__line skeleton-card__line--title"></div>
-      <div class="skeleton skeleton-card__line skeleton-card__line--ingested"></div>
+      <div class="skeleton skeleton-card__tile-foot">
+        <div class="skeleton skeleton-card__line skeleton-card__line--rule"></div>
+        <div class="skeleton skeleton-card__line skeleton-card__line--footer"></div>
+      </div>
     </div>`).join('');
 }
 
@@ -1292,7 +1412,13 @@ function formatLibraryRatingCell(r: CaptureListItem): string {
   return formatRatingDisplay(r.reaction_avg, r.reaction_count);
 }
 
-function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
+function renderHome(
+  h: Health,
+  recent: CaptureListItem[],
+  vaultCaptureTotal: number,
+  taxonomyItems: { id: string; label: string }[],
+): string {
+  const labelById = new Map(taxonomyItems.map((t) => [t.id, t.label]));
   const ingestShellClass = h.ingestAvailable ? 'ingest-shell' : 'ingest-shell ingest-shell-muted';
   const ingestInner = h.ingestAvailable
     ? `
@@ -1370,18 +1496,32 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
                 ? 'x'
                 : 'article';
             const ing = captureListIngestedForCard(r);
+            const headTime = ing.iso ? formatIngestedCardHeader(ing.iso) : '—';
+            const datetimeAttr = ing.iso?.trim() || '';
+            const meth = formatFetchMethodTile(r.fetch_method);
+            const methKnown = meth !== '—';
+            const cardAria = methKnown
+              ? `Open capture: ${r.title}. Ingest: ${meth}.`
+              : `Open capture: ${r.title}`;
+            const cardTitleAttr = methKnown ? `Ingest: ${meth}` : '';
             return `
-        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
-          <div class="card-meta">
-            <span>${esc(r.source)}<span class="card-source-dot" aria-hidden="true"></span></span>
-            <span>${esc(r.fetch_method || '—')}</span>
+        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}" aria-label="${escAttr(cardAria)}"${cardTitleAttr ? ` title="${escAttr(cardTitleAttr)}"` : ''}>
+          <div class="card-tile__header">
+            <div class="card-tile__header-main">
+              <div class="card-tile__icon-wrap" aria-hidden="true">${cardTileIconHtml(sourceType)}</div>
+              <div class="card-tile__head-text">
+                <span class="card-tile__platform">${esc(captureCardPlatformLabel(sourceType))}</span>
+                ${cardTileCategoryLine(r, labelById)}
+              </div>
+            </div>
+            ${
+              datetimeAttr
+                ? `<time class="card-tile__time" datetime="${escAttr(datetimeAttr)}">${esc(headTime)}</time>`
+                : `<span class="card-tile__time">${esc(headTime)}</span>`
+            }
           </div>
-          <h3>${esc(r.title)}</h3>
-          ${
-            ing.iso
-              ? `<time class="card-ingested" datetime="${escAttr(ing.iso)}">${esc(ing.text)}</time>`
-              : `<span class="card-ingested">${esc(ing.text)}</span>`
-          }
+          <h3 class="card-tile__title">${esc(r.title)}</h3>
+          ${captureCardFooterHtml(r)}
         </button>`;
           })
           .join('');
@@ -2310,14 +2450,20 @@ async function route() {
         <div class="view active">
           <div class="cards">${skeletonCardsHtml(3)}</div>
         </div>`;
-      const [h, capData] = await Promise.all([
+      const [h, capData, taxRes] = await Promise.all([
         fetchJson<Health>('/api/health'),
         fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
+        fetch('/api/taxonomy/categories'),
       ]);
+      let taxonomyForCards: { id: string; label: string }[] = [];
+      if (taxRes.ok) {
+        const tj = (await taxRes.json()) as { items?: { id: string; label: string }[] };
+        taxonomyForCards = tj.items ?? [];
+      }
       updateAppNavStatus(h);
       const allCaps = capData.captures;
       const recent = allCaps.slice(0, HOME_RECENT_CAPTURE_LIMIT);
-      main.innerHTML = renderHome(h, recent, allCaps.length);
+      main.innerHTML = renderHome(h, recent, allCaps.length, taxonomyForCards);
 
       main.querySelectorAll('.card[data-card-id]').forEach((el) => {
         el.addEventListener('click', () => {
