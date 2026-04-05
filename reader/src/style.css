@@ -17,9 +17,14 @@
   --overlay: rgba(0, 0, 0, 0.5);
   --nav-settings: #8b9dc9;
   --font-display: 'DM Serif Display', Georgia, serif;
-  /* Screen-reading serif: long notes; keeps mono for chrome / code */
+  /* Literata: optical sizes + strong legibility for long capture text (not generic UI sans) */
   --font-body: 'Literata', 'Georgia', 'Times New Roman', serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Fluid scale: ~16px body, slightly larger in prose column */
+  --text-body: clamp(16px, 0.35vw + 15px, 17px);
+  --text-prose: clamp(16px, 0.45vw + 15px, 19px);
+  --lh-body: 1.7;
+  --lh-prose: 1.78;
   /* Slightly brighter than legacy --paper for sustained reading on dark UI */
   --paper-read: #f2efe6;
   --radius: 2px;
@@ -101,10 +106,11 @@ body {
   background: var(--ink);
   color: var(--paper-read);
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
   font-weight: 400;
   font-optical-sizing: auto;
+  font-feature-settings: 'kern' 1, 'liga' 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -405,8 +411,9 @@ html[data-theme] .app-nav__status {
 
 @media (max-width: 480px) {
   body {
-    font-size: 14px;
-    line-height: 1.62;
+    /* Keep ≥15px for comfortable reading on small screens */
+    font-size: clamp(15px, 2.8vw + 11px, 16px);
+    line-height: 1.68;
   }
 }
 
@@ -1186,9 +1193,9 @@ main {
 .ingest-agent-status__badge {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   padding: 0.35rem 0.5rem;
   color: var(--ink);
@@ -1210,10 +1217,10 @@ main {
 .ingest-agent-status__msg {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.6;
   color: color-mix(in srgb, var(--paper-read) 92%, var(--muted));
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
 }
 
 .ingest-agent-status--running .ingest-agent-status__msg {
@@ -1332,9 +1339,9 @@ main {
 
 .ingest-agent-step__label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--muted) 55%, var(--paper-read));
   transition: color 0.3s var(--ease-out);
@@ -1342,8 +1349,8 @@ main {
 
 .ingest-agent-step__hint {
   font-family: var(--font-body);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.5;
   color: color-mix(in srgb, var(--muted) 72%, var(--paper-read));
 }
 
@@ -1415,8 +1422,8 @@ main {
   padding-top: 0.75rem;
   border-top: 1px dashed color-mix(in srgb, var(--line) 85%, var(--signal));
   font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1.55;
+  font-size: 11px;
+  line-height: 1.58;
   color: color-mix(in srgb, var(--muted) 40%, var(--paper-read));
   white-space: pre-wrap;
   word-break: break-word;
@@ -1462,7 +1469,7 @@ main {
 .ingest-agent-status__path {
   display: block;
   margin-top: 0.35rem;
-  font-size: 9px;
+  font-size: 10px;
   opacity: 0.9;
 }
 
@@ -1476,8 +1483,8 @@ main {
 
 .hint {
   margin-top: 0.75rem;
-  font-size: 12px;
-  line-height: 1.58;
+  font-size: 13px;
+  line-height: 1.62;
   color: color-mix(in srgb, var(--muted) 78%, var(--paper-read));
 }
 
@@ -1882,8 +1889,8 @@ main {
 
 .card-tile__comment-suffix {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 8px;
-  letter-spacing: 0.08em;
+  font-size: 9px;
+  letter-spacing: 0.07em;
   text-transform: lowercase;
   color: var(--muted);
   opacity: 0.72;
@@ -2101,8 +2108,8 @@ main {
 .mock-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 1em;
+  line-height: 1.58;
 }
 
 .mock-table th {
@@ -2891,10 +2898,12 @@ tr.capture-row:focus-visible {
 .prose {
   color: var(--paper-read);
   font-family: var(--font-body);
-  font-size: clamp(15px, 0.35vw + 14px, 17px);
-  line-height: 1.72;
-  max-width: 68ch;
+  font-size: var(--text-prose);
+  line-height: var(--lh-prose);
+  max-width: 70ch;
   hanging-punctuation: first last;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
+  text-wrap: pretty;
 }
 
 /* Capture detail note.md: fill available width */
@@ -2906,8 +2915,14 @@ tr.capture-row:focus-visible {
 
 .prose :where(h1, h2, h3, h4) {
   font-family: var(--font-display);
+  font-weight: 400;
   color: var(--paper-read);
   text-wrap: balance;
+  letter-spacing: -0.02em;
+}
+
+.prose :where(strong, b) {
+  font-weight: 600;
 }
 
 .prose p {
@@ -2933,14 +2948,18 @@ tr.capture-row:focus-visible {
 
 .prose a {
   color: color-mix(in srgb, var(--signal) 65%, var(--paper-read));
-  text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--signal) 35%, transparent);
-  transition: color 0.15s var(--ease-out), border-bottom-color 0.15s var(--ease-out);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--signal) 45%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition:
+    color 0.15s var(--ease-out),
+    text-decoration-color 0.15s var(--ease-out);
 }
 
 .prose a:hover {
   color: color-mix(in srgb, var(--signal) 85%, var(--paper));
-  border-bottom-color: var(--signal);
+  text-decoration-color: var(--signal);
 }
 
 /* In-app capture cross-references (Xem thêm wikilinks) */
@@ -3409,8 +3428,8 @@ tr.capture-row:focus-visible {
   padding: 0.75rem;
   overflow: auto;
   max-height: 320px;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.62;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -3609,8 +3628,8 @@ tr.capture-row:focus-visible {
 #cap-youtube .yt-sub-raw .yt-sub-raw-grid .transcript-pre {
   max-height: min(56vh, 560px);
   min-height: 16rem;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.58;
 }
 
 @container yt-split (max-width: 640px) {
@@ -3674,7 +3693,7 @@ tr.capture-row:focus-visible {
 }
 
 #cap-youtube .yt-split__transcript .transcript-pre {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 @media (min-width: 1120px) {
