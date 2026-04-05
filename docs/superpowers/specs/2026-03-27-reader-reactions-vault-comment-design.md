@@ -3,7 +3,7 @@
 **Ngày:** 2026-03-27  
 **Trạng thái:** Đã duyệt (brainstorming) — implementation plan: [`docs/superpowers/plans/2026-03-27-reader-reactions-vault-comment.md`](../plans/2026-03-27-reader-reactions-vault-comment.md)
 
-**Liên quan:** `reader-web/vault/service.ts` (resolve `*.note.md` / `*.source.md`), `reader-web/vault/apiMiddleware.ts`, `reader-web/src/main.ts` (capture detail).
+**Liên quan:** `reader/vault/service.ts` (resolve `*.note.md` / `*.source.md`), `reader/vault/apiMiddleware.ts`, `reader/src/main.ts` (capture detail).
 
 ---
 
@@ -26,7 +26,7 @@ Người đọc muốn **chấm điểm 1–5 sao** cho từng capture và **ghi
 ## 2. Tên file và slug
 
 - Thư mục capture: `YYYY-MM-DD--<slug>--<shortid>` (đã có trong vault).
-- **Basename** của note/source trong repo hiện tại: `{slug}.note.md`, `{slug}.source.md` (xem `getCaptureFiles` trong `reader-web/vault/service.ts`).
+- **Basename** của note/source trong repo hiện tại: `{slug}.note.md`, `{slug}.source.md` (xem `getCaptureFiles` trong `reader/vault/service.ts`).
 - File phản hồi đọc giả: **`path.join(captureDir, `${slug}.comment`)`** trong đó `slug` là **cùng prefix** với cặp `.note.md` / `.source.md` (suy ra từ tên file note đã resolve).
 
 **Ghi chú vault tùy biến:** Nếu bản thân vault dùng extension khác (ví dụ chỉ `.note` không `.md`), triển khai v1 vẫn dựa trên slug từ **`*.note.md` hoặc fallback `note.md`** như service hiện tại; mở rộng thêm nhánh `*.note` nếu cần — không chặn thiết kế sản phẩm, chỉ thêm resolver.
@@ -82,7 +82,7 @@ Hay, sẽ đọc lại.
 
 ---
 
-## 4. API (reader-web middleware)
+## 4. API (reader middleware)
 
 Tất cả chỉ hoạt động khi server có quyền đọc/ghi vault (cùng mô hình các route `/api/captures/...`).
 
@@ -99,7 +99,7 @@ Tất cả chỉ hoạt động khi server có quyền đọc/ghi vault (cùng m
 
 ---
 
-## 5. UI (reader-web) — triển khai sau, áp dụng frontend-design
+## 5. UI (reader) — triển khai sau, áp dụng frontend-design
 
 - Vị trí: **cuối** view chi tiết capture (sau khối `note` / phù hợp TOC), section riêng ví dụ “Phản hồi”.
 - Điều khiển: chọn **1–5 sao**, textarea **tùy chọn**, nút **Gửi**.

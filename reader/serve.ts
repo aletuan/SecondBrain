@@ -1,6 +1,6 @@
 /**
  * Production-style preview: serve `dist/` + same /api/* as Vite dev.
- * Run from reader-web/: `pnpm preview` (builds then starts server).
+ * Run from reader/: `pnpm preview` (builds then starts server).
  */
 import express from 'express';
 import path from 'node:path';

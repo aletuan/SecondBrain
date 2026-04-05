@@ -2,11 +2,11 @@
 
 **Date**: 2026-03-22
 **Branch**: `feature/light`
-**Scope**: reader-web only (vanilla JS SPA)
+**Scope**: reader only (vanilla JS SPA)
 
 ## Overview
 
-Add a theme switcher to reader-web supporting three themes: Dark (current), Light (Warm Parchment), and Solarized Dark. The switcher lives in the top-right of the masthead header, persists to localStorage, and swaps CSS variables without page reload.
+Add a theme switcher to reader supporting three themes: Dark (current), Light (Warm Parchment), and Solarized Dark. The switcher lives in the top-right of the masthead header, persists to localStorage, and swaps CSS variables without page reload.
 
 ## Themes
 
@@ -148,9 +148,9 @@ Non-color variables (`--radius`, `--ease-out`, `--font-display`, `--font-body`, 
 
 | File | Change |
 |------|--------|
-| `reader-web/src/style.css` | Add `[data-theme="light"]` and `[data-theme="solarized"]` variable blocks; add `.theme-switcher` styles; add transition properties; audit/replace hardcoded colors |
-| `reader-web/src/main.ts` | Add `themeSwitcherHtml()` function; insert switcher into masthead templates; add click handler + localStorage logic; audit inline style colors |
-| `reader-web/index.html` | Add flash-prevention inline script in `<head>` |
+| `reader/src/style.css` | Add `[data-theme="light"]` and `[data-theme="solarized"]` variable blocks; add `.theme-switcher` styles; add transition properties; audit/replace hardcoded colors |
+| `reader/src/main.ts` | Add `themeSwitcherHtml()` function; insert switcher into masthead templates; add click handler + localStorage logic; audit inline style colors |
+| `reader/index.html` | Add flash-prevention inline script in `<head>` |
 
 ## Testing
 

@@ -49,12 +49,12 @@ export default defineConfig({
         const inVault = f.includes('/vault/') && /\.(m?[jt]s)$/.test(f);
         if (inVault) {
           server.config.logger.warn(
-            '\n\x1b[33m[reader-web]\x1b[0m Dev API middleware lives in vault/*.ts — \x1b[1mrestart Vite\x1b[0m (Ctrl+C, then pnpm dev) for route changes to apply.\n',
+            '\n\x1b[33m[reader]\x1b[0m Dev API middleware lives in vault/*.ts — \x1b[1mrestart Vite\x1b[0m (Ctrl+C, then pnpm dev) for route changes to apply.\n',
           );
         }
         if (f.endsWith('vite.config.ts')) {
           server.config.logger.warn(
-            '\n\x1b[33m[reader-web]\x1b[0m vite.config.ts changed — \x1b[1mrestart Vite\x1b[0m (Ctrl+C, then pnpm dev).\n',
+            '\n\x1b[33m[reader]\x1b[0m vite.config.ts changed — \x1b[1mrestart Vite\x1b[0m (Ctrl+C, then pnpm dev).\n',
           );
         }
       },

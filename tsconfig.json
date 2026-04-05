@@ -17,7 +17,7 @@
   "include": [
     "cli/src/**/*.ts",
     "cli/tests/**/*.ts",
-    "reader-web/tests/**/*.ts",
+    "reader/tests/**/*.ts",
     "scripts/**/*.ts",
     "vitest.config.ts"
   ]

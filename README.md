@@ -1,6 +1,6 @@
 # Second brain CLI
 
-TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`) and optionally enriches notes with **OpenAI**. Routing is YAML: HTTP + Readability, Apify actors, or an X API stub. **CLI source** lives under [`cli/src/`](cli/src/) (root `package.json` runs `tsx cli/src/cli.ts …`). The optional reader UI is in [`reader-web/`](reader-web/).
+TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`) and optionally enriches notes with **OpenAI**. Routing is YAML: HTTP + Readability, Apify actors, or an X API stub. **CLI source** lives under [`cli/src/`](cli/src/) (root `package.json` runs `tsx cli/src/cli.ts …`). The optional reader UI is in [`reader/`](reader/).
 
 ## Setup
 
@@ -22,7 +22,7 @@ touch .env   # create at repo root; add keys from the Environment table (never c
 | `pnpm exec tsx cli/src/cli.ts ingest [options] <url>` | **Recommended** when passing options (avoids pnpm injecting an extra `--` into argv). Use `--progress-json` for machine-readable phase lines on stderr (Reader SSE). |
 | `pnpm translate-transcript -- --capture vault/Captures/…` | Add or replace `## Transcript (vi)` on an existing capture. |
 | `pnpm suggest-milestones -- --capture vault/Captures/… --max-sec 600` | Merge LLM-suggested `milestones.yaml` (YouTube). |
-| `pnpm test` / `pnpm typecheck` | Tests and TypeScript check. Tests live in **`cli/tests/`** (ingest CLI) and **`reader-web/tests/`** (reader); both run from the repo root via Vitest. |
+| `pnpm test` / `pnpm typecheck` | Tests and TypeScript check. Tests live in **`cli/tests/`** (ingest CLI) and **`reader/tests/`** (reader); both run from the repo root via Vitest. |
 | `pnpm verify-keys` | Kiểm tra nhanh **OpenAI** / **Apify** / **X** bearer (đọc `.env`, không in key). |
 | `pnpm verify-apify-youtube` | Thử **APIFY_TOKEN** + chạy actor YouTube trong routing trên một video mặc định (tốn Apify). `pnpm verify-apify-youtube --token-only` chỉ kiểm tra token. Có thể truyền URL: `pnpm verify-apify-youtube 'https://youtu.be/…'`. |
 | `pnpm verify-x-tweet [id]` | Gọi `GET /2/tweets/:id` (app-only). Mặc định id ví dụ nếu không truyền. |
@@ -87,7 +87,7 @@ Dataset: lấy **item đầu**, map `segments`, `subtitles`, `fullText`, v.v. N�
 
 ## Reader web (not this repo)
 
-The **reader web app** is in [`reader-web/`](reader-web/) (`pnpm dev` after `pnpm install` there). `POST /api/ingest` runs the same CLI entrypoint via `node …/tsx/dist/cli.mjs cli/src/cli.ts ingest` in `READER_BRAIN_ROOT` (not `pnpm run ingest --`, for the argv reason above). HTML mocks under [`docs/visualizations/`](docs/visualizations/) informed the layout — see [`docs/reader-web.md`](docs/reader-web.md). This CLI only writes Markdown to the vault; **Quartz** is not part of the stack.
+The **reader web app** is in [`reader/`](reader/) (`pnpm dev` after `pnpm install` there). `POST /api/ingest` runs the same CLI entrypoint via `node …/tsx/dist/cli.mjs cli/src/cli.ts ingest` in `READER_BRAIN_ROOT` (not `pnpm run ingest --`, for the argv reason above). HTML mocks under [`docs/visualizations/`](docs/visualizations/) informed the layout — see [`docs/reader.md`](docs/reader.md). This CLI only writes Markdown to the vault; **Quartz** is not part of the stack.
 
 ### Reader web screenshots
 

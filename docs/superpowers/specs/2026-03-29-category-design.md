@@ -1,15 +1,15 @@
-# Design: Category taxonomy for captures (auto + reader-web)
+# Design: Category taxonomy for captures (auto + reader)
 
 **Ngày:** 2026-03-29  
 **Trạng thái:** Đã chốt qua brainstorming — implementation plan: `docs/superpowers/plans/2026-03-29-category.md`
 
-**Liên quan:** `cli/src/ingest/runIngest.ts`, `cli/src/llm/enrich.ts`, `cli/src/vault/writer.ts`, `reader-web/src/main.ts` (frontmatter + capture detail).
+**Liên quan:** `cli/src/ingest/runIngest.ts`, `cli/src/llm/enrich.ts`, `cli/src/vault/writer.ts`, `reader/src/main.ts` (frontmatter + capture detail).
 
 ---
 
 ## 1. Vấn đề / mục tiêu
 
-Khi **ingest**, capture cần được **gán category** (multi-label) theo **taxonomy cố định**, dựa trên **phân tích nội dung** (LLM). Người dùng có thể **sửa lại trong reader-web** nếu sai. **Không** có lệnh batch re-classify trong phạm vi này (chỉ tại thời điểm ingest khi có API key).
+Khi **ingest**, capture cần được **gán category** (multi-label) theo **taxonomy cố định**, dựa trên **phân tích nội dung** (LLM). Người dùng có thể **sửa lại trong reader** nếu sai. **Không** có lệnh batch re-classify trong phạm vi này (chỉ tại thời điểm ingest khi có API key).
 
 ---
 
@@ -20,7 +20,7 @@ Khi **ingest**, capture cần được **gán category** (multi-label) theo **ta
 | Taxonomy | **A:** Danh sách cố định trong repo (ví dụ Machine Learning, Data Engineering, Management). |
 | Cardinality | **Multi-label:** `categories` là mảng các `id`. |
 | Không khớp / không chắc | Có thể **không** gán category (`[]` hoặc bỏ key); khi không chắc có thể dùng id **`uncategorized`** (label hiển thị kiểu “Khác / Chưa phân loại”) trong cùng file config. |
-| Chỉnh tay | **B:** Chủ yếu **reader-web** — UI chọn/bỏ, ghi lại `*.note.md`. |
+| Chỉnh tay | **B:** Chủ yếu **reader** — UI chọn/bỏ, ghi lại `*.note.md`. |
 | Kích hoạt auto | **i:** Chỉ khi **ingest** (capture mới hoặc re-ingest ghi đè). |
 | Re-ingest | **Ghi đè:** mỗi lần ingest/re-ingest chạy phân loại lại; **category do tay sửa trước đó không được giữ** (chấp nhận). |
 
@@ -58,7 +58,7 @@ categories: [machine-learning, data-engineering]
 - **Đầu vào phân loại:** Cùng kiểu excerpt đã dùng cho enrich/tags (body `source.md` sau khi strip frontmatter, có thể truncate giống `truncateSourceForEnrich` hoặc giới hạn tương đương — chi tiết trong plan).
 - **Cách làm đề xuất:** LLM **riêng** (prompt JSON), map sang mảng `id`, **lọc** chỉ `id` ∈ taxonomy; loại trùng; thứ tự ổn định (sort theo id hoặc thứ tự trong file config).
 - **Ghi file:** Hàm **`setCategoriesInNoteFrontmatter(notePath, ids)`** — **set/replace** key `categories` (idempotent, không nhân đôi key). Chạy trong cùng nhánh async với enrich/tags nếu phù hợp (ví dụ `Promise.all` với `extractTags`), thứ tự commit disk: đảm bảo không làm hỏng frontmatter trước khi `enrichNote` append body (hiện enrich **append** sau frontmatter — category nằm trong frontmatter block đầu file).
-- **Không có API key:** Không ghi `categories` tự động (user có thể thêm sau trong reader-web).
+- **Không có API key:** Không ghi `categories` tự động (user có thể thêm sau trong reader).
 
 ### 5.1 Re-ingest
 
@@ -86,7 +86,7 @@ categories: [machine-learning, data-engineering]
 
 - Unit: load taxonomy, validate & normalize mảng id, `setCategoriesInNoteFrontmatter` round-trip trên file mẫu.
 - Mock LLM: JSON cố định → kết quả frontmatter mong đợi.
-- reader-web: test phần pure (parse/format) nếu tách được; E2E tùy độ ưu tiên.
+- reader: test phần pure (parse/format) nếu tách được; E2E tùy độ ưu tiên.
 
 ---
 

@@ -3,7 +3,7 @@
 **Ngày:** 2026-03-28  
 **Trạng thái:** Đã chốt qua brainstorming — chờ triển khai / implementation plan
 
-**Liên quan:** `cli/src/ingest/runIngest.ts`, `cli/src/vault/writer.ts`, `cli/src/cli.ts`, `reader-web/vault/runIngestCli.ts`, `reader-web/vault/apiMiddleware.ts`, `reader-web/src/main.ts` (capture detail).
+**Liên quan:** `cli/src/ingest/runIngest.ts`, `cli/src/vault/writer.ts`, `cli/src/cli.ts`, `reader/vault/runIngestCli.ts`, `reader/vault/apiMiddleware.ts`, `reader/src/main.ts` (capture detail).
 
 ---
 

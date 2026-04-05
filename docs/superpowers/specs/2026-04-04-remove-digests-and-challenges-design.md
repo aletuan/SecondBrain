@@ -3,7 +3,7 @@
 **Date:** 2026-04-04  
 **Status:** Design approved — implementation plan is the next artifact (`writing-plans` after human review of this file).
 
-**Context:** Remove weekly digest generation (`pnpm digest`), reading challenges (`pnpm challenge`), and all reader-web surfaces that list or render digests/challenges. Vault cleanup for existing `Digests/` and `Challenges/` notes is a **manual** step using the **Obsidian CLI** (vault is gitignored).
+**Context:** Remove weekly digest generation (`pnpm digest`), reading challenges (`pnpm challenge`), and all reader surfaces that list or render digests/challenges. Vault cleanup for existing `Digests/` and `Challenges/` notes is a **manual** step using the **Obsidian CLI** (vault is gitignored).
 
 ---
 
@@ -11,7 +11,7 @@
 
 1. **CLI:** Remove `digest` and `challenge` commands and their implementation; remove `pnpm digest` and `pnpm challenge` from root `package.json`.
 2. **Reader web:** Remove Digests navigation, routes `#/digests` and `#/digest/:week`, “Generate digest” UI, and challenge rendering; remove related API routes and server helpers.
-3. **Documentation:** Update `CLAUDE.md`, `README.md`, `docs/reader-web.md`, `reader-web/README.md`; remove `DIGEST_LLM_MAX_CHARS` from env tables where listed. Do a **repo-wide pass** on user-facing docs (e.g. ripgrep `digest`, `challenge`, `Digests`, `Challenges`, case-insensitive) so opening blurbs, `OPENAI_API_KEY` copy, workflow steps, and screenshot blocks (e.g. reader digests image) are not left stale.
+3. **Documentation:** Update `CLAUDE.md`, `README.md`, `docs/reader.md`, `reader/README.md`; remove `DIGEST_LLM_MAX_CHARS` from env tables where listed. Do a **repo-wide pass** on user-facing docs (e.g. ripgrep `digest`, `challenge`, `Digests`, `Challenges`, case-insensitive) so opening blurbs, `OPENAI_API_KEY` copy, workflow steps, and screenshot blocks (e.g. reader digests image) are not left stale.
 4. **Stale links:** Hash routes `#/digests` and `#/digest/…` should **normalize to `#/captures`** (replace state + render captures) so bookmarks do not call removed APIs.
 
 **Non-goals:** Replacing digest/challenge with another workflow; automating vault deletion from the Brain repo; keeping deprecated CLI stubs.
@@ -35,19 +35,19 @@
 
 | Action | Path / note |
 |--------|-------------|
-| Delete | `reader-web/vault/runDigestCli.ts` |
-| Edit | `reader-web/vault/service.ts` — remove `listDigests`, `getDigest` |
-| Edit | `reader-web/vault/apiMiddleware.ts` — remove handlers for `POST /api/digest`, `GET /api/digests`, `GET /api/digests/:week`, `GET /api/challenges/:week`; remove imports of digest helpers and `runDigestCli` |
-| Edit | `reader-web/vault/brainDotenv.ts` — adjust comment if it only mentions digest alongside ingest (keep accurate) |
+| Delete | `reader/vault/runDigestCli.ts` |
+| Edit | `reader/vault/service.ts` — remove `listDigests`, `getDigest` |
+| Edit | `reader/vault/apiMiddleware.ts` — remove handlers for `POST /api/digest`, `GET /api/digests`, `GET /api/digests/:week`, `GET /api/challenges/:week`; remove imports of digest helpers and `runDigestCli` |
+| Edit | `reader/vault/brainDotenv.ts` — adjust comment if it only mentions digest alongside ingest (keep accurate) |
 
 ### 2.3 Reader web — client
 
 | Action | Path / note |
 |--------|-------------|
-| Delete | `reader-web/src/digestWikilinks.ts` |
-| Delete test | `reader-web/tests/digestWikilinks.test.ts` |
-| Edit | `reader-web/src/main.ts` — remove digest/challenge-specific imports, hash branches, `fetchChallengeMarkdown`, `renderDigestsList`, `renderDigestDetail`, digest-only markdown renderers (`DigestHeadingRenderer`, `DigestProseRenderer`, etc.), nav buttons for Digests, ingest sidebar copy referencing `Digests/YYYY-Www`; add early redirect from `digests` / `digest` views to captures |
-| Edit | `reader-web/src/style.css` — remove digest/challenge-only rules and `--nav-digest-detail` if nothing else uses it; fix comments referencing digests only |
+| Delete | `reader/src/digestWikilinks.ts` |
+| Delete test | `reader/tests/digestWikilinks.test.ts` |
+| Edit | `reader/src/main.ts` — remove digest/challenge-specific imports, hash branches, `fetchChallengeMarkdown`, `renderDigestsList`, `renderDigestDetail`, digest-only markdown renderers (`DigestHeadingRenderer`, `DigestProseRenderer`, etc.), nav buttons for Digests, ingest sidebar copy referencing `Digests/YYYY-Www`; add early redirect from `digests` / `digest` views to captures |
+| Edit | `reader/src/style.css` — remove digest/challenge-only rules and `--nav-digest-detail` if nothing else uses it; fix comments referencing digests only |
 
 ### 2.4 Health / API contract
 
@@ -58,8 +58,8 @@
 
 - **`CLAUDE.md`:** Remove digest/challenge from overview, commands, architecture bullets, env table row for `DIGEST_LLM_MAX_CHARS`.
 - **`README.md`:** Remove digest/challenge command rows and digest env row.
-- **`docs/reader-web.md`:** Remove digest/challenge API and UI sections; adjust ingest/health prose if it references digest.
-- **`reader-web/README.md`:** Update route list and API list; remove digest endpoints and `digestAvailable`.
+- **`docs/reader.md`:** Remove digest/challenge API and UI sections; adjust ingest/health prose if it references digest.
+- **`reader/README.md`:** Update route list and API list; remove digest endpoints and `digestAvailable`.
 
 **Historical specs/plans** under `docs/plans/` or older `docs/superpowers/specs/` that mention digest: **no mandatory edit** unless they are actively misleading as current architecture; optional one-line “superseded” only if touched for another reason.
 
@@ -86,7 +86,7 @@ The Brain repo **does not** delete vault files. After deploying code removal, cl
 
 ## 5. Verification
 
-- `pnpm typecheck` — root and ensure `reader-web` still builds if part of CI (`pnpm reader:build` from repo root).
+- `pnpm typecheck` — root and ensure `reader` still builds if part of CI (`pnpm reader:build` from repo root).
 - `pnpm test` — all Vitest suites green after deleting tests and updating any shared fixtures.
 
 ---

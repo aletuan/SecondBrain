@@ -1,6 +1,6 @@
 /**
  * Parse list-like note frontmatter fields (`tags`, `categories`).
- * Mirrors `parseTagList` in `reader-web/src/main.ts` so list API and UI stay aligned.
+ * Mirrors `parseTagList` in `reader/src/main.ts` so list API and UI stay aligned.
  */
 export function parseListField(raw: string | boolean | undefined): string[] {
   if (raw === undefined || typeof raw === 'boolean') return [];

@@ -34,11 +34,11 @@
 | **MVP Task 1–12** | ✅ | `pnpm test` — ~77 tests; `cli/src/cli.ts` (`ingest`, `digest`, `challenge`, `translate-transcript`, `suggest-milestones`), adapters, `vault/writer.ts`, `digest.ts`, `llm/enrich.ts` |
 | **Challenge 13a–d** | ✅ | `cli/src/challenge/fromDigest.ts`, `cli/tests/challenge/fromDigest.test.ts`, script `pnpm challenge` |
 | **YouTube 14a–b** | ✅ | `cli/src/adapters/youtube.ts`, `cli/tests/adapters/youtube.test.ts`, writer transcript + `routing.example.yaml` |
-| **YouTube 14c–f** | ✅ | `translateTranscript.ts`, `youtube/milestones.ts`, `suggestMilestones`, [`docs/reader-web.md`](../reader-web.md), [`reader-youtube-timeline.html`](../visualizations/reader-youtube-timeline.html) |
+| **YouTube 14c–f** | ✅ | `translateTranscript.ts`, `youtube/milestones.ts`, `suggestMilestones`, [`docs/reader.md`](../reader.md), [`reader-youtube-timeline.html`](../visualizations/reader-youtube-timeline.html) |
 | **X Article (tweet + long-form)** | ✅ | `cli/src/adapters/xApi.ts` — body Markdown + ảnh → `source.md` / `assets/` (đã verify ingest thực tế); tùy chọn GraphQL/twitter-cli: [handoff](../handoffs/2026-03-20-x-ingest-open-issues.md), [`docs/integrations/x-article-twitter-cli.md`](../integrations/x-article-twitter-cli.md) |
 | **Mở rộng thread / conversation X** | ⛔ không làm | **Đã loại khỏi scope** theo quyết định sản phẩm — không track trong plan. |
 | **Meta Threads (threads.net)** | ⛔ không làm | Nội dung post ngắn, không ưu tiên như article — **không** ingest, không route. |
-| **Reader web app (full)** | ✅ | [`reader-web/`](../../reader-web/) — Vite SPA + vault `/api/*`; mock [`second-brain-mock-ui.html`](../visualizations/second-brain-mock-ui.html) |
+| **Reader web app (full)** | ✅ | [`reader/`](../../reader/) — Vite SPA + vault `/api/*`; mock [`second-brain-mock-ui.html`](../visualizations/second-brain-mock-ui.html) |
 | **Digest chunking lớn** | ✅ | `cli/src/digest.ts` — `DIGEST_LLM_MAX_CHARS`, chunk + merge |
 | **Obsidian CLI batch** | ✅ (tài liệu) | [`docs/integrations/obsidian-cli-batch.md`](../integrations/obsidian-cli-batch.md) |
 
@@ -46,7 +46,7 @@
 
 ## Tiến độ tổng — MVP (Tasks 1–12)
 
-**Công việc mở (ngoài MVP checklist):** **không** ingest Meta Threads; **không** mở rộng thread/conversation X. Reader web: ✅ [`reader-web/`](../../reader-web/).
+**Công việc mở (ngoài MVP checklist):** **không** ingest Meta Threads; **không** mở rộng thread/conversation X. Reader web: ✅ [`reader/`](../../reader/).
 
 - [x] **Task 1** — Project scaffold & config samples
 - [x] **Task 2** — Internal types & normaliser
@@ -299,7 +299,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 **Files:**
 
 - Create: `README.md` (setup, env, example commands, link tới `docs/visualizations/` làm spec reader web)
-- Optional: `docs/reader-web.md` — mục tiêu app đọc vault theo mock, không Quartz
+- Optional: `docs/reader.md` — mục tiêu app đọc vault theo mock, không Quartz
 
 - [x] **Step 1:** Document MVP limitations (X/YouTube phase 2); ghi rõ **Quartz không** nằm trong stack; reader web là project riêng sau.
 - [x] **Step 2:** Bảng lệnh: `ingest`, `digest`, env bắt buộc/tùy chọn.
@@ -316,7 +316,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 - [x] Digest chunking khi vault lớn (`DIGEST_LLM_MAX_CHARS`)
 - [x] Obsidian CLI batch — hướng dẫn trong docs (không wrapper trong repo)
 - [x] Challenge CLI (Task 13a–d)
-- [x] Reader web app đầy đủ — [`reader-web/`](../../reader-web/) + visualizations (mock)
+- [x] Reader web app đầy đủ — [`reader/`](../../reader/) + visualizations (mock)
 
 ---
 
@@ -329,11 +329,11 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 | Mã | Việc | Trạng thái |
 |-----|------|------------|
 | **B1 (14c)** | Dịch transcript YouTube (LLM) + test | ✅ |
-| **B2 (14d)** | `docs/reader-web.md` (embed, `publish`, transcript) | ✅ |
+| **B2 (14d)** | `docs/reader.md` (embed, `publish`, transcript) | ✅ |
 | **B3 (14e)** | `milestones` + `pnpm suggest-milestones` | ✅ |
 | **B4 (14f)** | Mock timeline + seek — [`reader-youtube-timeline.html`](../visualizations/reader-youtube-timeline.html) | ✅ |
 | **B5** | X Article / tích hợp twitter-cli (tài liệu tùy chọn) | ✅ CLI; doc [`x-article-twitter-cli.md`](../integrations/x-article-twitter-cli.md) |
-| **B6** | App reader web đầy đủ | ✅ [`reader-web/`](../../reader-web/) (`pnpm dev` / `pnpm preview`) |
+| **B6** | App reader web đầy đủ | ✅ [`reader/`](../../reader/) (`pnpm dev` / `pnpm preview`) |
 | **B7** | Obsidian CLI doc + digest chunking | ✅ |
 
 ### B1 — Dịch transcript YouTube (**Task 14c**)
@@ -346,7 +346,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 ### B2 — Docs reader web + hợp đồng hiển thị (**Task 14d**)
 
 - **Mục đích:** Người làm app reader (sau này) đọc **một** tài liệu là biết: embed YouTube, cờ `publish`, transcript lấy từ đâu trong vault, phạm vi “app đọc cá nhân”.
-- **Sửa:** [`docs/reader-web.md`](../reader-web.md) — hợp đồng vault + app [`reader-web/`](../../reader-web/); có thể thêm mục “Mapping từ capture folder → UI”.
+- **Sửa:** [`docs/reader.md`](../reader.md) — hợp đồng vault + app [`reader/`](../../reader/); có thể thêm mục “Mapping từ capture folder → UI”.
 - **Xong khi:** Checklist trong doc có thể tick được (ví dụ: “embed URL”, “đọc `## Transcript`”, “ẩn khi `publish: false`” — điều chỉnh theo quyết định thực tế và ghi rõ).
 
 ### B3 — Milestones YouTube (**Task 14e**)
@@ -369,8 +369,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 ### B6 — Reader web app
 
 - **Mục đích:** Ứng dụng đọc vault (disk hoặc API), không Quartz — theo mock trong `docs/visualizations/`.
-- **Triển khai:** [`reader-web/`](../../reader-web/) — Vite + middleware đọc `Captures/` và `Digests/`; xem [`reader-web/README.md`](../../reader-web/README.md).
-- **Xong khi:** Repo (hoặc thư mục app) chạy được locally; link từ README gốc tới app + `docs/reader-web.md`.
+- **Triển khai:** [`reader/`](../../reader/) — Vite + middleware đọc `Captures/` và `Digests/`; xem [`reader/README.md`](../../reader/README.md).
+- **Xong khi:** Repo (hoặc thư mục app) chạy được locally; link từ README gốc tới app + `docs/reader.md`.
 
 ### B7 — Nice-to-have
 
@@ -408,7 +408,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 - [x] **Task 14a:** `cli/src/adapters/youtube.ts` — normalised bundle có `source: youtube`, `youtubeVideoId`, `transcriptSegments` optional; `runIngest` dùng luồng này khi strategy `apify` + host YouTube.
 - [x] **Task 14b:** `cli/src/vault/writer.ts` — `source.md` có `## Transcript (en)`, frontmatter `source`, `youtube_video_id`, `transcript_locale`; `youtu.be` trong `routing.example.yaml`.
 - [x] **Task 14c:** `cli/src/llm/translateTranscript.ts` + `cli/tests/llm/translateTranscript.test.ts`.
-- [x] **Task 14d:** [`docs/reader-web.md`](../reader-web.md) — embed, `publish`, transcript, milestones, CLI.
+- [x] **Task 14d:** [`docs/reader.md`](../reader.md) — embed, `publish`, transcript, milestones, CLI.
 - [x] **Task 14e:** `cli/src/youtube/milestones.ts`, `suggestMilestones.ts`, `pnpm suggest-milestones`.
 - [x] **Task 14f:** [`docs/visualizations/reader-youtube-timeline.html`](../visualizations/reader-youtube-timeline.html).
 

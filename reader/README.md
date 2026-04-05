@@ -1,6 +1,6 @@
 # Reader web
 
-Vite SPA over your **local** Obsidian vault (same contract as [`docs/reader-web.md`](../docs/reader-web.md)): **ingest URL** (same as `pnpm ingest` in the Brain CLI), captures list, capture detail with rendered `note.md`, YouTube embed + transcript tabs (EN / VI / both), and milestone seek.
+Vite SPA over your **local** Obsidian vault (same contract as [`docs/reader.md`](../docs/reader.md)): **ingest URL** (same as `pnpm ingest` in the Brain CLI), captures list, capture detail with rendered `note.md`, YouTube embed + transcript tabs (EN / VI / both), and milestone seek.
 
 Layout and tokens follow [`docs/visualizations/second-brain-mock-ui.html`](../docs/visualizations/second-brain-mock-ui.html). Timeline/seek behaviour from [`reader-youtube-timeline.html`](../docs/visualizations/reader-youtube-timeline.html) is folded into the YouTube capture view here; the standalone HTML remains a small static demo.
 
@@ -12,7 +12,7 @@ Layout and tokens follow [`docs/visualizations/second-brain-mock-ui.html`](../do
 ## Setup
 
 ```bash
-cd reader-web
+cd reader
 pnpm install
 # optional: touch .env and set READER_VAULT_ROOT / READER_BRAIN_ROOT (see Environment below)
 ```
@@ -26,15 +26,15 @@ pnpm install
 | `pnpm preview` | Build then Express: static `dist/` + same `/api/*` (port **4173** or `READER_PORT`) |
 | `pnpm typecheck` | `tsc --noEmit` for `cli/src/`, `vault/`, Vite config, `serve.ts` |
 
-Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default — avoids some HMR WebSocket issues when `localhost` vs `127.0.0.1` disagree). From the Brain repo root you can run `pnpm reader:dev` (same as `cd reader-web && pnpm dev`). Routes use the hash: `#/`, `#/captures`, `#/capture/:id`. Legacy bookmarks `#/digests` or `#/digest/…` redirect to `#/captures`.
+Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default — avoids some HMR WebSocket issues when `localhost` vs `127.0.0.1` disagree). From the Brain repo root you can run `pnpm reader:dev` (same as `cd reader && pnpm dev`). Routes use the hash: `#/`, `#/captures`, `#/capture/:id`. Legacy bookmarks `#/digests` or `#/digest/…` redirect to `#/captures`.
 
 **Live reload vs restart**
 
 | What you change | What to do |
 |-----------------|------------|
-| `reader-web/src/*` (UI, `main.ts`, `style.css`) | Save the file — Vite **hot-updates** or **full page reload** automatically. No need to restart the dev server. |
-| `reader-web/vault/*.ts` (Connect `/api/*` middleware) | **Restart** `pnpm dev` — middleware is registered once at startup. The dev server prints a yellow hint when you save these files. |
-| `reader-web/vite.config.ts` | **Restart** `pnpm dev`. |
+| `reader/src/*` (UI, `main.ts`, `style.css`) | Save the file — Vite **hot-updates** or **full page reload** automatically. No need to restart the dev server. |
+| `reader/vault/*.ts` (Connect `/api/*` middleware) | **Restart** `pnpm dev` — middleware is registered once at startup. The dev server prints a yellow hint when you save these files. |
+| `reader/vite.config.ts` | **Restart** `pnpm dev`. |
 | `pnpm preview` / `dist/` | **No HMR.** Run `pnpm build` again (or use `pnpm dev` while iterating). |
 
 **If the browser still looks stale:** confirm you are on **`pnpm dev`** (port **5174**), not **`pnpm preview`** (port **4173**, static `dist/`). Then DevTools → **Network** → **Disable cache**, hard-reload. Optional: `READER_VITE_POLL=1 pnpm dev` if file saves are not detected (Docker bind mounts, some network disks). Optional: `READER_DEV_HOST=0.0.0.0` to listen on all interfaces (local network only — do not expose to the internet).
@@ -47,13 +47,13 @@ Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default —
 |----------|---------|
 | `READER_VAULT_ROOT` | Vault path (preferred for this app) |
 | `VAULT_ROOT` | Same as CLI; used if `READER_VAULT_ROOT` unset |
-| `READER_BRAIN_ROOT` | Brain CLI repo (contains `cli/src/cli.ts`); default parent of `reader-web/` |
+| `READER_BRAIN_ROOT` | Brain CLI repo (contains `cli/src/cli.ts`); default parent of `reader/` |
 | `READER_ALLOW_INGEST` | `0` / `false` disables ingest routes (`POST /api/ingest`, start/stream) |
 | `READER_PORT` | Preview server port (default `4173`) |
 | `READER_DEV_HOST` | Dev + HMR bind host (default `127.0.0.1`). Use `0.0.0.0` only on trusted LAN. |
 | `READER_VITE_POLL` | Set to `1` or `true` so Vite watches files with polling (fixes missed saves on Docker / some disks). |
 
-If neither vault env is set, the app resolves `../vault` from the `reader-web/` working directory.
+If neither vault env is set, the app resolves `../vault` from the `reader/` working directory.
 
 ## API (local middleware)
 

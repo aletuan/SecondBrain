@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "reader:dev": "pnpm -C reader-web dev",
-    "reader:build": "pnpm -C reader-web build",
-    "reader:preview": "pnpm -C reader-web preview",
+    "reader:dev": "pnpm -C reader dev",
+    "reader:build": "pnpm -C reader build",
+    "reader:preview": "pnpm -C reader preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "ingest": "tsx cli/src/cli.ts ingest",

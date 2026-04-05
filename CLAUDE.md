@@ -19,9 +19,9 @@ pnpm translate-transcript -- --capture path/to/Captures/…   # Add/replace ## T
 pnpm suggest-milestones -- --capture path/to/Captures/… --max-sec 600
 ```
 
-**Reader web** (optional, separate package): `cd reader-web && pnpm install && pnpm dev` (or repo root `pnpm reader:dev`) — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs cli/src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader-web/README.md` and `docs/reader-web.md`.
+**Reader web** (optional, separate package): `cd reader && pnpm install && pnpm dev` (or repo root `pnpm reader:dev`) — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs cli/src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader/README.md` and `docs/reader.md`.
 
-Run a single test file: `pnpm vitest run cli/tests/path/to/file.test.ts` (CLI) or `pnpm vitest run reader-web/tests/…` (reader).
+Run a single test file: `pnpm vitest run cli/tests/path/to/file.test.ts` (CLI) or `pnpm vitest run reader/tests/…` (reader).
 
 ## Architecture
 

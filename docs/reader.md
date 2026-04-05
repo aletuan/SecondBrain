@@ -4,7 +4,7 @@ The second-brain **reader web** is a **separate** application from this CLI. It 
 
 ## Implementation in this repo
 
-A working app lives under [`reader-web/`](../reader-web/): **Vite** + vanilla TS, dev server with Connect middleware exposing read routes plus ingest against the Brain CLI repo (`READER_BRAIN_ROOT`, default parent of `reader-web/`; CLI entry `cli/src/cli.ts`) with `VAULT_ROOT` aligned to the reader vault — same files Obsidian sees. Treat ingest as **local-only** (do not expose the dev server to the internet); use `READER_ALLOW_INGEST=0` to disable. See [`reader-web/README.md`](../reader-web/README.md).
+A working app lives under [`reader/`](../reader/): **Vite** + vanilla TS, dev server with Connect middleware exposing read routes plus ingest against the Brain CLI repo (`READER_BRAIN_ROOT`, default parent of `reader/`; CLI entry `cli/src/cli.ts`) with `VAULT_ROOT` aligned to the reader vault — same files Obsidian sees. Treat ingest as **local-only** (do not expose the dev server to the internet); use `READER_ALLOW_INGEST=0` to disable. See [`reader/README.md`](../reader/README.md).
 
 **Ingest API:** **`POST /api/ingest`** remains a single round-trip (JSON result); body **`{ "url": "…" }`** only. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (same body, returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks real pipeline phases from the CLI (`tsx … ingest --progress-json`). Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request sends **SIGTERM** to the child process.
 
@@ -61,4 +61,4 @@ Path pattern (CLI output):
 
 ## Repo layout
 
-The [`reader-web/`](../reader-web/) package is the canonical app; it can stay here or move to its own repo / monorepo package. Keep the **vault path** configurable (`READER_VAULT_ROOT` or `VAULT_ROOT`).
+The [`reader/`](../reader/) package is the canonical app; it can stay here or move to its own repo / monorepo package. Keep the **vault path** configurable (`READER_VAULT_ROOT` or `VAULT_ROOT`).
