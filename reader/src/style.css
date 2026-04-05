@@ -1730,14 +1730,6 @@ main {
   min-width: 0;
 }
 
-.card-tile__platform {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 .card-tile__category-row {
   display: flex;
   flex-wrap: wrap;
