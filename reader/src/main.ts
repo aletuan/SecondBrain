@@ -1477,10 +1477,9 @@ function renderHome(
             const datetimeAttr = ing.iso?.trim() || '';
             const meth = formatFetchMethodTile(r.fetch_method);
             const methKnown = meth !== '—';
-            const platformLabel = captureCardPlatformLabel(sourceType);
             const cardAria = methKnown
-              ? `Open capture: ${r.title} (${platformLabel}). Ingest: ${meth}.`
-              : `Open capture: ${r.title} (${platformLabel}).`;
+              ? `Open capture: ${r.title}. Ingest: ${meth}.`
+              : `Open capture: ${r.title}`;
             const cardTitleAttr = methKnown ? `Ingest: ${meth}` : '';
             return `
         <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}" aria-label="${escAttr(cardAria)}"${cardTitleAttr ? ` title="${escAttr(cardTitleAttr)}"` : ''}>
@@ -1488,6 +1487,7 @@ function renderHome(
             <div class="card-tile__header-main">
               <div class="card-tile__icon-wrap" aria-hidden="true">${cardTileIconHtml(sourceType)}</div>
               <div class="card-tile__head-text">
+                <span class="card-tile__platform">${esc(captureCardPlatformLabel(sourceType))}</span>
                 ${cardTileCategoryLine(r, labelById)}
               </div>
             </div>
