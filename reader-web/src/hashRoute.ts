@@ -1,5 +1,5 @@
 /**
- * Maps legacy digest hash routes to the captures library after digest UI removal.
+ * Maps removed reader hash routes to the captures library (bookmark compatibility).
  * `location.hash` includes the leading `#`.
  */
 export function normalizeLegacyReaderHash(hash: string): string | null {

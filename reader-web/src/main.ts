@@ -1115,7 +1115,7 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
       <div class="ingest-label">Vault</div>
       <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.5">Same folder as Obsidian · <code style="color:var(--signal)">READER_VAULT_ROOT</code></p>
     </div>
-    <div class="digest-block">
+    <div class="side-aside-block">
       <h4>Status</h4>
       <ul>
         <li><strong>Vault</strong> — absolute path in the status strip</li>
@@ -1123,7 +1123,7 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
         <li>Home: <strong>${shownOnHome}</strong> recent cards · <strong>${vaultTotal}</strong> captures in vault</li>
       </ul>
     </div>
-    <div class="digest-block">
+    <div class="side-aside-block">
       <h4>Quick links</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.6">
         → <code style="color:var(--signal)">Captures/…</code> in vault
@@ -1168,7 +1168,7 @@ function sideCaptures(rows: CaptureListItem[]): string {
 function sideCapture(d: CaptureDetail): string {
   return `
     <div class="ingest-label">Capture</div>
-    <div class="digest-block">
+    <div class="side-aside-block">
       <h4>${esc(d.id)}</h4>
       <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">Folder under <code style="color:var(--signal)">Captures/</code> — edit <code style="color:var(--signal)">note.md</code> in Obsidian.</p>
     </div>

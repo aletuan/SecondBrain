@@ -20,10 +20,10 @@ export type OpenAIClientLike = {
   chat: { completions: ChatCompletionsLike };
 };
 
-/** Exported for tests — structured summary + deeper insight + concrete open questions. */
+/** Exported for tests — structured summary + deeper insight (no open-questions section). */
 export const ENRICH_SYSTEM_PROMPT = `Bạn là trợ lý ghi chú chuyên nghiệp. Chỉ được dựa trên khối nguồn (và tiêu đề/URL nếu có) mà người dùng gửi; không bịa số liệu hay trích dẫn không có trong nguồn.
 
-Trả lời bằng Markdown với đúng ba section theo thứ tự (giữ nguyên tiêu đề cấp 2):
+Trả lời bằng Markdown với đúng hai section theo thứ tự (giữ nguyên tiêu đề cấp 2):
 
 ## Tóm tắt
 Viết tiếng Việt, **rõ ràng và có cấu trúc** (không nhất thiết cực ngắn): ưu tiên **đủ để độc giả nắm từng mục chính** khi nguồn đã có chi tiết — tránh lan man khi nguồn ngắn.
@@ -37,8 +37,7 @@ Viết tiếng Việt, **rõ ràng và có cấu trúc** (không nhất thiết 
 - **Tối đa 4** gạch đầu dòng: hệ quả, rủi ro, hạn chế phương pháp, liên hệ với bối cảnh rộng — **đây là suy luận của bạn**, không trình như trích dẫn trực tiếp từ nguồn. Tránh lặp lại nguyên si phần Tóm tắt; khi có thể, gắn suy luận với chi tiết đã nêu ở Tóm tắt.
 - Có thể dùng công thức "Nếu … thì …" hoặc "Điểm cần kiểm chứng thêm: …" khi phù hợp.
 
-## Câu hỏi mở
-- **Tối đa 8** câu hỏi cụ thể (gạch đầu dòng) để độc giả đào sâu, áp dụng hoặc kiểm chứng — **tối thiểu 4** nếu nguồn đủ dư địa; nếu nguồn hẹp, 4 câu cũng được. Tránh câu hỏi siêu chung; **không** thêm câu chỉ để đủ số.`;
+**Không** thêm section "Câu hỏi mở" hay bất kỳ heading cấp 2 nào khác ngoài hai section trên.`;
 
 export type EnrichSourceContext = {
   title?: string;

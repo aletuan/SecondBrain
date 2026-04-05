@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 describe('ENRICH_SYSTEM_PROMPT', () => {
-  it('asks for structured summary, insights, and concrete open questions', () => {
+  it('asks for structured summary and insights only (no open-questions section)', () => {
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Tóm tắt');
     expect(ENRICH_SYSTEM_PROMPT).toContain('Ý chính');
     expect(ENRICH_SYSTEM_PROMPT).toContain('tối đa 7');
@@ -32,8 +32,8 @@ describe('ENRICH_SYSTEM_PROMPT', () => {
     expect(ENRICH_SYSTEM_PROMPT).toContain('ngoặc kép');
     expect(ENRICH_SYSTEM_PROMPT).toContain('## Insight (LLM)');
     expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 4/i);
-    expect(ENRICH_SYSTEM_PROMPT).toContain('## Câu hỏi mở');
-    expect(ENRICH_SYSTEM_PROMPT).toMatch(/tối đa 8/i);
+    expect(ENRICH_SYSTEM_PROMPT).not.toContain('## Câu hỏi mở');
+    expect(ENRICH_SYSTEM_PROMPT).toMatch(/Không.*Câu hỏi mở/s);
   });
 });
 
@@ -145,7 +145,7 @@ describe('buildEnrichmentSections', () => {
                   {
                     message: {
                       content:
-                        '## Tóm tắt\n- **Chủ đề / bối cảnh** — Test.\n- **Ý chính**\n- a\n## Insight (LLM) — suy luận\n- x\n## Câu hỏi mở\n- y?',
+                        '## Tóm tắt\n- **Chủ đề / bối cảnh** — Test.\n- **Ý chính**\n- a\n## Insight (LLM) — suy luận\n- x',
                     },
                   },
                 ],
@@ -241,7 +241,7 @@ describe('enrichNote', () => {
               {
                 message: {
                   content:
-                    '## Tóm tắt\n- **Chủ đề / bối cảnh** — X.\n- **Ý chính**\n- một\n## Insight (LLM) — suy luận\nCó thể liên quan Y (suy luận).\n\n## Câu hỏi mở\n- Câu 1?\n- Câu 2?',
+                    '## Tóm tắt\n- **Chủ đề / bối cảnh** — X.\n- **Ý chính**\n- một\n## Insight (LLM) — suy luận\nCó thể liên quan Y (suy luận).',
                 },
               },
             ],
@@ -263,7 +263,7 @@ describe('enrichNote', () => {
     const out = await fs.readFile(notePath, 'utf8');
     expect(out).toContain('## Tóm tắt');
     expect(out).toContain('## Insight (LLM)');
-    expect(out).toContain('## Câu hỏi mở');
-    expect(out).toContain('Câu 1?');
+    expect(out).not.toContain('## Câu hỏi mở');
+    expect(out).toContain('liên quan Y');
   });
 });

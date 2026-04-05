@@ -15,6 +15,7 @@
     "verify-keys": "tsx scripts/verify-keys.ts",
     "verify-apify-youtube": "tsx scripts/verify-apify-youtube.ts",
     "verify-x-tweet": "tsx scripts/verify-x-tweet.ts",
+    "strip-cau-hoi-mo": "tsx scripts/strip-cau-hoi-mo-notes.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

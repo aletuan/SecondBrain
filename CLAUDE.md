@@ -31,7 +31,7 @@ Run a single test file: `pnpm vitest run tests/path/to/file.test.ts`
 - **Adapters** (`src/adapters/`): Fetch content per strategy — `httpReadability.ts` (default, Mozilla Readability + jsdom), `apify.ts` (Apify actors), `youtube.ts` (transcripts via Apify), `xApi.ts` (X API v2 with article/long-post support)
 - **Normaliser** (`src/normaliser.ts`): Raw HTML → `CaptureBundle` (title, text, images, code blocks)
 - **Vault Writer** (`src/vault/writer.ts`): Writes `Captures/YYYY-MM-DD--slug--hash/` with `source.md`, `note.md`, `assets/`
-- **LLM Enrichment** (`src/llm/enrich.ts`): Appends Vietnamese-language sections (Tóm tắt, Insight, Câu hỏi mở) to `note.md` via OpenAI
+- **LLM Enrichment** (`src/llm/enrich.ts`): Appends Vietnamese-language sections (Tóm tắt, Insight) to the capture note via OpenAI
 - **Translate transcript** (`src/llm/translateTranscript.ts`): Batch EN→VI for YouTube segments (aligned with `youtube-crawl-translate` JSON-array pattern)
 - **Milestones** (`src/youtube/milestones.ts`, `suggestMilestones.ts`): `milestones.yaml` + optional LLM suggestions
 

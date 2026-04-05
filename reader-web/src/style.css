@@ -2030,13 +2030,13 @@ tr.capture-row:focus-visible {
   gap: 0.35rem;
 }
 
-.digest-block {
+.side-aside-block {
   border: 1px dashed var(--line);
   padding: 1rem;
   background: var(--ink);
 }
 
-.digest-block h4 {
+.side-aside-block h4 {
   font-family: var(--font-display);
   font-size: 1.1rem;
   font-weight: 400;
@@ -2044,7 +2044,7 @@ tr.capture-row:focus-visible {
   color: var(--paper-read);
 }
 
-.digest-block ul {
+.side-aside-block ul {
   margin: 0;
   padding-left: 1rem;
   color: color-mix(in srgb, var(--muted) 65%, var(--paper-read));
@@ -2052,16 +2052,16 @@ tr.capture-row:focus-visible {
   line-height: 1.58;
 }
 
-.digest-block li {
+.side-aside-block li {
   margin-bottom: 0.4rem;
 }
 
-.digest-block li strong {
+.side-aside-block li strong {
   color: var(--accent);
   font-weight: 500;
 }
 
-.digest-block code {
+.side-aside-block code {
   color: var(--signal);
   font-size: 11px;
 }
