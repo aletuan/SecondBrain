@@ -4,7 +4,7 @@
 
 **Goal:** Replace the TypeScript `cli/` ingest stack with a **Python FastAPI service** on the same machine, keep the **vault path unchanged**, and remove **all** CLI entrypoints; the reader keeps its **SSE ingest UX** by having **Connect middleware** call the Python API (server-side) instead of spawning `tsx`.
 
-**Architecture:** New package under `api/` (`pyproject.toml`, `src/brain_api/`) hosts the pipeline (router, adapters, normaliser, vault, LLM) ported from `cli/src/*`. FastAPI exposes `POST /ingest` (or job + stream) emitting the **same v1 progress JSON** as `cli/src/ingest/ingestProgress.ts`. Reader’s `reader/vault/apiMiddleware.ts` and `reader/vault/runIngestCli.ts` are **replaced or refactored** to **HTTP stream** to `PYTHON_INGEST_URL` with `INGEST_API_KEY`; `reader/src/main.ts` ingest copy drops `pnpm ingest` references. Delete `cli/` and root scripts; **Vitest** only for `reader/`; **pytest** for `api/`.
+**Architecture:** New package under `api/` (`pyproject.toml`, `src/brain_api/`) hosts the pipeline (router, adapters, normaliser, vault, LLM) ported from `cli/src/*`. FastAPI exposes `POST /ingest` (or job + stream) emitting the **same v1 progress JSON** as `cli/src/ingest/ingestProgress.ts`, plus **`GET` taxonomy/categories** from **bundled `api/…` YAML** (see spec §3). Reader’s `reader/vault/apiMiddleware.ts` **proxies** ingest streams and **category list** to Python (`PYTHON_INGEST_URL`); remove filesystem reads of `config/categories.yaml` from `READER_BRAIN_ROOT`. Delete `cli/` and root scripts; **Vitest** only for `reader/`; **pytest** for `api/`.
 
 **Tech Stack:** Python 3.11+, FastAPI, Uvicorn, Pydantic v2, PyYAML, httpx, pytest; HTML extraction via **readability-lxml** and/or **trafilatura** (evaluate parity vs `@mozilla/readability`+jsdom); OpenAI **official Python SDK**; Apify **Python client**; X API via httpx.
 
@@ -16,9 +16,9 @@
 
 | Area | Create / keep | Remove / stop using |
 |------|----------------|---------------------|
-| Python service | `api/pyproject.toml`, `api/README.md`, `api/src/brain_api/__init__.py`, `api/src/brain_api/main.py`, `api/src/brain_api/settings.py`, `api/src/brain_api/progress.py`, `api/src/brain_api/routes/ingest.py`, `api/src/brain_api/routes/health.py`, ported modules mirroring `cli/src/` (`router.py`, `adapters/`, `normaliser.py`, `vault/`, `llm/`, …) | — |
+| Python service | `api/pyproject.toml`, `api/README.md`, `api/src/brain_api/…`, `api/config/categories.default.yaml` (or `brain_api/data/categories.default.yaml`), `routes/taxonomy.py` for **`GET /v1/taxonomy/categories`**, `routes/ingest.py`, `routes/health.py`, ported modules mirroring `cli/src/` | Root `config/categories.yaml` workflow |
 | Tests | `api/tests/conftest.py`, `api/tests/test_progress.py`, `api/tests/test_ingest_e2e.py`, … | `cli/tests/**` |
-| Reader | `reader/vault/ingestBackend.ts` (new: httpx-like client using `fetch`/`undici` in Node — use native `fetch` in Node 20+) or inline in `apiMiddleware.ts` | `reader/vault/runIngestCli.ts` (delete after cutover) |
+| Reader | `reader/vault/ingestBackend.ts` or inline in `apiMiddleware.ts` — **ingest stream** + **proxy `GET /api/taxonomy/categories` → Python** | `reader/vault/runIngestCli.ts`; middleware path that reads `config/categories*.yaml` from disk |
 | Reader | `reader/vault/paths.ts`, `brainDotenv.ts` — adjust `assertIngestEnvironment` | Check for `cli/src/cli.ts` |
 | Root | `.env.example` rows for `PYTHON_INGEST_URL`, `INGEST_API_KEY`, `UVICORN_PORT` | `package.json` scripts: `ingest`, `translate-transcript`, `suggest-milestones`, TS verify scripts that import `cli/` |
 | Root | Optional: `pnpm api:dev` → `cd api && uv run uvicorn …` | Entire `cli/` tree |
@@ -191,6 +191,22 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 
 ---
 
+### Task 8b: Category taxonomy (bundled YAML + `GET`)
+
+**Files:**
+- Create: `api/config/categories.default.yaml` (migrate content from root `config/categories.example.yaml`)
+- Create: `api/src/brain_api/taxonomy.py` — load default + optional `CATEGORIES_CONFIG_PATH`, export ordered `{ id, label }[]` and `allowed_ids` set
+- Create: `api/src/brain_api/routes/taxonomy.py` — `GET /v1/taxonomy/categories` → JSON list
+- Create: `api/tests/test_taxonomy.py`
+
+- [ ] **Step 1:** pytest: payload matches file contents; override path env merges/replaces per spec.
+
+- [ ] **Step 2:** Wire router in `main.py`.
+
+- [ ] **Step 3:** Commit `feat(api): taxonomy endpoint and bundled categories`
+
+---
+
 ### Task 9: `run_ingest` orchestration + real progress events
 
 **Files:**
@@ -215,9 +231,11 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 
 - [ ] **Step 1:** OpenAI SDK calls mirror TS prompts (Vietnamese headings, env `ENRICH_*`).
 
-- [ ] **Step 2:** pytest with mocked OpenAI client.
+- [ ] **Step 2:** **`extract_categories`** uses **`taxonomy.allowed_ids`** from Task 8b (same source as `GET`).
 
-- [ ] **Step 3:** Commit `feat(api): LLM and YouTube helpers`
+- [ ] **Step 3:** pytest with mocked OpenAI client.
+
+- [ ] **Step 4:** Commit `feat(api): LLM and YouTube helpers`
 
 ---
 
@@ -246,6 +264,8 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 - Modify: `reader/vault/brainDotenv.ts` if it injects CLI-specific env.
 
 - [ ] **Step 1:** With Python API running, reader SSE ingest completes and UI shows steps.
+
+- [ ] **Step 1b:** Proxy **`GET /api/taxonomy/categories`** to Python **`GET /v1/taxonomy/categories`**; remove disk read of `config/categories.yaml` in middleware.
 
 - [ ] **Step 2:** `pnpm vitest run reader/tests/readerApiNoDigest.test.ts` (update mocks to hit FastAPI test app or mock `fetch`).
 
@@ -279,6 +299,8 @@ Work **bottom-up**: types → vault writer → normaliser → router → adapter
 - [ ] **Step 1:** `pnpm test` (reader only) passes; `pytest api` passes.
 
 - [ ] **Step 2:** `pnpm typecheck` passes.
+
+- [ ] **Step 2b:** Deprecate root **`config/categories.example.yaml`** (delete or stub pointer); update **`.gitignore`** / `README` per spec §5.
 
 - [ ] **Step 3:** Commit `chore!: remove TypeScript CLI`
 
