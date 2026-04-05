@@ -31,15 +31,15 @@
 
 | Nhóm | Hoàn thành | Kiểm chứng nhanh |
 |------|------------|------------------|
-| **MVP Task 1–12** | ✅ | `pnpm test` — ~77 tests; `src/cli.ts` (`ingest`, `digest`, `challenge`, `translate-transcript`, `suggest-milestones`), adapters, `vault/writer.ts`, `digest.ts`, `llm/enrich.ts` |
-| **Challenge 13a–d** | ✅ | `src/challenge/fromDigest.ts`, `tests/challenge/fromDigest.test.ts`, script `pnpm challenge` |
-| **YouTube 14a–b** | ✅ | `src/adapters/youtube.ts`, `tests/adapters/youtube.test.ts`, writer transcript + `routing.example.yaml` |
+| **MVP Task 1–12** | ✅ | `pnpm test` — ~77 tests; `cli/src/cli.ts` (`ingest`, `digest`, `challenge`, `translate-transcript`, `suggest-milestones`), adapters, `vault/writer.ts`, `digest.ts`, `llm/enrich.ts` |
+| **Challenge 13a–d** | ✅ | `cli/src/challenge/fromDigest.ts`, `cli/tests/challenge/fromDigest.test.ts`, script `pnpm challenge` |
+| **YouTube 14a–b** | ✅ | `cli/src/adapters/youtube.ts`, `cli/tests/adapters/youtube.test.ts`, writer transcript + `routing.example.yaml` |
 | **YouTube 14c–f** | ✅ | `translateTranscript.ts`, `youtube/milestones.ts`, `suggestMilestones`, [`docs/reader-web.md`](../reader-web.md), [`reader-youtube-timeline.html`](../visualizations/reader-youtube-timeline.html) |
-| **X Article (tweet + long-form)** | ✅ | `src/adapters/xApi.ts` — body Markdown + ảnh → `source.md` / `assets/` (đã verify ingest thực tế); tùy chọn GraphQL/twitter-cli: [handoff](../handoffs/2026-03-20-x-ingest-open-issues.md), [`docs/integrations/x-article-twitter-cli.md`](../integrations/x-article-twitter-cli.md) |
+| **X Article (tweet + long-form)** | ✅ | `cli/src/adapters/xApi.ts` — body Markdown + ảnh → `source.md` / `assets/` (đã verify ingest thực tế); tùy chọn GraphQL/twitter-cli: [handoff](../handoffs/2026-03-20-x-ingest-open-issues.md), [`docs/integrations/x-article-twitter-cli.md`](../integrations/x-article-twitter-cli.md) |
 | **Mở rộng thread / conversation X** | ⛔ không làm | **Đã loại khỏi scope** theo quyết định sản phẩm — không track trong plan. |
 | **Meta Threads (threads.net)** | ⛔ không làm | Nội dung post ngắn, không ưu tiên như article — **không** ingest, không route. |
 | **Reader web app (full)** | ✅ | [`reader-web/`](../../reader-web/) — Vite SPA + vault `/api/*`; mock [`second-brain-mock-ui.html`](../visualizations/second-brain-mock-ui.html) |
-| **Digest chunking lớn** | ✅ | `src/digest.ts` — `DIGEST_LLM_MAX_CHARS`, chunk + merge |
+| **Digest chunking lớn** | ✅ | `cli/src/digest.ts` — `DIGEST_LLM_MAX_CHARS`, chunk + merge |
 | **Obsidian CLI batch** | ✅ (tài liệu) | [`docs/integrations/obsidian-cli-batch.md`](../integrations/obsidian-cli-batch.md) |
 
 ---
@@ -92,7 +92,7 @@
 - Modify: [`.gitignore`](../../.gitignore) (ensure `.env` ignored — already present)
 
 - [x] **Step 1:** Chốt **CLI parser**: `commander` *hoặc* `yargs` — ghi vào `package.json` dependency và dùng thống nhất từ Task 9.
-- [x] **Step 2:** Add `package.json` with scripts: `"test": "vitest run"`, `"test:watch": "vitest"`, `"ingest": "tsx src/cli.ts ingest"`, `"digest": "tsx src/cli.ts digest"`, deps: `typescript`, `tsx`, `vitest`, `yaml`, `apify-client`, `openai`, `jsdom`, `@mozilla/readability`, `commander` (hoặc `yargs`).
+- [x] **Step 2:** Add `package.json` with scripts: `"test": "vitest run"`, `"test:watch": "vitest"`, `"ingest": "tsx cli/src/cli.ts ingest"`, `"digest": "tsx cli/src/cli.ts digest"`, deps: `typescript`, `tsx`, `vitest`, `yaml`, `apify-client`, `openai`, `jsdom`, `@mozilla/readability`, `commander` (hoặc `yargs`).
 - [x] **Step 3:** `tsconfig.json` — `moduleResolution: bundler` or `node16`, `strict: true`, `outDir: dist` optional.
 - [x] **Step 4:** Copy `config/routing.example.yaml` → `config/routing.yaml` locally (gitignore `routing.yaml` if contains secrets) **or** commit only example; document that user copies example.
 
@@ -138,14 +138,14 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/types/capture.ts`
-- Create: `src/normaliser.ts`
-- Create: `tests/normaliser.test.ts`
+- Create: `cli/src/types/capture.ts`
+- Create: `cli/src/normaliser.ts`
+- Create: `cli/tests/normaliser.test.ts`
 
 - [x] **Step 1: Write failing test** — `normaliseRawHtml` or `bundleFromParts` produces fixed shape: `{ canonicalUrl, title, textPlain, images: { url, alt }[], codeBlocks: { language, code }[], fetchedAt, fetchMethod }`.
-- [x] **Step 2:** Run `pnpm vitest tests/normaliser.test.ts` — expect **FAIL**.
+- [x] **Step 2:** Run `pnpm vitest cli/tests/normaliser.test.ts` — expect **FAIL**.
 - [x] **Step 3:** Implement minimal `normaliser.ts`.
-- [x] **Step 4:** Run `pnpm vitest tests/normaliser.test.ts` — expect **PASS**.
+- [x] **Step 4:** Run `pnpm vitest cli/tests/normaliser.test.ts` — expect **PASS**.
 - [x] **Step 5:** Commit.
 
 ---
@@ -154,12 +154,12 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/router.ts`
-- Create: `tests/router.test.ts`
-- Create: `src/config/loadRouting.ts`
+- Create: `cli/src/router.ts`
+- Create: `cli/tests/router.test.ts`
+- Create: `cli/src/config/loadRouting.ts`
 
 - [x] **Step 1:** Tests: given YAML string, `resolveStrategy('https://example.com/post')` → `http_readability`; `https://x.com/user/status/1` → `x_api` when route matches.
-- [x] **Step 2:** Run `pnpm vitest tests/router.test.ts` — expect **FAIL**.
+- [x] **Step 2:** Run `pnpm vitest cli/tests/router.test.ts` — expect **FAIL**.
 - [x] **Step 3:** Implement `loadRouting` + `resolveStrategy`.
 - [x] **Step 4:** Run tests — **PASS**.
 - [x] **Step 5:** Commit.
@@ -170,8 +170,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/vault/writer.ts`
-- Create: `tests/vault/writer.test.ts`
+- Create: `cli/src/vault/writer.ts`
+- Create: `cli/tests/vault/writer.test.ts`
 
 - [x] **Step 1:** Test in temp dir: `writeCapture(bundle)` creates `Captures/YYYY-MM-DD--slug--shortid/source.md` with frontmatter `type: capture`, `url`, `ingested_at`, `fetch_method`, `publish: false`.
 - [x] **Step 2:** Run test — **FAIL** until implemented.
@@ -185,8 +185,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/adapters/httpReadability.ts`
-- Create: `tests/adapters/httpReadability.test.ts` (mock `fetch` or use golden HTML string)
+- Create: `cli/src/adapters/httpReadability.ts`
+- Create: `cli/tests/adapters/httpReadability.test.ts` (mock `fetch` or use golden HTML string)
 
 - [x] **Step 1:** Test passes static HTML fixture through adapter → expected text + image URLs extracted.
 - [x] **Step 2:** Run test — **FAIL**.
@@ -200,8 +200,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/adapters/apify.ts`
-- Create: `tests/adapters/apify.test.ts` (mock `ApifyClient` — no real network in CI)
+- Create: `cli/src/adapters/apify.ts`
+- Create: `cli/tests/adapters/apify.test.ts` (mock `ApifyClient` — no real network in CI)
 
 - [x] **Step 1:** Test: mock client returns dataset items with `text` / `markdown` / `screenshotUrl` fields → normalised bundle.
 - [x] **Step 2:** Run test — **FAIL**.
@@ -215,11 +215,11 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/adapters/xApi.ts`
-- Create: `tests/adapters/xApi.test.ts`
+- Create: `cli/src/adapters/xApi.ts`
+- Create: `cli/tests/adapters/xApi.test.ts`
 
 - [x] **Step 1:** Test: khi `X_BEARER_TOKEN` thiếu (hoặc env mock rỗng), adapter throw error message chứa chuỗi gợi ý kiểu **"Configure X API"** hoặc **"switch route to apify"** — assert bằng `toThrowError` / `rejects.toThrow`.
-- [x] **Step 2:** Run `pnpm vitest tests/adapters/xApi.test.ts` — **FAIL**.
+- [x] **Step 2:** Run `pnpm vitest cli/tests/adapters/xApi.test.ts` — **FAIL**.
 - [x] **Step 3:** Implement adapter: throw rõ ràng khi không có token; entry ingest tweet + note_tweet + article (`fetchXThread`).
 - [x] **Step 4:** Run test — **PASS**.
 - [x] **Step 5 (tùy chọn):** Nếu có token trong env dev, test tích hợp với `fetch` mock JSON 1 tweet → bundle (có thể hoãn Phase 2+).
@@ -233,8 +233,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/llm/enrich.ts`
-- Create: `tests/llm/enrich.test.ts` (mock OpenAI client — không gọi mạng trong CI)
+- Create: `cli/src/llm/enrich.ts`
+- Create: `cli/tests/llm/enrich.test.ts` (mock OpenAI client — không gọi mạng trong CI)
 
 - [x] **Step 1:** Test: `enrichNote` (hoặc `buildEnrichmentSections`) với mock completion trả về nội dung cố định → markdown có các section (hoặc substring): **Tóm tắt**, **Insight (LLM)** / suy luận, **Câu hỏi mở** — khớp design (tách facts vs inference trong prompt; test assert cấu trúc output).
 - [x] **Step 2:** Run test — **FAIL**.
@@ -248,7 +248,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/cli.ts` (hoặc `src/cli/index.ts` + subcommands nếu tách)
+- Create: `cli/src/cli.ts` (hoặc `cli/src/cli/index.ts` + subcommands nếu tách)
 - Modify: `package.json` scripts / `bin` nếu cần
 
 - [x] **Step 1:** Đăng ký lệnh `ingest <url>` (hoặc `ingest -- <url>`): parse URL, đọc `VAULT_ROOT`, load `config/routing.yaml` (fallback example path document trong README).
@@ -265,8 +265,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Create: `src/digest.ts`
-- Create: `tests/digest.test.ts`
+- Create: `cli/src/digest.ts`
+- Create: `cli/tests/digest.test.ts`
 
 - [x] **Step 1:** Test: với vài file capture giả trong temp `vault/Captures/.../note.md` + `ingested_at` trong frontmatter, `generateDigest({ since: '7d' })` tạo `Digests/YYYY-Www.md` chứa wikilink `[[...]]` tới ít nhất một capture (week theo **ISO**, timezone document: UTC hoặc local — chốt một và ghi trong code comment).
 - [x] **Step 2:** Run test — **FAIL**.
@@ -281,8 +281,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Files:**
 
-- Modify: `src/vault/writer.ts`
-- Create: `tests/vault/assets.test.ts`
+- Modify: `cli/src/vault/writer.ts`
+- Create: `cli/tests/vault/assets.test.ts`
 
 **Thứ tự:** Nên làm **sau** Task 4 tối thiểu; thường **sau Task 8/9** để ingest end-to-end có ảnh. Có thể tách: ingest không ảnh trước, rồi bật Task 11.
 
@@ -339,8 +339,8 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 ### B1 — Dịch transcript YouTube (**Task 14c**)
 
 - **Mục đích:** Từ transcript đã ghi trong capture, sinh thêm bản **Tiếng Việt** (LLM), gắn nhãn rõ *bản dịch / suy diễn* để không nhầm với nguyên bản.
-- **Tạo / sửa:** `src/llm/translateTranscript.ts`; `tests/llm/translateTranscript.test.ts` (fixture transcript ngắn → snapshot khối `vi`).
-- **CLI:** `pnpm exec tsx src/cli.ts ingest '<url>'` (YouTube: dịch Vi tự động khi có segment + key) hoặc `pnpm translate-transcript -- --capture <path>` — xem README.
+- **Tạo / sửa:** `cli/src/llm/translateTranscript.ts`; `cli/tests/llm/translateTranscript.test.ts` (fixture transcript ngắn → snapshot khối `vi`).
+- **CLI:** `pnpm exec tsx cli/src/cli.ts ingest '<url>'` (YouTube: dịch Vi tự động khi có segment + key) hoặc `pnpm translate-transcript -- --capture <path>` — xem README.
 - **Xong khi:** `pnpm test` có test mới pass; contract output (section Markdown hoặc file phụ) được mô tả trong comment hoặc README một dòng.
 
 ### B2 — Docs reader web + hợp đồng hiển thị (**Task 14d**)
@@ -352,7 +352,7 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 ### B3 — Milestones YouTube (**Task 14e**)
 
 - **Mục đích:** Cho phép đánh dấu **mốc thời gian** (chapter / highlight) để reader web seek nhanh; dữ liệu tách khỏi transcript thuần.
-- **Tạo / sửa:** `src/youtube/milestones.ts` (parse/merge `milestones.yaml` hoặc frontmatter `youtube_milestones`); optional `pnpm suggest-milestones --capture …` (LLM → JSON, validate `t` trong bounds).
+- **Tạo / sửa:** `cli/src/youtube/milestones.ts` (parse/merge `milestones.yaml` hoặc frontmatter `youtube_milestones`); optional `pnpm suggest-milestones --capture …` (LLM → JSON, validate `t` trong bounds).
 - **Xong khi:** Unit test parse/merge; ví dụ YAML/array trong doc hoặc fixture test.
 
 ### B4 — UI timeline + seek (**Task 14f**)
@@ -405,11 +405,11 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Task gợi ý**
 
-- [x] **Task 14a:** `src/adapters/youtube.ts` — normalised bundle có `source: youtube`, `youtubeVideoId`, `transcriptSegments` optional; `runIngest` dùng luồng này khi strategy `apify` + host YouTube.
-- [x] **Task 14b:** `src/vault/writer.ts` — `source.md` có `## Transcript (en)`, frontmatter `source`, `youtube_video_id`, `transcript_locale`; `youtu.be` trong `routing.example.yaml`.
-- [x] **Task 14c:** `src/llm/translateTranscript.ts` + `tests/llm/translateTranscript.test.ts`.
+- [x] **Task 14a:** `cli/src/adapters/youtube.ts` — normalised bundle có `source: youtube`, `youtubeVideoId`, `transcriptSegments` optional; `runIngest` dùng luồng này khi strategy `apify` + host YouTube.
+- [x] **Task 14b:** `cli/src/vault/writer.ts` — `source.md` có `## Transcript (en)`, frontmatter `source`, `youtube_video_id`, `transcript_locale`; `youtu.be` trong `routing.example.yaml`.
+- [x] **Task 14c:** `cli/src/llm/translateTranscript.ts` + `cli/tests/llm/translateTranscript.test.ts`.
 - [x] **Task 14d:** [`docs/reader-web.md`](../reader-web.md) — embed, `publish`, transcript, milestones, CLI.
-- [x] **Task 14e:** `src/youtube/milestones.ts`, `suggestMilestones.ts`, `pnpm suggest-milestones`.
+- [x] **Task 14e:** `cli/src/youtube/milestones.ts`, `suggestMilestones.ts`, `pnpm suggest-milestones`.
 - [x] **Task 14f:** [`docs/visualizations/reader-youtube-timeline.html`](../visualizations/reader-youtube-timeline.html).
 
 **Kiểm thử:** fixture JSON transcript → snapshot Markdown; contract `extractVideoId(url)`; milestone click → seek (e2e nhẹ với Playwright nếu có).
@@ -426,12 +426,12 @@ git commit -m "chore: scaffold second-brain CLI and docs"
 
 **Task gợi ý (sau Task 10 digest)**
 
-- [x] **Task 13a:** `src/challenge/fromDigest.ts` — parse path digest, đọc body, gọi `llm` với schema JSON → render Markdown.
-- [x] **Task 13b:** `tests/challenge/fromDigest.test.ts` — fixture digest ngắn → snapshot challenge output.
-- [x] **Task 13c:** CLI `pnpm challenge` / `tsx src/cli.ts challenge --digest …` hoặc `--week 2026-W12`.
+- [x] **Task 13a:** `cli/src/challenge/fromDigest.ts` — parse path digest, đọc body, gọi `llm` với schema JSON → render Markdown.
+- [x] **Task 13b:** `cli/tests/challenge/fromDigest.test.ts` — fixture digest ngắn → snapshot challenge output.
+- [x] **Task 13c:** CLI `pnpm challenge` / `tsx cli/src/cli.ts challenge --digest …` hoặc `--week 2026-W12`.
 - [x] **Task 13d:** `.env.example` — không bắt buộc biến mới nếu dùng chung `OPENAI_*`.
 
-**Package script:** `"challenge": "tsx src/cli.ts challenge"`.
+**Package script:** `"challenge": "tsx cli/src/cli.ts challenge"`.
 
 ---
 

@@ -6,7 +6,7 @@ This CLI’s **`x_api`** adapter uses **X API v2** with `X_BEARER_TOKEN`. For **
 
 | Source | Body | Images in vault |
 |--------|------|-----------------|
-| X API v2 (`src/adapters/xApi.ts`) | `plain_text` for article | From tweet entities / separate media lookup; article inline images may be incomplete vs web |
+| X API v2 (`cli/src/adapters/xApi.ts`) | `plain_text` for article | From tweet entities / separate media lookup; article inline images may be incomplete vs web |
 | twitter-cli (GraphQL) | Markdown-style text + image URLs | Full article images when GraphQL returns them |
 
 ## Operational note

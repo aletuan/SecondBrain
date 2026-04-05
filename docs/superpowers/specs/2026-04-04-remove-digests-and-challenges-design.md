@@ -24,11 +24,11 @@
 
 | Action | Path / note |
 |--------|-------------|
-| Delete | `src/digest.ts` |
-| Delete | `src/digest/isoWeek.ts` |
-| Delete | `src/challenge/fromDigest.ts` |
-| Delete tests | `tests/digest.test.ts`, `tests/digest/chunk.test.ts`, `tests/digest/isoWeek.test.ts`, `tests/challenge/fromDigest.test.ts` |
-| Edit | `src/cli.ts` — remove `digest` and `challenge` command registrations and imports from deleted modules; update the root Commander **`.description()`** (currently mentions digest) to match ingest-only scope |
+| Delete | `cli/src/digest.ts` |
+| Delete | `cli/src/digest/isoWeek.ts` |
+| Delete | `cli/src/challenge/fromDigest.ts` |
+| Delete tests | `cli/tests/digest.test.ts`, `cli/tests/digest/chunk.test.ts`, `cli/tests/digest/isoWeek.test.ts`, `cli/tests/challenge/fromDigest.test.ts` |
+| Edit | `cli/src/cli.ts` — remove `digest` and `challenge` command registrations and imports from deleted modules; update the root Commander **`.description()`** (currently mentions digest) to match ingest-only scope |
 | Edit | `package.json` — remove `"digest"` and `"challenge"` scripts |
 
 ### 2.2 Reader web — server
@@ -45,7 +45,7 @@
 | Action | Path / note |
 |--------|-------------|
 | Delete | `reader-web/src/digestWikilinks.ts` |
-| Delete test | `tests/reader-web/digestWikilinks.test.ts` |
+| Delete test | `reader-web/tests/digestWikilinks.test.ts` |
 | Edit | `reader-web/src/main.ts` — remove digest/challenge-specific imports, hash branches, `fetchChallengeMarkdown`, `renderDigestsList`, `renderDigestDetail`, digest-only markdown renderers (`DigestHeadingRenderer`, `DigestProseRenderer`, etc.), nav buttons for Digests, ingest sidebar copy referencing `Digests/YYYY-Www`; add early redirect from `digests` / `digest` views to captures |
 | Edit | `reader-web/src/style.css` — remove digest/challenge-only rules and `--nav-digest-detail` if nothing else uses it; fix comments referencing digests only |
 

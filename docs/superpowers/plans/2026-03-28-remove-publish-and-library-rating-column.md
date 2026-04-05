@@ -30,7 +30,7 @@
 - [ ] **Step 1:** Thêm `averageReactionStats(entries: ParsedReactionEntry[]): { avg: number | null; count: number }` — `count` = số entry có `rating` hợp lệ; `avg` = arithmetic mean hoặc `null` khi `count === 0`.
 - [ ] **Step 2:** Refactor: tách phần `★…☆` từ `ratingToStarLine` thành hàm ví dụ `ratingStarsOnly(rating: number): string` (integer 1–5, cùng validation), `ratingToStarLine` = `ratingStarsOnly` + `` ` (${rating}/5)` ``.
 - [ ] **Step 3:** Vitest: rỗng; một entry; nhiều entry; trung bình không nguyên (assert `avg`).
-- [ ] **Step 4:** `cd reader-web && pnpm exec vitest run tests/reactionsMarkdown.test.ts`
+- [ ] **Step 4:** `pnpm vitest run reader-web/tests/reactionsMarkdown.test.ts`
 
 - [ ] **Step 5:** Commit `feat(reader-web): average reaction stats and stars-only helper`
 

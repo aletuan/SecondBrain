@@ -4,9 +4,9 @@
 
 **Goal:** Remove digest and challenge CLI commands, all reader-web digest/challenge UI and APIs, related tests and styles, and update docs; redirect legacy `#/digests` / `#/digest/…` hashes to `#/captures`.
 
-**Architecture:** Delete `src/digest*`, `src/challenge/fromDigest.ts`, reader-web digest server helpers and routes, client-only digest rendering (`main.ts`, `digestWikilinks.ts`, CSS). No replacement feature. Vault file deletion stays an operator runbook (Obsidian CLI), not repo code.
+**Architecture:** Delete `cli/src/digest*`, `cli/src/challenge/fromDigest.ts`, reader-web digest server helpers and routes, client-only digest rendering (`main.ts`, `digestWikilinks.ts`, CSS). No replacement feature. Vault file deletion stays an operator runbook (Obsidian CLI), not repo code.
 
-**Tech Stack:** TypeScript (ESM), Commander (`src/cli.ts`), Vite reader-web, Vitest.
+**Tech Stack:** TypeScript (ESM), Commander (`cli/src/cli.ts`), Vite reader-web, Vitest.
 
 **Spec:** [`docs/superpowers/specs/2026-04-04-remove-digests-and-challenges-design.md`](../specs/2026-04-04-remove-digests-and-challenges-design.md)
 
@@ -16,27 +16,27 @@
 
 | Action | Path |
 |--------|------|
-| Delete | `src/digest.ts`, `src/digest/isoWeek.ts`, `src/challenge/fromDigest.ts` |
-| Delete | `tests/digest.test.ts`, `tests/digest/chunk.test.ts`, `tests/digest/isoWeek.test.ts`, `tests/challenge/fromDigest.test.ts` |
-| Delete | `reader-web/vault/runDigestCli.ts`, `reader-web/src/digestWikilinks.ts`, `tests/reader-web/digestWikilinks.test.ts` |
-| Modify | `package.json`, `src/cli.ts` |
+| Delete | `cli/src/digest.ts`, `cli/src/digest/isoWeek.ts`, `cli/src/challenge/fromDigest.ts` |
+| Delete | `cli/tests/digest.test.ts`, `cli/tests/digest/chunk.test.ts`, `cli/tests/digest/isoWeek.test.ts`, `cli/tests/challenge/fromDigest.test.ts` |
+| Delete | `reader-web/vault/runDigestCli.ts`, `reader-web/src/digestWikilinks.ts`, `reader-web/tests/digestWikilinks.test.ts` |
+| Modify | `package.json`, `cli/src/cli.ts` |
 | Modify | `reader-web/vault/service.ts`, `reader-web/vault/apiMiddleware.ts`, `reader-web/vault/brainDotenv.ts` |
 | Modify | `reader-web/src/main.ts`, `reader-web/src/style.css` |
 | Modify | `CLAUDE.md`, `README.md`, `docs/reader-web.md`, `reader-web/README.md` |
 | Optional doc | `github-profile/README.md` — only if product blurb still claims “digests” as a shipped feature |
-| Optional asset | `screenshots/reader-digests.png` — delete if present after removing README reference |
+| Optional asset | `docs/screenshots/reader-digests.png` — delete if present after removing README reference |
 
 ---
 
 ## Task 1: Root CLI and core removal
 
-**Files:** delete listed `src/` + `tests/digest*` + `tests/challenge/fromDigest.test.ts`; modify `src/cli.ts`, `package.json`
+**Files:** delete listed `cli/src/digest*` + `cli/tests/digest*` + `cli/tests/challenge/fromDigest.test.ts`; modify `cli/src/cli.ts`, `package.json`
 
-- [ ] **Step 1:** Delete files: `src/digest.ts`, `src/digest/isoWeek.ts`, `src/challenge/fromDigest.ts`, `tests/digest.test.ts`, `tests/digest/chunk.test.ts`, `tests/digest/isoWeek.test.ts`, `tests/challenge/fromDigest.test.ts`. Remove empty `tests/digest/` directory if Vitest/config does not require it.
+- [ ] **Step 1:** Delete files: `cli/src/digest.ts`, `cli/src/digest/isoWeek.ts`, `cli/src/challenge/fromDigest.ts`, `cli/tests/digest.test.ts`, `cli/tests/digest/chunk.test.ts`, `cli/tests/digest/isoWeek.test.ts`, `cli/tests/challenge/fromDigest.test.ts`. Remove empty `cli/tests/digest/` directory if Vitest/config does not require it.
 
 - [ ] **Step 2:** In `package.json`, remove script entries `"digest"` and `"challenge"`.
 
-- [ ] **Step 3:** In `src/cli.ts`, remove imports from `./challenge/fromDigest.js` and `./digest.js`. Remove `.command('digest')` and `.command('challenge')` blocks entirely. Set root program `.description()` to something accurate, e.g. `Obsidian vault URL ingest CLI` (no “digest”).
+- [ ] **Step 3:** In `cli/src/cli.ts`, remove imports from `./challenge/fromDigest.js` and `./digest.js`. Remove `.command('digest')` and `.command('challenge')` blocks entirely. Set root program `.description()` to something accurate, e.g. `Obsidian vault URL ingest CLI` (no “digest”).
 
 - [ ] **Step 4:** Run from repo root:
 
@@ -101,9 +101,9 @@ git commit -m "chore(reader-web): remove digest and challenge API routes"
 
 ## Task 3: Reader web — client (`main.ts`) and wikilinks helper
 
-**Files:** delete `reader-web/src/digestWikilinks.ts`, `tests/reader-web/digestWikilinks.test.ts`; modify `reader-web/src/main.ts`
+**Files:** delete `reader-web/src/digestWikilinks.ts`, `reader-web/tests/digestWikilinks.test.ts`; modify `reader-web/src/main.ts`
 
-- [ ] **Step 1:** Delete `reader-web/src/digestWikilinks.ts` and `tests/reader-web/digestWikilinks.test.ts`.
+- [ ] **Step 1:** Delete `reader-web/src/digestWikilinks.ts` and `reader-web/tests/digestWikilinks.test.ts`.
 
 - [ ] **Step 2:** In `reader-web/src/main.ts`:
   - Remove `import { transformDigestCapturesWikilinks } from './digestWikilinks.js'`.
@@ -168,7 +168,7 @@ git commit -m "chore(reader-web): drop digest and challenge styles"
 
 - [ ] **Step 1:** Update `CLAUDE.md`: remove digest/challenge from intro, command list, architecture bullets, `DIGEST_LLM_MAX_CHARS` env row.
 
-- [ ] **Step 2:** Update `README.md`: opening paragraph (no weekly digests); remove digest/challenge command table rows; trim `OPENAI_API_KEY` line if it cites digest overview; remove `DIGEST_LLM_MAX_CHARS` row; remove workflow steps that say `pnpm digest`; remove or replace the “Digests” / `screenshots/reader-digests.png` section (if image file exists, delete it; if missing, still remove the markdown line).
+- [ ] **Step 2:** Update `README.md`: opening paragraph (no weekly digests); remove digest/challenge command table rows; trim `OPENAI_API_KEY` line if it cites digest overview; remove `DIGEST_LLM_MAX_CHARS` row; remove workflow steps that say `pnpm digest`; remove or replace the “Digests” / `docs/screenshots/reader-digests.png` section (if image file exists, delete it; if missing, still remove the markdown line).
 
 - [ ] **Step 3:** Update `docs/reader-web.md` and `reader-web/README.md`: routes without `#/digests` / `#/digest`; API list without digest/challenge endpoints; health without `digestAvailable`; ingest section without digest button prose.
 
@@ -178,7 +178,7 @@ git commit -m "chore(reader-web): drop digest and challenge styles"
 rg -i "digests/|challenges/|pnpm digest|pnpm challenge|/api/digest|digestAvailable|DIGEST_LLM" --glob '!docs/superpowers/specs/2026-04-04-*'
 ```
 
-Fix any stale **user-facing** hits in current docs/README/CLAUDE/reader-web. Ignore `crypto.createHash(...).digest(` in `src/vault/writer.ts`.
+Fix any stale **user-facing** hits in current docs/README/CLAUDE/reader-web. Ignore `crypto.createHash(...).digest(` in `cli/src/vault/writer.ts`.
 
 - [ ] **Step 4b:** Broader prose pass (opening blurbs, “weekly digest”, standalone word **Digests**):
 
@@ -215,7 +215,7 @@ After merge, the human deletes vault files per spec §4 (Obsidian CLI `delete` w
 
 ## Done when
 
-- No `digest` / `challenge` commands in `src/cli.ts` or `package.json`.
+- No `digest` / `challenge` commands in `cli/src/cli.ts` or `package.json`.
 - No digest/challenge API routes; health has no `digestAvailable`.
 - Reader has no Digests nav; `#/digests` and `#/digest/x` land on `#/captures`.
 - `pnpm typecheck`, `pnpm test`, `pnpm reader:build` pass.

@@ -36,7 +36,7 @@
 - [ ] **Step 2:** Implement `formatReactionEntry(rating: number, comment: string | undefined, at: Date): string` — một block entry **không** gồm delimiter đầu (caller thêm `---` khi append sau nội dung cũ).
 - [ ] **Step 3:** Implement `appendToReactionsFile(existing: string | null, rating, comment?, at?: Date): string` — nếu file rỗng/mới, có thể thêm `# Reader reactions\n\n`; append `---\n\n` trước entry mới khi `existing` đã có nội dung sau header.
 - [ ] **Step 4:** Viết Vitest: ví dụ spec mục 3.2, entry không comment, rating 1 và 5.
-- [ ] **Step 5:** Chạy `cd reader-web && pnpm exec vitest run tests/reactionsMarkdown.test.ts`
+- [ ] **Step 5:** Chạy `pnpm vitest run reader-web/tests/reactionsMarkdown.test.ts`
 
 - [ ] **Step 6:** Commit `feat(reader-web): reactions markdown parse and append`
 

@@ -24,7 +24,7 @@ pnpm install
 | `pnpm dev` | Vite dev server (default port **5174**) + `/api/*` vault middleware |
 | `pnpm build` | Production client bundle → `dist/` |
 | `pnpm preview` | Build then Express: static `dist/` + same `/api/*` (port **4173** or `READER_PORT`) |
-| `pnpm typecheck` | `tsc --noEmit` for `src/`, `vault/`, Vite config, `serve.ts` |
+| `pnpm typecheck` | `tsc --noEmit` for `cli/src/`, `vault/`, Vite config, `serve.ts` |
 
 Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default — avoids some HMR WebSocket issues when `localhost` vs `127.0.0.1` disagree). From the Brain repo root you can run `pnpm reader:dev` (same as `cd reader-web && pnpm dev`). Routes use the hash: `#/`, `#/captures`, `#/capture/:id`. Legacy bookmarks `#/digests` or `#/digest/…` redirect to `#/captures`.
 

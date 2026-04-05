@@ -21,7 +21,7 @@
 | `reader-web/src/captureFilters.ts` (new) | Pure `filterCaptures`, `SourceFilter` type, helpers re-export or move `isYoutubeCapture`/`isXCapture`/`isThreadsCapture` from `main.ts` to avoid duplication. |
 | `reader-web/src/main.ts` | `layoutShell`, remove `aside.side`; `bindRail` → `bindAppNav`; remove `setSideInner` + inline side HTML into `renderHome` / `renderCapturesTable` / `renderCaptureDetail` / digest renders; wire filter UI + re-render table; `route()` updates. |
 | `reader-web/src/style.css` | `.app` 2-col grid; `.app-nav` sections; remove/adjust `.side`, `.rail` → nav styles; drawer nav mirror; responsive breakpoints. |
-| `tests/reader-web/captureFilters.test.ts` (new) | Unit tests for `filterCaptures` AND/OR source classification helpers. |
+| `reader-web/tests/captureFilters.test.ts` (new) | Unit tests for `filterCaptures` AND/OR source classification helpers. |
 
 ---
 
@@ -44,13 +44,13 @@
 
 **Files:**
 - Create: `reader-web/src/captureFilters.ts`
-- Create: `tests/reader-web/captureFilters.test.ts`
+- Create: `reader-web/tests/captureFilters.test.ts`
 - Modify: `reader-web/src/main.ts` — remove duplicate helpers once moved (in Task 2 or 3)
 
 - [ ] **Step 1: Write failing tests** — cases: no filter returns all; category id filters multi-label; `null`/all category clears; source youtube only; `other` excludes yt/x/threads; AND of category + source.
-- [ ] **Step 2:** Run `pnpm vitest run tests/reader-web/captureFilters.test.ts` — FAIL (module empty).
+- [ ] **Step 2:** Run `pnpm vitest run reader-web/tests/captureFilters.test.ts` — FAIL (module empty).
 - [ ] **Step 3:** Implement `filterCaptures(rows, { categoryId: string | null, source: 'all' | 'youtube' | 'x' | 'threads' | 'other' })` and move `isYoutubeCapture` / `isXCapture` / `isThreadsCapture` here (accept `CaptureListItem`-shaped object).
-- [ ] **Step 4:** Run `pnpm vitest run tests/reader-web/captureFilters.test.ts` — PASS.
+- [ ] **Step 4:** Run `pnpm vitest run reader-web/tests/captureFilters.test.ts` — PASS.
 - [ ] **Step 5:** Commit — `feat(reader-web): add captureFilters for client-side list filtering`
 
 ---

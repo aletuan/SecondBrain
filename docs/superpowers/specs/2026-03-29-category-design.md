@@ -3,7 +3,7 @@
 **Ngày:** 2026-03-29  
 **Trạng thái:** Đã chốt qua brainstorming — implementation plan: `docs/superpowers/plans/2026-03-29-category.md`
 
-**Liên quan:** `src/ingest/runIngest.ts`, `src/llm/enrich.ts`, `src/vault/writer.ts`, `reader-web/src/main.ts` (frontmatter + capture detail).
+**Liên quan:** `cli/src/ingest/runIngest.ts`, `cli/src/llm/enrich.ts`, `cli/src/vault/writer.ts`, `reader-web/src/main.ts` (frontmatter + capture detail).
 
 ---
 

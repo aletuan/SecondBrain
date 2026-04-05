@@ -16,8 +16,8 @@
 
 | Hạng mục | Trạng thái |
 |----------|------------|
-| Bearer trong `.env` | `src/adapters/xApi.ts` → `Authorization: Bearer …` cho `GET /2/tweets/:id`. |
-| CLI load `.env` | `src/cli.ts` có `import 'dotenv/config'`. |
+| Bearer trong `.env` | `cli/src/adapters/xApi.ts` → `Authorization: Bearer …` cho `GET /2/tweets/:id`. |
+| CLI load `.env` | `cli/src/cli.ts` có `import 'dotenv/config'`. |
 | `tweet.fields` | `created_at,author_id,text,entities,note_tweet,article` (+ expansions user). |
 | X API v2 `article` field | Trả `article.title` + `article.plain_text` (full body, plain text, **không có images**). |
 | twitter-cli (GraphQL) | Trả full article body dạng **Markdown + embedded images** qua GraphQL + cookies. |
@@ -127,7 +127,7 @@ Lấy cookies: browser DevTools → Application → Cookies → `x.com` → copy
 pnpm verify-x-tweet 2034902650534187503
 
 # Full ingest (no LLM)
-pnpm exec tsx src/cli.ts ingest 'https://x.com/_avichawla/status/2034902650534187503'
+pnpm exec tsx cli/src/cli.ts ingest 'https://x.com/_avichawla/status/2034902650534187503'
 
 # Test twitter-cli trực tiếp
 twitter article 2034902650534187503 --json
@@ -149,7 +149,7 @@ uv run --with twitter-cli python3 scripts/fetch-x-article.py 2034902650534187503
 ## Tham chiếu nội bộ
 
 - Plan: `docs/plans/2026-03-20-second-brain-implementation-plan.md`
-- Adapter: `src/adapters/xApi.ts` (`fetchXThread`, `fetchXArticleViaTwitterCli`)
+- Adapter: `cli/src/adapters/xApi.ts` (`fetchXThread`, `fetchXArticleViaTwitterCli`)
 - Python helper: `scripts/fetch-x-article.py`
-- Tests: `tests/adapters/xApi.test.ts` (26 tests)
+- Tests: `cli/tests/adapters/xApi.test.ts` (26 tests)
 - Env template: `.env.example` (đã thêm `TWITTER_AUTH_TOKEN`, `TWITTER_CT0`)

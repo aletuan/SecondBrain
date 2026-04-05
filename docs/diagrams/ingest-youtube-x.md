@@ -41,6 +41,6 @@ flowchart TD
 
 ## Tham chiếu code
 
-- `src/ingest/runIngest.ts`
-- `src/adapters/youtube.ts`, `src/adapters/xApi.ts`
+- `cli/src/ingest/runIngest.ts`
+- `cli/src/adapters/youtube.ts`, `cli/src/adapters/xApi.ts`
 - `docs/handoffs/2026-03-20-x-ingest-open-issues.md`
