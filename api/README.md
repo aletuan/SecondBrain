@@ -1,6 +1,6 @@
 # Second Brain API
 
-Python **FastAPI** service that runs the same ingest pipeline as the TypeScript CLI: routing YAML → adapters → vault writer → optional OpenAI (enrich, tags, categories, YouTube transcript translation).
+Python **FastAPI** service for the Brain ingest pipeline: routing YAML → adapters → vault writer → optional OpenAI (enrich, tags, categories, YouTube transcript translation).
 
 ## Setup
 

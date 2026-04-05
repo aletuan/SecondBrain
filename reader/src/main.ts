@@ -722,47 +722,38 @@ type Health = {
   ingestAvailable: boolean;
   /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
   ingestSse?: boolean;
-  /** Which backend the reader would use: from `PYTHON_INGEST_URL` or local `cli/`. */
-  ingestBackend?: 'python' | 'ts-cli' | null;
+  /** Ingest uses the Python API when `PYTHON_INGEST_URL` is set. */
+  ingestBackend?: 'python' | null;
 };
 
 function ingestStatusStripLine(h: Health): string {
   if (h.ingestAvailable) return 'Vault · ingest ready';
-  if (h.ingestBackend === 'python' || h.ingestBackend === 'ts-cli') return 'Ingest · disabled';
+  if (h.ingestBackend === 'python') return 'Ingest · disabled';
   if (h.ingestBackend === null) return 'Ingest · not configured';
   return 'Ingest · check setup';
 }
 
 function webIngestAsideLi(h: Health): string {
   if (h.ingestAvailable) {
-    const via =
-      h.ingestBackend === 'python'
-        ? 'Python API'
-        : h.ingestBackend === 'ts-cli'
-          ? 'TypeScript CLI (local)'
-          : 'local';
-    return `<li>Web ingest <strong>on</strong> — via ${via}</li>`;
+    return '<li>Web ingest <strong>on</strong> — via Python API</li>';
   }
-  if (h.ingestBackend === 'python' || h.ingestBackend === 'ts-cli') {
+  if (h.ingestBackend === 'python') {
     return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code></li>';
   }
   if (h.ingestBackend === null) {
-    return '<li>Web ingest <strong>off</strong> — set <code>PYTHON_INGEST_URL</code> or point <code>READER_BRAIN_ROOT</code> at a repo with <code>cli/</code></li>';
+    return '<li>Web ingest <strong>off</strong> — set <code>PYTHON_INGEST_URL</code> (Python ingest is required)</li>';
   }
-  return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code> and ingest configuration</li>';
+  return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code> and <code>PYTHON_INGEST_URL</code></li>';
 }
 
 function ingestUnavailablePanelHtml(h: Health): string {
   if (h.ingestBackend === 'python') {
     return `<p class="hint" style="margin:0">Unavailable: web ingest is turned off (<code>READER_ALLOW_INGEST=0</code>). You can still call the Python ingest API directly.</p>`;
   }
-  if (h.ingestBackend === 'ts-cli') {
-    return `<p class="hint" style="margin:0">Unavailable: <code>READER_ALLOW_INGEST=0</code>. From the Brain repo you can run <code>pnpm ingest</code> in a terminal.</p>`;
-  }
   if (h.ingestBackend === null) {
-    return `<p class="hint" style="margin:0">Unavailable: set <code>PYTHON_INGEST_URL</code> to your FastAPI service, or use <code>READER_BRAIN_ROOT</code> with a checkout that includes <code>cli/src/cli.ts</code> and dependencies.</p>`;
+    return `<p class="hint" style="margin:0">Unavailable: set <code>PYTHON_INGEST_URL</code> to your FastAPI ingest service (e.g. <code>http://127.0.0.1:8765</code>) and run <code>pnpm api:dev</code> from the repo root.</p>`;
   }
-  return `<p class="hint" style="margin:0">Unavailable: check <code>READER_ALLOW_INGEST</code>, <code>PYTHON_INGEST_URL</code>, and <code>READER_BRAIN_ROOT</code>.</p>`;
+  return `<p class="hint" style="margin:0">Unavailable: check <code>READER_ALLOW_INGEST</code> and <code>PYTHON_INGEST_URL</code>.</p>`;
 }
 
 function appNavStatusHtml(h: Health): string {

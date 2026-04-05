@@ -6,7 +6,7 @@ import { resolveBrainRepoRoot } from './paths.js';
 
 export type CategoryEntry = { id: string; label: string };
 
-/** Keep in sync with `cli/src/config/categories.ts` / `config/categories.example.yaml`. */
+/** Aligned with `config/categories.example.yaml` and Python taxonomy defaults. */
 export async function loadCategoryTaxonomy(): Promise<CategoryEntry[]> {
   const pyBase = pythonIngestBaseUrl();
   if (pyBase) {
@@ -74,7 +74,7 @@ export function allowedCategoryIdsSorted(entries: CategoryEntry[]): string[] {
   return [...new Set(entries.map(e => e.id))].sort((a, b) => a.localeCompare(b));
 }
 
-/** Keep in sync with `cli/src/vault/writer.ts` `setCategoriesInNoteFrontmatter`. */
+/** Frontmatter shape aligned with vault writer / Python API. */
 export async function setCategoriesInNoteFrontmatter(
   notePath: string,
   ids: string[],

@@ -1,8 +1,7 @@
 import type { IngestProgressEvent } from './ingestProgressParse.js';
 import { tryParseIngestProgressLine } from './ingestProgressParse.js';
-import { assertIngestEnvironment } from './runIngestCli.js';
 
-/** Base URL for Python FastAPI (e.g. `http://127.0.0.1:8765`). When unset, reader uses TS CLI ingest. */
+/** Base URL for Python FastAPI (e.g. `http://127.0.0.1:8765`). Required for ingest. */
 export function pythonIngestBaseUrl(): string | null {
   const u = process.env.PYTHON_INGEST_URL?.trim();
   return u || null;
@@ -41,19 +40,20 @@ export async function fetchPythonIngestHealth(baseUrl: string): Promise<boolean>
   }
 }
 
-/** Resolve ingest backend: Python API health check, or TS CLI files on disk. */
-export async function assertIngestBackendReady(cwd?: string): Promise<void> {
+/** Require `PYTHON_INGEST_URL` and a reachable `/health`. */
+export async function assertIngestBackendReady(): Promise<void> {
   const py = pythonIngestBaseUrl();
-  if (py) {
-    const ok = await fetchPythonIngestHealth(py);
-    if (!ok) {
-      throw new Error(
-        `Python ingest API not reachable at ${py} (check PYTHON_INGEST_URL and run pnpm api:dev, or unset PYTHON_INGEST_URL to use CLI)`,
-      );
-    }
-    return;
+  if (!py) {
+    throw new Error(
+      'PYTHON_INGEST_URL is not set. Ingest runs only via the Python API (e.g. http://127.0.0.1:8765). Add it to reader/.env or the shell environment.',
+    );
   }
-  await assertIngestEnvironment(cwd);
+  const ok = await fetchPythonIngestHealth(py);
+  if (!ok) {
+    throw new Error(
+      `Python ingest API not reachable at ${py} (check PYTHON_INGEST_URL and run pnpm api:dev).`,
+    );
+  }
 }
 
 export type PythonIngestStreamOptions = {
@@ -64,7 +64,7 @@ export type PythonIngestStreamOptions = {
 };
 
 /**
- * POST /v1/ingest (NDJSON). Mirrors runIngestCli outcome shape for middleware.
+ * POST /v1/ingest (NDJSON). Outcome shape matches what reader middleware expects from the old CLI spawn.
  */
 export async function runPythonIngestStream(
   opts: PythonIngestStreamOptions,

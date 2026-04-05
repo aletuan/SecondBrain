@@ -1,12 +1,12 @@
 # Reader web (separate app)
 
-The second-brain **reader web** is a **separate** application from this CLI. It reads the Obsidian vault from **disk** (same machine or mounted volume) today; a remote **HTTP API** could replace that later. It is **not** Quartz, not an SSG wiki, and not a publishing pipeline.
+The second-brain **reader web** is a **separate** application from the Python ingest API. It reads the Obsidian vault from **disk** (same machine or mounted volume). It is **not** Quartz, not an SSG wiki, and not a publishing pipeline.
 
 ## Implementation in this repo
 
-A working app lives under [`reader/`](../reader/): **Vite** + vanilla TS, dev server with Connect middleware exposing read routes plus ingest against the Brain CLI repo (`READER_BRAIN_ROOT`, default parent of `reader/`; CLI entry `cli/src/cli.ts`) with `VAULT_ROOT` aligned to the reader vault — same files Obsidian sees. Treat ingest as **local-only** (do not expose the dev server to the internet); use `READER_ALLOW_INGEST=0` to disable. See [`reader/README.md`](../reader/README.md).
+A working app lives under [`reader/`](../reader/): **Vite** + vanilla TS, dev server with Connect middleware exposing read routes plus ingest proxied to the **Python FastAPI** app via **`PYTHON_INGEST_URL`** (required for ingest). `READER_BRAIN_ROOT` defaults to the repo parent of `reader/` (for on-disk `config/` when taxonomy falls back). Treat ingest as **local-only** (do not expose the dev server to the internet); use `READER_ALLOW_INGEST=0` to disable. See [`reader/README.md`](../reader/README.md).
 
-**Ingest API:** **`POST /api/ingest`** remains a single round-trip (JSON result); body **`{ "url": "…" }`** only. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (same body, returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks real pipeline phases from the CLI (`tsx … ingest --progress-json`). Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request sends **SIGTERM** to the child process.
+**Ingest API:** **`POST /api/ingest`** is a single round-trip (JSON result); body **`{ "url": "…" }`**. When `GET /api/health` reports `ingestSse: true`, the UI uses **`POST /api/ingest/start`** (returns `{ jobId }`) and **`GET /api/ingest/stream?jobId=…`** (`text/event-stream`, each `data:` line is JSON `v:1` with `kind`: `phase` | `done` | `error`) so the Agent panel tracks pipeline phases from **`POST /v1/ingest`** NDJSON. Pending jobs are capped (`MAX_PENDING_INGEST_JOBS`); disconnecting the SSE request **aborts** the in-flight fetch to Python.
 
 **YouTube timeline:** the standalone demo [`visualizations/reader-youtube-timeline.html`](visualizations/reader-youtube-timeline.html) is optional reference only; the reader app implements embed + milestones + seek inside the capture detail screen (aligned with the main mock below).
 
@@ -25,7 +25,7 @@ A working app lives under [`reader/`](../reader/): **Vite** + vanilla TS, dev se
 
 ### Capture folder
 
-Path pattern (CLI output):
+Path pattern (ingest output):
 
 `vault/Captures/YYYY-MM-DD--slug--shortid/`
 
@@ -51,13 +51,9 @@ Path pattern (CLI output):
    - **Simple seek (legacy embed):** set iframe `src` to `...&start={t}&autoplay=1` (reloads player).
    - **Smooth seek (subtitle panel path):** `player.seekTo(t, true)` via IFrame API.
 
-## CLI helpers related to reader data
+## Ingest outside the reader UI
 
-| Command | Purpose |
-|---------|---------|
-| `pnpm ingest -- <youtube-url>` | New YouTube capture; **Vi** transcript batch runs when `OPENAI_API_KEY` is set and segments exist (same idea as `youtube-crawl-translate`) |
-| `pnpm translate-transcript -- --capture <dir>` | Add/replace `## Transcript (vi)` on an existing capture |
-| `pnpm suggest-milestones -- --capture <dir> --max-sec <n>` | Merge LLM-suggested `milestones.yaml` |
+Use the **Python API** (`pnpm api:dev`, then `POST /v1/ingest` with `url` or `reingest_capture_dir`). YouTube **Vi** transcript batch runs during ingest when `OPENAI_API_KEY` is set and segments exist. There is no separate `translate-transcript` / `suggest-milestones` CLI in this repo anymore; extend `api/` if you need dedicated endpoints.
 
 ## Repo layout
 

@@ -1,5 +1,5 @@
 /**
- * Mirrors `src/ingest/ingestProgress.ts` (Brain CLI). Keep parse rules in sync when changing the schema.
+ * Parses v1 NDJSON progress lines from `POST /v1/ingest` (Python API). Keep in sync with `brain_api.progress`.
  */
 export type IngestProgressPhase = 'fetch' | 'translate' | 'vault' | 'llm';
 

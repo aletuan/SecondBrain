@@ -1,7 +1,5 @@
-import type { ChildProcess } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -23,21 +21,13 @@ import {
   runPythonIngestStream,
 } from './pythonIngest.js';
 
-/** When `PYTHON_INGEST_URL` is set, ingest uses the Python API regardless of `cli/` on disk. */
-function resolvedIngestBackend(): 'python' | 'ts-cli' | null {
-  if (pythonIngestBaseUrl()) return 'python';
-  const brainRoot = resolveBrainRepoRoot();
-  const cliPath = path.join(brainRoot, 'cli', 'src', 'cli.ts');
-  if (fsSync.existsSync(cliPath) && fsSync.existsSync(path.join(brainRoot, 'package.json'))) {
-    return 'ts-cli';
-  }
-  return null;
+function resolvedIngestBackend(): 'python' | null {
+  return pythonIngestBaseUrl() ? 'python' : null;
 }
 
 function ingestBackendConfigured(): boolean {
   return resolvedIngestBackend() !== null;
 }
-import { runIngestCli } from './runIngestCli.js';
 
 type NextFn = (err?: unknown) => void;
 
@@ -280,12 +270,10 @@ export function vaultApiMiddleware() {
         pendingIngestJobs.delete(jobId);
 
         beginSse(res);
-        let childRef: { kill: (signal?: NodeJS.Signals) => boolean } | null = null;
         const ac = new AbortController();
         const onReqClose = () => {
           try {
             ac.abort();
-            childRef?.kill('SIGTERM');
           } catch {
             /* ignore */
           }
@@ -303,61 +291,27 @@ export function vaultApiMiddleware() {
         try {
           await assertIngestBackendReady();
           const vaultRoot = resolveVaultRoot();
-          if (pythonIngestBaseUrl()) {
-            const { code, stderr, captureDir } = await runPythonIngestStream({
-              url: payload.kind === 'url' ? payload.url : undefined,
-              reingestCaptureDir:
-                payload.kind === 'reingest'
-                  ? path.join(vaultRoot, 'Captures', payload.captureId)
-                  : undefined,
-              onProgress: forward,
-              signal: ac.signal,
+          const { code, stderr, captureDir } = await runPythonIngestStream({
+            url: payload.kind === 'url' ? payload.url : undefined,
+            reingestCaptureDir:
+              payload.kind === 'reingest'
+                ? path.join(vaultRoot, 'Captures', payload.captureId)
+                : undefined,
+            onProgress: forward,
+            signal: ac.signal,
+          });
+          if (code !== 0) {
+            sendSse(res, {
+              v: 1,
+              kind: 'error',
+              message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
             });
-            if (code !== 0) {
-              sendSse(res, {
-                v: 1,
-                kind: 'error',
-                message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
-              });
-            } else if (!captureDir) {
-              sendSse(res, {
-                v: 1,
-                kind: 'error',
-                message: 'capture path missing in ingest stream',
-              });
-            }
-          } else {
-            const onChild = (c: ChildProcess) => {
-              childRef = c;
-            };
-            const cliOpts =
-              payload.kind === 'url'
-                ? {
-                    url: payload.url,
-                    progressJson: true as const,
-                    onIngestProgress: forward,
-                    onChild,
-                  }
-                : {
-                    reingestCaptureDir: path.join(vaultRoot, 'Captures', payload.captureId),
-                    progressJson: true as const,
-                    onIngestProgress: forward,
-                    onChild,
-                  };
-            const { code, stdout, stderr, captureDir } = await runIngestCli(cliOpts);
-            if (code !== 0) {
-              sendSse(res, {
-                v: 1,
-                kind: 'error',
-                message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
-              });
-            } else if (!captureDir) {
-              sendSse(res, {
-                v: 1,
-                kind: 'error',
-                message: `capture path missing in stdout: ${stdout.slice(-2000)}`,
-              });
-            }
+          } else if (!captureDir) {
+            sendSse(res, {
+              v: 1,
+              kind: 'error',
+              message: 'capture path missing in ingest stream',
+            });
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -392,28 +346,10 @@ export function vaultApiMiddleware() {
         }
         try {
           await assertIngestBackendReady();
-          let code: number;
-          let stdout: string;
-          let stderr: string;
-          let captureDir: string | null;
-          if (pythonIngestBaseUrl()) {
-            const r = await runPythonIngestStream({
-              url: parsedBody.url,
-              onProgress: () => {},
-            });
-            code = r.code;
-            stdout = r.stdout;
-            stderr = r.stderr;
-            captureDir = r.captureDir;
-          } else {
-            const r = await runIngestCli({
-              url: parsedBody.url,
-            });
-            code = r.code;
-            stdout = r.stdout;
-            stderr = r.stderr;
-            captureDir = r.captureDir;
-          }
+          const { code, stdout, stderr, captureDir } = await runPythonIngestStream({
+            url: parsedBody.url,
+            onProgress: () => {},
+          });
           if (code !== 0) {
             sendJson(res, 502, {
               error: 'ingest failed',
