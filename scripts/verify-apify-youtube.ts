@@ -3,9 +3,9 @@
  * (hoặc `routing.example.yaml`) trên một video.
  *
  * Usage:
- *   pnpm verify-apify-youtube
- *   pnpm verify-apify-youtube --token-only
- *   pnpm verify-apify-youtube https://www.youtube.com/watch?v=VIDEO_ID
+ *   cd reader && pnpm verify-apify-youtube
+ *   cd reader && pnpm verify-apify-youtube --token-only
+ *   cd reader && pnpm verify-apify-youtube https://www.youtube.com/watch?v=VIDEO_ID
  *
  * (Standalone — không phụ thuộc `cli/`.)
  */

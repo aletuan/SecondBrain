@@ -53,7 +53,7 @@ Path pattern (ingest output):
 
 ## Ingest outside the reader UI
 
-Use the **Python API** (`pnpm api:dev`, then `POST /v1/ingest` with `url` or `reingest_capture_dir`). YouTube **Vi** transcript batch runs during ingest when `OPENAI_API_KEY` is set and segments exist. There is no separate `translate-transcript` / `suggest-milestones` CLI in this repo anymore; extend `api/` if you need dedicated endpoints.
+Use the **Python API** (`cd reader && pnpm api:dev`, then `POST /v1/ingest` with `url` or `reingest_capture_dir`). YouTube **Vi** transcript batch runs during ingest when `OPENAI_API_KEY` is set and segments exist. There is no separate `translate-transcript` / `suggest-milestones` CLI in this repo anymore; extend `api/` if you need dedicated endpoints.
 
 ## Repo layout
 

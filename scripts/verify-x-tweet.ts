@@ -1,7 +1,7 @@
 /**
  * Kiểm tra Bearer (app-only) có đọc được tweet theo ID không.
- * Usage: pnpm verify-x-tweet [tweetId]
- * Example: pnpm verify-x-tweet 2034902650534187503
+ * Usage: cd reader && pnpm verify-x-tweet [tweetId]
+ * Example: cd reader && pnpm verify-x-tweet 2034902650534187503
  */
 import 'dotenv/config';
 

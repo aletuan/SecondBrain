@@ -8,14 +8,14 @@ Python **FastAPI** service for the Brain ingest pipeline: routing YAML → adapt
 cd api && uv sync
 ```
 
-The API reads **`.env`** from the **current working directory** when you start uvicorn (often repo root or `api/`). Required for a real server: **`VAULT_ROOT`**. Optional: `OPENAI_API_KEY`, `APIFY_TOKEN`, `X_BEARER_TOKEN`, `INGEST_API_KEY`, `ROUTING_CONFIG_PATH`, `CATEGORIES_CONFIG_PATH`, and the same enrich/translate env vars as the CLI (see root `README.md`).
+The API reads **`.env`** from the **current working directory** when you start uvicorn (often repo root or `api/`). Required for a real server: **`VAULT_ROOT`**. Optional: `OPENAI_API_KEY`, `APIFY_TOKEN`, `X_BEARER_TOKEN`, `INGEST_API_KEY`, `ROUTING_CONFIG_PATH`, `CATEGORIES_CONFIG_PATH`, and enrich/translate env vars (see root `README.md`).
 
 ## Tests
 
 ```bash
 cd api && uv run pytest
-# or from repo root:
-pnpm api:test
+# or from reader/:
+cd ../reader && pnpm api:test
 ```
 
 Run a single file:
@@ -28,6 +28,7 @@ cd api && uv run pytest tests/test_x_api.py -v
 
 ```bash
 cd api && uv run uvicorn brain_api.main:app --reload --host 127.0.0.1 --port 8765
+# or: cd reader && pnpm api:dev
 ```
 
 Health check:

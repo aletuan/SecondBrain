@@ -2,7 +2,7 @@
 /**
  * Strip "## Câu hỏi mở" sections from all `*.note.md` under VAULT_ROOT/Captures.
  *
- * Usage: pnpm strip-cau-hoi-mo
+ * Usage: cd reader && pnpm strip-cau-hoi-mo
  * Env: VAULT_ROOT (default ./vault from cwd)
  */
 import fs from 'node:fs/promises';

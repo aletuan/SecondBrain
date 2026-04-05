@@ -5,7 +5,7 @@
  * in every capture directory under `Captures/`.
  *
  * Usage:
- *   pnpm exec tsx scripts/migrate-vault-filenames.ts [--vault <path>] [--dry-run]
+ *   cd reader && pnpm migrate-vault-filenames [--vault <path>] [--dry-run]
  *
  * Options:
  *   --vault <path>   Path to vault root (default: VAULT_ROOT env or ./vault)

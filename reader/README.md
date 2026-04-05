@@ -7,7 +7,7 @@ Layout and tokens follow [`docs/visualizations/second-brain-mock-ui.html`](../do
 ## Requirements
 
 - Node 20+
-- `pnpm` (from repo root or here)
+- `pnpm` — **this directory is the only Node package** (`pnpm install` here).
 - **Python ingest API** running and **`PYTHON_INGEST_URL`** set (e.g. `http://127.0.0.1:8765`) — ingest is not available without it.
 
 ## Setup
@@ -25,9 +25,17 @@ pnpm install
 | `pnpm dev` | Vite dev server (default port **5174**) + `/api/*` vault middleware |
 | `pnpm build` | Production client bundle → `dist/` |
 | `pnpm preview` | Build then Express: static `dist/` + same `/api/*` (port **4173** or `READER_PORT`) |
-| `pnpm typecheck` | `tsc --noEmit` for `src/`, `vault/`, Vite config, `serve.ts` |
+| `pnpm typecheck` | App (`src/`, `vault/`, …) + repo `../scripts/*.ts` |
+| `pnpm test` / `pnpm test:watch` | Vitest — `tests/` |
+| `pnpm api:dev` | FastAPI ingest API on **8765** (`../api`) |
+| `pnpm api:test` | `pytest` in `../api` |
+| `pnpm verify-keys` | Smoke `.env` keys (runs from **repo root** via `cd .. && tsx …`) |
+| `pnpm verify-apify-youtube` | Apify + YouTube routing (cwd repo root) |
+| `pnpm verify-x-tweet` | X API tweet lookup |
+| `pnpm strip-cau-hoi-mo` | Strip legacy section in vault `*.note.md` |
+| `pnpm migrate-vault-filenames` | One-off vault filename migration |
 
-Open **`http://127.0.0.1:5174`** for dev. From the Brain repo root: `pnpm reader:dev`.
+Open **`http://127.0.0.1:5174`** for dev. From repo root: **`cd reader && pnpm dev`**.
 
 **Live reload vs restart**
 

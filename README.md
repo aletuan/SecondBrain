@@ -6,12 +6,15 @@ Routing is YAML: HTTP + Readability, Apify actors, YouTube via Apify, or X API v
 
 ## Setup
 
+**Node / reader** (one package for the web app, Vitest, and repo helper scripts):
+
 ```bash
-pnpm install
-pnpm -C reader install
+cd reader && pnpm install
 cp config/routing.example.yaml config/routing.yaml   # optional: for verify script + operator reference
 touch .env   # repo root; add keys from the Environment table (never commit .env)
 ```
+
+**Python API:** see [`api/README.md`](api/README.md) (`uv sync` / `uv run` from `api/`).
 
 - **Vault:** `VAULT_ROOT` (API and reader; default `./vault` relative to how you start each process).
 - **Secrets:** put real keys only in **`.env`** at repo root (gitignored). The Python API also reads **`api/.env`** if present (see `brain_api.settings`).
@@ -19,17 +22,19 @@ touch .env   # repo root; add keys from the Environment table (never commit .env
 
 ## Commands
 
+Run from **`reader/`** (`cd reader` first), except raw `uv`/`pytest` in `api/`:
+
 | Command | Description |
 |--------|-------------|
-| `pnpm api:dev` | Run FastAPI ingest API (default **8765**). |
+| `pnpm dev` | Reader Vite dev server (set **`PYTHON_INGEST_URL`** in `reader/.env`). |
+| `pnpm api:dev` | FastAPI ingest API (default **8765**). |
 | `pnpm api:test` | Python tests (`pytest` in `api/`). |
-| `pnpm reader:dev` | Reader Vite dev server (set **`PYTHON_INGEST_URL`** in `reader/.env`). |
-| `pnpm test` | Vitest — **`reader/tests/`** only. |
-| `pnpm typecheck` | Root `tsc` (scripts + reader tests) + `reader` package typecheck. |
-| `pnpm verify-keys` | Smoke-check **OpenAI** / **Apify** / **X** from `.env`. |
-| `pnpm verify-apify-youtube` | **`APIFY_TOKEN`** + YouTube actor from `config/routing.yaml` (or example). `--token-only` skips the actor run. |
+| `pnpm test` / `pnpm test:watch` | Vitest — `reader/tests/`. |
+| `pnpm typecheck` | `tsc` for reader + `scripts/*.ts` at repo root. |
+| `pnpm verify-keys` | Smoke-check **OpenAI** / **Apify** / **X** from `.env` (cwd = repo root). |
+| `pnpm verify-apify-youtube` | **`APIFY_TOKEN`** + YouTube actor from `config/routing.yaml` (or example). |
 | `pnpm verify-x-tweet [id]` | X API v2 tweet lookup (app-only bearer). |
-| `pnpm strip-cau-hoi-mo` | Batch-remove legacy `## Câu hỏi mở` blocks from `*.note.md` under the vault. |
+| `pnpm strip-cau-hoi-mo` | Batch-remove legacy `## Câu hỏi mở` from `*.note.md` under the vault. |
 | `pnpm migrate-vault-filenames` | One-off migration for capture filenames (see script header). |
 
 **Ingest từ HTTP:** `POST /v1/ingest` trên API Python (JSON body `url` hoặc `reingest_capture_dir`) — xem [`api/README.md`](api/README.md). Reader dùng SSE qua `/api/ingest/start` + `/api/ingest/stream`.
@@ -49,9 +54,9 @@ touch .env   # repo root; add keys from the Environment table (never commit .env
 
 ## Testing integrations
 
-1. **`pnpm verify-keys`** — OpenAI / Apify / X reachability.
-2. **`pnpm verify-apify-youtube`** — routing YAML + YouTube Apify actor (costs compute unless `--token-only`).
-3. **`pnpm api:test`** — unit/integration tests for the Python pipeline.
+1. **`cd reader && pnpm verify-keys`** — OpenAI / Apify / X reachability.
+2. **`cd reader && pnpm verify-apify-youtube`** — routing YAML + YouTube Apify actor (costs compute unless `--token-only`).
+3. **`cd reader && pnpm api:test`** — unit/integration tests for the Python pipeline.
 
 ## Apify + YouTube
 
