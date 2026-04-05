@@ -1,6 +1,6 @@
 # Second brain CLI
 
-TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`) and optionally enriches notes with **OpenAI**. Routing is YAML: HTTP + Readability, Apify actors, or an X API stub. **CLI source** lives under [`cli/src/`](cli/src/) (root `package.json` runs `tsx cli/src/cli.ts …`). The optional reader UI is in [`reader/`](reader/).
+TypeScript CLI that ingests URLs into an **Obsidian vault** (`Captures/…`) and optionally enriches notes with **OpenAI**. Routing is YAML: HTTP + Readability, Apify actors, YouTube via Apify, or X API v2. **CLI source** lives under [`cli/src/`](cli/src/) (root `package.json` runs `tsx cli/src/cli.ts …`). A **Python FastAPI ingest service** lives under [`api/`](api/) (`pnpm api:dev` / `pnpm api:test`) and mirrors the same pipeline for use with **`PYTHON_INGEST_URL`** in the reader. The optional reader UI is in [`reader/`](reader/).
 
 ## Setup
 
@@ -23,6 +23,8 @@ touch .env   # create at repo root; add keys from the Environment table (never c
 | `pnpm translate-transcript -- --capture vault/Captures/…` | Add or replace `## Transcript (vi)` on an existing capture. |
 | `pnpm suggest-milestones -- --capture vault/Captures/… --max-sec 600` | Merge LLM-suggested `milestones.yaml` (YouTube). |
 | `pnpm test` / `pnpm typecheck` | Tests and TypeScript check. Tests live in **`cli/tests/`** (ingest CLI) and **`reader/tests/`** (reader); both run from the repo root via Vitest. |
+| `pnpm api:test` | Python API tests (`pytest` under `api/`). |
+| `pnpm api:dev` | Run FastAPI locally on port **8765** (see `api/README.md`). |
 | `pnpm verify-keys` | Kiểm tra nhanh **OpenAI** / **Apify** / **X** bearer (đọc `.env`, không in key). |
 | `pnpm verify-apify-youtube` | Thử **APIFY_TOKEN** + chạy actor YouTube trong routing trên một video mặc định (tốn Apify). `pnpm verify-apify-youtube --token-only` chỉ kiểm tra token. Có thể truyền URL: `pnpm verify-apify-youtube 'https://youtu.be/…'`. |
 | `pnpm verify-x-tweet [id]` | Gọi `GET /2/tweets/:id` (app-only). Mặc định id ví dụ nếu không truyền. |
@@ -40,7 +42,7 @@ Thư mục **`vault/`** mặc định **gitignore** (dữ liệu cá nhân).
 | `ENRICH_TEMPERATURE` | No | Temperature for ingest note enrichment only (0–2; default `0.3` when unset/invalid). |
 | `ENRICH_MAX_COMPLETION_TOKENS` | No | Max output tokens for enrich completion only (256–32000; default `4096`). |
 | `APIFY_TOKEN` | For Apify routes | Actor runs. |
-| `X_BEARER_TOKEN` | For X routes (later) | Full X adapter is not implemented yet. |
+| `X_BEARER_TOKEN` | For `x_api` routes (CLI + Python API) | X API v2 app-only bearer for `…/status/<id>` URLs. Optional **`twitter-cli`** + cookies (`TWITTER_AUTH_TOKEN`, `TWITTER_CT0`) for full X Article bodies (same as CLI). |
 | `VAULT_ROOT` | No | Vault directory. |
 | `CAPTURE_IMAGE_MAX_BYTES` | No | Per-image download cap (default 2_000_000). |
 | `YT_TRANSLATE_BATCH` | No | Transcript translation: lines per OpenAI call (default 20). |

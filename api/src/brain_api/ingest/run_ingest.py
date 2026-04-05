@@ -71,7 +71,7 @@ def collect_ingest_events(
         apify = resolved.get("apify") if isinstance(resolved.get("apify"), dict) else None
 
         phase("fetch", "active")
-        bundle = fetch_capture_bundle(ingest_url, strategy, apify)
+        bundle = fetch_capture_bundle(ingest_url, strategy, apify, settings)
         phase("fetch", "done")
 
         api_key = _openai_key(settings)

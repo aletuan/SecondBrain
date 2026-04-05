@@ -9,7 +9,9 @@ from urllib.parse import urlparse
 
 from brain_api.adapters.apify_generic import ingest_apify
 from brain_api.adapters.http_readability import ingest_http_readability
+from brain_api.adapters.x_api import fetch_x_thread
 from brain_api.adapters.youtube import extract_youtube_video_id, ingest_youtube_via_apify
+from brain_api.settings import Settings
 from brain_api.types.capture import CaptureBundle
 
 
@@ -27,14 +29,12 @@ def fetch_capture_bundle(
     url: str,
     strategy: str,
     apify_cfg: dict[str, Any] | None,
+    settings: Settings | None = None,
 ) -> CaptureBundle:
     if strategy == "http_readability":
         return ingest_http_readability(url)
     if strategy == "x_api":
-        raise ValueError(
-            "x_api ingest is not implemented in the Python API yet; use a different route "
-            "or the TypeScript CLI.",
-        )
+        return fetch_x_thread(url, settings=settings)
     if strategy == "apify":
         token = (os.environ.get("APIFY_TOKEN") or "").strip()
         if not token:
