@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from brain_api.routes.ingest import router as ingest_router
+from brain_api.routes.taxonomy import router as taxonomy_router
 
 
 def create_app() -> FastAPI:
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(ingest_router)
+    app.include_router(taxonomy_router)
 
     @app.get("/health")
     def health() -> dict[str, bool]:
