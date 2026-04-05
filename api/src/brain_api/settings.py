@@ -4,10 +4,17 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# api/src/brain_api/settings.py → repo root and api/ (later file overrides)
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_API_ROOT = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(_REPO_ROOT / ".env"),
+            str(_API_ROOT / ".env"),
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -22,6 +22,15 @@ import {
   pythonIngestBaseUrl,
   runPythonIngestStream,
 } from './pythonIngest.js';
+
+function ingestBackendConfigured(): boolean {
+  if (pythonIngestBaseUrl()) return true;
+  const brainRoot = resolveBrainRepoRoot();
+  const cliPath = path.join(brainRoot, 'cli', 'src', 'cli.ts');
+  return (
+    fsSync.existsSync(cliPath) && fsSync.existsSync(path.join(brainRoot, 'package.json'))
+  );
+}
 import { runIngestCli } from './runIngestCli.js';
 
 type NextFn = (err?: unknown) => void;
@@ -184,11 +193,7 @@ export function vaultApiMiddleware() {
       if (req.method === 'GET' && urlRaw === '/api/health') {
         const vaultRoot = resolveVaultRoot();
         const brainRoot = resolveBrainRepoRoot();
-        const cliPath = path.join(brainRoot, 'cli', 'src', 'cli.ts');
-        const ingestAvailable =
-          ingestAllowed() &&
-          fsSync.existsSync(cliPath) &&
-          fsSync.existsSync(path.join(brainRoot, 'package.json'));
+        const ingestAvailable = ingestAllowed() && ingestBackendConfigured();
         sendJson(res, 200, {
           ok: true,
           vaultRoot,
