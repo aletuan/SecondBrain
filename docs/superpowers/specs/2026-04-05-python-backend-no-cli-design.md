@@ -1,7 +1,7 @@
 # Design: Python ingest backend, API-only (no CLI)
 
 **Date:** 2026-04-05  
-**Status:** Design approved by stakeholder — next: human review of this file, then `writing-plans` for implementation.
+**Status:** Design approved — implementation plan: `docs/superpowers/plans/2026-04-05-python-backend-no-cli.md`.
 
 **Context:** Ingest and enrichment today live in the TypeScript `cli/` tree and are invoked locally via Commander (`pnpm ingest`, …) and from the reader by **spawning** `tsx cli/src/cli.ts ingest` with `--progress-json` on stderr. The desired direction is **Python-first**: a **backend HTTP service** callable from the web app, **no local CLI** in this repository. The **Obsidian vault stays on the same machine** with **unchanged absolute/relative path semantics** (`VAULT_ROOT` / `READER_VAULT_ROOT` as today — same files Obsidian sees).
 
