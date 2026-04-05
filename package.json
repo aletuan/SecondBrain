@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "api:dev": "cd api && uv run uvicorn brain_api.main:app --reload --host 127.0.0.1 --port 8765",
+    "api:test": "cd api && uv run pytest",
     "reader:dev": "pnpm -C reader dev",
     "reader:build": "pnpm -C reader build",
     "reader:preview": "pnpm -C reader preview",
