@@ -45,6 +45,15 @@ def test_optional_paths_and_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     assert s.ingest_api_key == "secret-ingest"
 
 
+def test_apify_token_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    vault = tmp_path / "v"
+    vault.mkdir()
+    monkeypatch.setenv("VAULT_ROOT", str(vault))
+    monkeypatch.setenv("APIFY_TOKEN", "apify_test_xxx")
+    s = Settings(_env_file=None)
+    assert s.apify_token == "apify_test_xxx"
+
+
 def test_optional_paths_default_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     vault = tmp_path / "v"
     vault.mkdir()
@@ -53,9 +62,11 @@ def test_optional_paths_default_none(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.delenv("CATEGORIES_CONFIG_PATH", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("INGEST_API_KEY", raising=False)
+    monkeypatch.delenv("APIFY_TOKEN", raising=False)
 
     s = Settings(_env_file=None)
     assert s.routing_config_path is None
     assert s.categories_config_path is None
     assert s.openai_api_key is None
     assert s.ingest_api_key is None
+    assert s.apify_token is None

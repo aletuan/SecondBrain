@@ -36,7 +36,10 @@ def fetch_capture_bundle(
     if strategy == "x_api":
         return fetch_x_thread(url, settings=settings)
     if strategy == "apify":
-        token = (os.environ.get("APIFY_TOKEN") or "").strip()
+        token = (
+            ((settings.apify_token if settings else None) or os.environ.get("APIFY_TOKEN") or "")
+            .strip()
+        )
         if not token:
             raise ValueError("APIFY_TOKEN is required for Apify routes")
         if not apify_cfg or not apify_cfg.get("actorId"):

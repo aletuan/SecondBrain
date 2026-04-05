@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -40,17 +41,18 @@ def _allowed_category_ids(settings: Settings) -> list[str]:
     return sorted({str(x["id"]) for x in items}, key=lambda x: x.lower())
 
 
-def collect_ingest_events(
+def emit_ingest_events(
     settings: Settings,
+    emit: Callable[[dict[str, Any]], None],
     *,
     url: str | None = None,
     reingest_capture_dir: str | None = None,
-) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
+) -> None:
+    """Run ingest and push NDJSON-shaped dicts through ``emit`` as each phase advances."""
     vault_root = settings.vault_root.resolve()
 
     def phase(name: str, state: str) -> None:
-        events.append({"v": 1, "kind": "phase", "phase": name, "state": state})
+        emit({"v": 1, "kind": "phase", "phase": name, "state": state})
 
     try:
         capture_dir_abs: Path | None = None
@@ -136,7 +138,7 @@ def collect_ingest_events(
             phase("llm", "done")
 
         capture_id = out_dir.name
-        events.append(
+        emit(
             {
                 "v": 1,
                 "kind": "done",
@@ -145,5 +147,21 @@ def collect_ingest_events(
             },
         )
     except Exception as e:
-        events.append({"v": 1, "kind": "error", "message": str(e)})
+        emit({"v": 1, "kind": "error", "message": str(e)})
+
+
+def collect_ingest_events(
+    settings: Settings,
+    *,
+    url: str | None = None,
+    reingest_capture_dir: str | None = None,
+) -> list[dict[str, Any]]:
+    """Collect all ingest events into a list (tests / synchronous consumers)."""
+    events: list[dict[str, Any]] = []
+    emit_ingest_events(
+        settings,
+        events.append,
+        url=url,
+        reingest_capture_dir=reingest_capture_dir,
+    )
     return events

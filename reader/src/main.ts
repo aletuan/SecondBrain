@@ -925,7 +925,7 @@ function ingestFailurePresentation(
     friendly = 'Server sent unreadable progress data — retry or update the reader.';
   } else if (low.includes('apify_token') || /\bapify\b/.test(low)) {
     friendly =
-      'This URL needs Apify but APIFY_TOKEN is missing or wrong — add it to the Brain repo `.env` and restart the reader.';
+      'This URL needs Apify — set `APIFY_TOKEN` in the Brain repo `.env` (or `api/.env`) and restart the Python API (`pnpm api:dev`), then try again.';
   } else if (
     low.includes('configure x api') ||
     low.includes('x_bearer_token') ||

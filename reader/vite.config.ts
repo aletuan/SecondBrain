@@ -1,5 +1,13 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import { defineConfig } from 'vite';
 import { vaultApiMiddleware } from './vault/apiMiddleware.js';
+
+const __configDir = path.dirname(fileURLToPath(import.meta.url));
+// Vault middleware reads `process.env`; Vite does not inject unprefixed `.env` vars into Node.
+dotenv.config({ path: path.join(__configDir, '.env') });
+dotenv.config({ path: path.join(__configDir, '..', '.env') });
 
 const DEV_NO_CACHE = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

@@ -23,16 +23,17 @@ def client(monkeypatch: pytest.MonkeyPatch, vault_dir: Path) -> TestClient:
     monkeypatch.setenv("VAULT_ROOT", str(vault_dir))
     monkeypatch.setenv("INGEST_API_KEY", "test")
 
-    def fake_collect(
+    def fake_emit(
         settings: Settings,
+        emit,
         *,
         url: str | None = None,
         reingest_capture_dir: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> None:
         _ = url, reingest_capture_dir
         cap = settings.vault_root / "Captures" / "2026-04-05--stub-slug--abc123"
         cap.mkdir(parents=True, exist_ok=True)
-        return [
+        for ev in [
             {"v": 1, "kind": "phase", "phase": "fetch", "state": "active"},
             {"v": 1, "kind": "phase", "phase": "fetch", "state": "done"},
             {"v": 1, "kind": "phase", "phase": "translate", "state": "active"},
@@ -47,11 +48,12 @@ def client(monkeypatch: pytest.MonkeyPatch, vault_dir: Path) -> TestClient:
                 "captureDir": str(cap.resolve()),
                 "captureId": cap.name,
             },
-        ]
+        ]:
+            emit(ev)
 
     monkeypatch.setattr(
-        "brain_api.routes.ingest.collect_ingest_events",
-        fake_collect,
+        "brain_api.routes.ingest.emit_ingest_events",
+        fake_emit,
     )
     return TestClient(create_app())
 

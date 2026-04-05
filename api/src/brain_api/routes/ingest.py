@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
@@ -10,9 +11,11 @@ from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, model_validator
 
-from brain_api.ingest.run_ingest import collect_ingest_events
+from brain_api.ingest.run_ingest import emit_ingest_events
 from brain_api.progress import format_line
 from brain_api.settings import Settings
+
+_STREAM_END = object()
 
 
 def get_settings() -> Settings:
@@ -44,9 +47,42 @@ def _ingest_auth_enabled(settings: Settings) -> bool:
     return bool(str(k).strip())
 
 
-async def _ndjson_stream(events: list[dict[str, Any]]) -> AsyncIterator[bytes]:
-    for ev in events:
-        yield format_line(ev).encode("utf-8")
+async def _live_ndjson_stream(
+    settings: Settings,
+    url: str | None,
+    reingest_capture_dir: str | None,
+) -> AsyncIterator[bytes]:
+    """Yield each progress line as ingest runs (worker thread + asyncio.Queue).
+
+    Previously the route buffered the full ingest via ``asyncio.to_thread(collect_ingest_events)``,
+    then streamed — clients received all phase lines at once after completion, so the reader UI
+    could not highlight the active step.
+    """
+    loop = asyncio.get_running_loop()
+    q: asyncio.Queue[Any] = asyncio.Queue()
+
+    def emit(ev: dict[str, Any]) -> None:
+        fut = asyncio.run_coroutine_threadsafe(q.put(ev), loop)
+        fut.result()
+
+    def worker() -> None:
+        try:
+            emit_ingest_events(
+                settings,
+                emit,
+                url=url,
+                reingest_capture_dir=reingest_capture_dir,
+            )
+        finally:
+            asyncio.run_coroutine_threadsafe(q.put(_STREAM_END), loop)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    while True:
+        item = await q.get()
+        if item is _STREAM_END:
+            break
+        yield format_line(item).encode("utf-8")
 
 
 @router.post("/ingest", response_model=None)
@@ -62,13 +98,11 @@ async def ingest(
                 content={"message": "Invalid or missing X-Ingest-Key"},
             )
 
-    events = await asyncio.to_thread(
-        collect_ingest_events,
-        settings,
-        url=body.url,
-        reingest_capture_dir=body.reingest_capture_dir,
-    )
     return StreamingResponse(
-        _ndjson_stream(events),
+        _live_ndjson_stream(settings, body.url, body.reingest_capture_dir),
         media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
     )

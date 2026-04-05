@@ -21,8 +21,6 @@ pnpm api:dev                          # FastAPI (port 8765)
 pnpm verify-keys                      # from repo root cwd (cd .. && tsx scripts/…)
 pnpm verify-apify-youtube
 pnpm verify-x-tweet
-pnpm strip-cau-hoi-mo
-pnpm migrate-vault-filenames
 ```
 
 **Single test file:** `cd reader && pnpm exec vitest run tests/path/to/file.test.ts`

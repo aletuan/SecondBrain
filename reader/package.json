@@ -14,9 +14,7 @@
     "api:test": "cd ../api && uv run pytest",
     "verify-keys": "cd .. && tsx scripts/verify-keys.ts",
     "verify-apify-youtube": "cd .. && tsx scripts/verify-apify-youtube.ts",
-    "verify-x-tweet": "cd .. && tsx scripts/verify-x-tweet.ts",
-    "strip-cau-hoi-mo": "cd .. && tsx scripts/strip-cau-hoi-mo-notes.ts",
-    "migrate-vault-filenames": "cd .. && tsx scripts/migrate-vault-filenames.ts"
+    "verify-x-tweet": "cd .. && tsx scripts/verify-x-tweet.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

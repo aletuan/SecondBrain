@@ -32,8 +32,6 @@ pnpm install
 | `pnpm verify-keys` | Smoke `.env` keys (runs from **repo root** via `cd .. && tsx …`) |
 | `pnpm verify-apify-youtube` | Apify + YouTube routing (cwd repo root) |
 | `pnpm verify-x-tweet` | X API tweet lookup |
-| `pnpm strip-cau-hoi-mo` | Strip legacy section in vault `*.note.md` |
-| `pnpm migrate-vault-filenames` | One-off vault filename migration |
 
 Open **`http://127.0.0.1:5174`** for dev. From repo root: **`cd reader && pnpm dev`**.
 

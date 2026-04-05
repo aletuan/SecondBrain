@@ -34,8 +34,6 @@ Run from **`reader/`** (`cd reader` first), except raw `uv`/`pytest` in `api/`:
 | `pnpm verify-keys` | Smoke-check **OpenAI** / **Apify** / **X** from `.env` (cwd = repo root). |
 | `pnpm verify-apify-youtube` | **`APIFY_TOKEN`** + YouTube actor from `config/routing.yaml` (or example). |
 | `pnpm verify-x-tweet [id]` | X API v2 tweet lookup (app-only bearer). |
-| `pnpm strip-cau-hoi-mo` | Batch-remove legacy `## Câu hỏi mở` from `*.note.md` under the vault. |
-| `pnpm migrate-vault-filenames` | One-off migration for capture filenames (see script header). |
 
 **Ingest từ HTTP:** `POST /v1/ingest` trên API Python (JSON body `url` hoặc `reingest_capture_dir`) — xem [`api/README.md`](api/README.md). Reader dùng SSE qua `/api/ingest/start` + `/api/ingest/stream`.
 
