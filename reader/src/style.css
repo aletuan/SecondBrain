@@ -1691,12 +1691,14 @@ main {
   transform: scale(1.04);
 }
 
+/* Neutral plate so full-colour YouTube mark reads clearly (avoids double-red wash). */
 .card[data-source-type="youtube"] .card-tile__icon-wrap {
-  background: color-mix(in oklab, #ff0000 12%, var(--elevated));
+  background: color-mix(in oklab, var(--elevated) 94%, var(--line));
 }
 
+/* X mark follows body text colour (paper-read) per theme — matches editorial chrome. */
 .card[data-source-type="x"] .card-tile__icon-wrap {
-  background: color-mix(in oklab, var(--accent) 14%, var(--elevated));
+  background: color-mix(in oklab, var(--elevated) 92%, var(--muted));
 }
 
 .card[data-source-type="article"] .card-tile__icon-wrap {
@@ -1710,12 +1712,13 @@ main {
   line-height: 0;
 }
 
-.card-tile__icon-inner--yt {
-  color: #c00;
+.card-tile__icon-inner--yt svg {
+  display: block; /* brand fills on paths; no currentColor */
 }
 
 .card-tile__icon-inner--x {
-  color: var(--accent);
+  color: var(--paper-read);
+  opacity: 0.95;
 }
 
 .card-tile__icon-inner--article {
