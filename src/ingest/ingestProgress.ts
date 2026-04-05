@@ -8,6 +8,11 @@ export type IngestProgressEvent =
 
 export type IngestPhaseProgressEvent = Extract<IngestProgressEvent, { kind: 'phase' }>;
 
+/** One JSON object + newline, as emitted on stderr for `--progress-json`. */
+export function formatIngestProgressLine(ev: IngestProgressEvent): string {
+  return `${JSON.stringify(ev)}\n`;
+}
+
 export function tryParseIngestProgressLine(line: string): IngestProgressEvent | null {
   const t = line.trim();
   if (!t.startsWith('{')) return null;

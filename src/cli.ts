@@ -1,28 +1,18 @@
 import 'dotenv/config';
 import OpenAI from 'openai';
-import path from 'node:path';
 import { Command } from 'commander';
-import type { IngestProgressEvent } from './ingest/ingestProgress.js';
-import { runIngest } from './ingest/runIngest.js';
+import {
+  emitIngestDoneProgress,
+  emitIngestErrorProgress,
+  ingestUrlToCapture,
+  reingestCaptureDir,
+} from './cli/ingestCommands.js';
+import { printError } from './cli/printError.js';
 import type { OpenAIClientLike } from './llm/enrich.js';
 import { applyTranslationToCaptureSource } from './llm/translateTranscript.js';
-import { getCaptureFiles, readIngestUrlFromCaptureDir } from './vault/writer.js';
+import { resolveUserPath } from './util/resolveUserPath.js';
+import { getCaptureFiles } from './vault/writer.js';
 import { writeSuggestedMilestonesForCapture } from './youtube/suggestMilestones.js';
-
-function printError(e: unknown): void {
-  if (!(e instanceof Error)) {
-    console.error(e);
-    return;
-  }
-  console.error(e.message);
-  let c: unknown = e.cause;
-  let depth = 0;
-  while (c instanceof Error && depth < 6) {
-    console.error(`  Caused by: ${c.message}`);
-    c = c.cause;
-    depth += 1;
-  }
-}
 
 const program = new Command()
   .name('second-brain')
@@ -50,37 +40,17 @@ program
         captureDir?: string;
       },
     ) => {
-      const writeProgress = (ev: IngestProgressEvent) => {
-        process.stderr.write(`${JSON.stringify(ev)}\n`);
-      };
       try {
-        const cwd = process.cwd();
-        const captureDir = opts.captureDir
-          ? path.isAbsolute(opts.captureDir)
-            ? opts.captureDir
-            : path.resolve(cwd, opts.captureDir)
-          : undefined;
-        const dir = await runIngest({
+        const dir = await ingestUrlToCapture({
           url,
-          captureDir,
-          onProgress: opts.progressJson ? (ev) => writeProgress(ev) : undefined,
+          captureDir: opts.captureDir,
+          progressJson: opts.progressJson,
         });
-        if (opts.progressJson) {
-          writeProgress({
-            v: 1,
-            kind: 'done',
-            captureDir: dir,
-            captureId: path.basename(dir),
-          });
-        }
+        if (opts.progressJson) emitIngestDoneProgress(dir);
         console.log(dir);
       } catch (e) {
         if (opts.progressJson) {
-          writeProgress({
-            v: 1,
-            kind: 'error',
-            message: e instanceof Error ? e.message : String(e),
-          });
+          emitIngestErrorProgress(e instanceof Error ? e.message : String(e));
         }
         printError(e);
         process.exitCode = 1;
@@ -97,34 +67,16 @@ program
     'emit one JSON progress object per line on stderr (v1 schema for Reader SSE)',
   )
   .action(async (opts: { capture: string; progressJson?: boolean }) => {
-    const writeProgress = (ev: IngestProgressEvent) => {
-      process.stderr.write(`${JSON.stringify(ev)}\n`);
-    };
     try {
-      const cwd = process.cwd();
-      const dir = path.isAbsolute(opts.capture) ? opts.capture : path.resolve(cwd, opts.capture);
-      const url = await readIngestUrlFromCaptureDir(dir);
-      const out = await runIngest({
-        url,
-        captureDir: dir,
-        onProgress: opts.progressJson ? (ev) => writeProgress(ev) : undefined,
+      const out = await reingestCaptureDir({
+        capture: opts.capture,
+        progressJson: opts.progressJson,
       });
-      if (opts.progressJson) {
-        writeProgress({
-          v: 1,
-          kind: 'done',
-          captureDir: out,
-          captureId: path.basename(out),
-        });
-      }
+      if (opts.progressJson) emitIngestDoneProgress(out);
       console.log(out);
     } catch (e) {
       if (opts.progressJson) {
-        writeProgress({
-          v: 1,
-          kind: 'error',
-          message: e instanceof Error ? e.message : String(e),
-        });
+        emitIngestErrorProgress(e instanceof Error ? e.message : String(e));
       }
       printError(e);
       process.exitCode = 1;
@@ -138,9 +90,7 @@ program
   .action(async (opts: { capture: string }) => {
     try {
       const cwd = process.cwd();
-      const dir = path.isAbsolute(opts.capture)
-        ? opts.capture
-        : path.resolve(cwd, opts.capture);
+      const dir = resolveUserPath(cwd, opts.capture);
       await applyTranslationToCaptureSource({ captureDir: dir });
       const { sourcePath } = await getCaptureFiles(dir);
       console.log(sourcePath);
@@ -158,9 +108,7 @@ program
   .action(async (opts: { capture: string; maxSec: string }) => {
     try {
       const cwd = process.cwd();
-      const dir = path.isAbsolute(opts.capture)
-        ? opts.capture
-        : path.resolve(cwd, opts.capture);
+      const dir = resolveUserPath(cwd, opts.capture);
       const maxSec = Number(opts.maxSec);
       const key = process.env.OPENAI_API_KEY?.trim();
       if (!key) throw new Error('suggest-milestones: OPENAI_API_KEY is not set');

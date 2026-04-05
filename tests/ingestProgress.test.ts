@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { tryParseIngestProgressLine } from '../src/ingest/ingestProgress.js';
+import {
+  formatIngestProgressLine,
+  tryParseIngestProgressLine,
+} from '../src/ingest/ingestProgress.js';
+
+describe('formatIngestProgressLine', () => {
+  it('round-trips with tryParseIngestProgressLine for phase events', () => {
+    const ev = { v: 1 as const, kind: 'phase' as const, phase: 'fetch' as const, state: 'active' as const };
+    expect(tryParseIngestProgressLine(formatIngestProgressLine(ev))).toEqual(ev);
+  });
+});
 
 describe('tryParseIngestProgressLine', () => {
   it('parses phase lines', () => {

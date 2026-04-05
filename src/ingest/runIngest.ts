@@ -6,6 +6,7 @@ import { ingestHttpReadability } from '../adapters/httpReadability.js';
 import { fetchXThread } from '../adapters/xApi.js';
 import { extractYoutubeVideoId, ingestYouTubeViaApify } from '../adapters/youtube.js';
 import { getAllowedCategoryIdsSorted, loadCategoriesFromRepo } from '../config/categories.js';
+import type { ApifyRouteConfig } from '../config/loadRouting.js';
 import { readRoutingYamlSync } from '../config/routingFile.js';
 import type { OpenAIClientLike } from '../llm/enrich.js';
 import { enrichNote, extractTags, resolveEnrichModel } from '../llm/enrich.js';
@@ -13,7 +14,7 @@ import { extractCategories } from '../llm/extractCategories.js';
 import { enrichMaxCharsFromEnv, truncateSourceForEnrich } from '../llm/enrichSource.js';
 import { translateTranscriptSegments } from '../llm/translateTranscript.js';
 import { loadRouting, resolveStrategy } from '../router.js';
-import type { CaptureBundle } from '../types/capture.js';
+import type { CaptureBundle, FetchMethod } from '../types/capture.js';
 import {
   addTagsToNoteFrontmatter,
   assertCaptureDirUnderVault,
@@ -24,6 +25,41 @@ import {
   writeCapture,
 } from '../vault/writer.js';
 import type { IngestPhaseProgressEvent } from './ingestProgress.js';
+
+async function fetchCaptureBundle(
+  url: string,
+  strategy: FetchMethod,
+  apify: ApifyRouteConfig | undefined,
+): Promise<CaptureBundle> {
+  switch (strategy) {
+    case 'http_readability':
+      return ingestHttpReadability(url);
+    case 'apify': {
+      const token = process.env.APIFY_TOKEN?.trim();
+      if (!token) throw new Error('APIFY_TOKEN is required for Apify routes');
+      const isYoutube =
+        extractYoutubeVideoId(url) !== null ||
+        /youtube\.com|youtu\.be/i.test(new URL(url).hostname);
+      if (isYoutube) {
+        return ingestYouTubeViaApify({
+          url,
+          actorId: apify!.actorId,
+          token,
+          build: apify!.build,
+          youtubeInput: apify!.youtubeInput,
+        });
+      }
+      return ingestApify({
+        url,
+        actorId: apify!.actorId,
+        token,
+        build: apify!.build,
+      });
+    }
+    case 'x_api':
+      return fetchXThread(url);
+  }
+}
 
 export async function runIngest(options: {
   url: string;
@@ -44,34 +80,7 @@ export async function runIngest(options: {
   const { strategy, apify } = resolveStrategy(cfg, options.url);
 
   phase({ v: 1, kind: 'phase', phase: 'fetch', state: 'active' });
-  let bundle: CaptureBundle;
-  if (strategy === 'http_readability') {
-    bundle = await ingestHttpReadability(options.url);
-  } else if (strategy === 'apify') {
-    const token = process.env.APIFY_TOKEN?.trim();
-    if (!token) throw new Error('APIFY_TOKEN is required for Apify routes');
-    const isYoutube =
-      extractYoutubeVideoId(options.url) !== null ||
-      /youtube\.com|youtu\.be/i.test(new URL(options.url).hostname);
-    if (isYoutube) {
-      bundle = await ingestYouTubeViaApify({
-        url: options.url,
-        actorId: apify!.actorId,
-        token,
-        build: apify!.build,
-        youtubeInput: apify!.youtubeInput,
-      });
-    } else {
-      bundle = await ingestApify({
-        url: options.url,
-        actorId: apify!.actorId,
-        token,
-        build: apify!.build,
-      });
-    }
-  } else {
-    bundle = await fetchXThread(options.url);
-  }
+  let bundle = await fetchCaptureBundle(options.url, strategy, apify);
   phase({ v: 1, kind: 'phase', phase: 'fetch', state: 'done' });
 
   const doTranslate =
