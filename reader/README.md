@@ -52,14 +52,17 @@ Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default —
 | `READER_PORT` | Preview server port (default `4173`) |
 | `READER_DEV_HOST` | Dev + HMR bind host (default `127.0.0.1`). Use `0.0.0.0` only on trusted LAN. |
 | `READER_VITE_POLL` | Set to `1` or `true` so Vite watches files with polling (fixes missed saves on Docker / some disks). |
+| `PYTHON_INGEST_URL` | Optional. When set (e.g. `http://127.0.0.1:8765`), ingest and **category taxonomy** use the Python API (`POST /v1/ingest`, `GET /v1/taxonomy/categories`) instead of spawning the TS CLI / reading `config/categories*.yaml` from disk. **Unset** keeps the legacy CLI + local taxonomy. |
+| `INGEST_API_KEY` | When the Python API has `INGEST_API_KEY` set, the reader forwards it as `X-Ingest-Key` on ingest and taxonomy requests. |
 
 If neither vault env is set, the app resolves `../vault` from the `reader/` working directory.
 
 ## API (local middleware)
 
 - `GET /api/health` — `vaultRoot`, `brainRoot`, `ingestAvailable`, `ingestSse` (same as `ingestAvailable` when the SSE ingest flow is built in)
-- `POST /api/ingest` — JSON `{ "url": "https://…" }` → runs the Brain CLI ingest in `READER_BRAIN_ROOT` with `VAULT_ROOT` set to the reader vault (same behaviour as CLI: LLM when `OPENAI_API_KEY`; YouTube Vi transcript when segments + key). **Local-only**; set `READER_ALLOW_INGEST=0` to turn off. The **web UI** uses SSE (`/start` + `/stream`) when `ingestSse` is true; otherwise it falls back to this endpoint.
-- `POST /api/ingest/start` — body `{ "url": "https://…" }` → `{ ok, jobId }`. Open `GET /api/ingest/stream?jobId=…` as **SSE** (`text/event-stream`); each event is `data: <JSON>` with `v:1` and `kind`: `phase` \| `done` \| `error` (CLI `--progress-json` on stderr, forwarded by the server).
+- `POST /api/ingest` — JSON `{ "url": "https://…" }` → with **`PYTHON_INGEST_URL`**: proxies NDJSON stream from Python; **without**: runs the Brain CLI ingest in `READER_BRAIN_ROOT`. **Local-only**; set `READER_ALLOW_INGEST=0` to turn off. The **web UI** uses SSE (`/start` + `/stream`) when `ingestSse` is true; otherwise it falls back to this endpoint.
+- `POST /api/ingest/start` — body `{ "url": "https://…" }` → `{ ok, jobId }`. Open `GET /api/ingest/stream?jobId=…` as **SSE** (`text/event-stream`); each event is `data: <JSON>` with `v:1` and `kind`: `phase` \| `done` \| `error` (from CLI stderr or Python NDJSON, depending on `PYTHON_INGEST_URL`).
+- `GET /api/taxonomy/categories` — with **`PYTHON_INGEST_URL`**: proxies Python `GET /v1/taxonomy/categories`; **without**: reads `config/categories.yaml` / `categories.example.yaml` under `READER_BRAIN_ROOT`.
 - `GET /api/captures` — list captures (each item includes `publish`, `reaction_avg`, `reaction_count` from `{slug}.comment` when present; the library table shows average rating, not publish state)
 - `GET /api/captures/:id` — capture payload (markdown, frontmatter, YouTube, transcripts, milestones)
 - `GET /api/captures/:id/reactions` — reader reactions timeline parsed from `{slug}.comment` in the capture folder (JSON `{ entries: [{ at, rating, text? }] }`; empty file → `entries: []`)

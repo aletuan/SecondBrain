@@ -1,12 +1,41 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
+import { pythonIngestBaseUrl } from './pythonIngest.js';
 import { resolveBrainRepoRoot } from './paths.js';
 
 export type CategoryEntry = { id: string; label: string };
 
 /** Keep in sync with `cli/src/config/categories.ts` / `config/categories.example.yaml`. */
 export async function loadCategoryTaxonomy(): Promise<CategoryEntry[]> {
+  const pyBase = pythonIngestBaseUrl();
+  if (pyBase) {
+    const base = pyBase.replace(/\/$/, '');
+    const apiKey = process.env.INGEST_API_KEY?.trim();
+    const headers: Record<string, string> = {};
+    if (apiKey) headers['X-Ingest-Key'] = apiKey;
+    const r = await fetch(`${base}/v1/taxonomy/categories`, { headers });
+    if (!r.ok) {
+      throw new Error(`taxonomy: Python API ${r.status}: ${(await r.text()).slice(0, 500)}`);
+    }
+    const data = (await r.json()) as { items?: unknown };
+    const items = data.items;
+    if (!Array.isArray(items)) throw new Error('taxonomy: expected { items: array } from API');
+    const entries: CategoryEntry[] = [];
+    const seen = new Set<string>();
+    for (const row of items) {
+      if (!row || typeof row !== 'object') continue;
+      const id = String((row as { id?: unknown }).id ?? '').trim();
+      const label = String((row as { label?: unknown }).label ?? '').trim();
+      if (!id || !label) throw new Error('taxonomy: each item needs id and label');
+      if (seen.has(id)) throw new Error(`taxonomy: duplicate id "${id}"`);
+      seen.add(id);
+      entries.push({ id, label });
+    }
+    if (entries.length === 0) throw new Error('taxonomy: items is empty');
+    return entries;
+  }
+
   const brainRoot = resolveBrainRepoRoot(process.cwd());
   const local = path.join(brainRoot, 'config', 'categories.yaml');
   const fallback = path.join(brainRoot, 'config', 'categories.example.yaml');

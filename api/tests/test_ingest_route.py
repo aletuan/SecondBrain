@@ -72,3 +72,26 @@ def test_ingest_valid_key_streams_ndjson_progress(
     assert len(dones) == 1
     assert dones[0]["captureDir"] == "/tmp/stub/Captures/x"
     assert dones[0]["captureId"] == "stub-id"
+
+
+def test_ingest_reingest_capture_dir_alone_streams_stub(
+    client: TestClient,
+) -> None:
+    r = client.post(
+        "/v1/ingest",
+        headers={"X-Ingest-Key": "test"},
+        json={"reingest_capture_dir": "/tmp/Captures/foo"},
+    )
+    assert r.status_code == 200
+    lines = [ln for ln in r.text.splitlines() if ln.strip()]
+    dones = [try_parse_line(ln) for ln in lines]
+    assert any(p and p.get("kind") == "done" for p in dones)
+
+
+def test_ingest_neither_url_nor_reingest_422(client: TestClient) -> None:
+    r = client.post(
+        "/v1/ingest",
+        headers={"X-Ingest-Key": "test"},
+        json={},
+    )
+    assert r.status_code == 422

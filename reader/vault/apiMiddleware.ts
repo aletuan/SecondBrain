@@ -17,6 +17,11 @@ import {
 } from './reactionsMarkdown.js';
 import { resolveBrainRepoRoot, resolveVaultRoot } from './paths.js';
 import type { IngestProgressEvent } from './ingestProgressParse.js';
+import {
+  assertIngestBackendReady,
+  pythonIngestBaseUrl,
+  runPythonIngestStream,
+} from './pythonIngest.js';
 import { runIngestCli } from './runIngestCli.js';
 
 type NextFn = (err?: unknown) => void;
@@ -263,8 +268,10 @@ export function vaultApiMiddleware() {
 
         beginSse(res);
         let childRef: { kill: (signal?: NodeJS.Signals) => boolean } | null = null;
+        const ac = new AbortController();
         const onReqClose = () => {
           try {
+            ac.abort();
             childRef?.kill('SIGTERM');
           } catch {
             /* ignore */
@@ -281,37 +288,63 @@ export function vaultApiMiddleware() {
         };
 
         try {
+          await assertIngestBackendReady();
           const vaultRoot = resolveVaultRoot();
-          const onChild = (c: ChildProcess) => {
-            childRef = c;
-          };
-          const cliOpts =
-            payload.kind === 'url'
-              ? {
-                  url: payload.url,
-                  progressJson: true as const,
-                  onIngestProgress: forward,
-                  onChild,
-                }
-              : {
-                  reingestCaptureDir: path.join(vaultRoot, 'Captures', payload.captureId),
-                  progressJson: true as const,
-                  onIngestProgress: forward,
-                  onChild,
-                };
-          const { code, stdout, stderr, captureDir } = await runIngestCli(cliOpts);
-          if (code !== 0) {
-            sendSse(res, {
-              v: 1,
-              kind: 'error',
-              message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
+          if (pythonIngestBaseUrl()) {
+            const { code, stderr, captureDir } = await runPythonIngestStream({
+              url: payload.kind === 'url' ? payload.url : undefined,
+              reingestCaptureDir:
+                payload.kind === 'reingest'
+                  ? path.join(vaultRoot, 'Captures', payload.captureId)
+                  : undefined,
+              onProgress: forward,
+              signal: ac.signal,
             });
-          } else if (!captureDir) {
-            sendSse(res, {
-              v: 1,
-              kind: 'error',
-              message: `capture path missing in stdout: ${stdout.slice(-2000)}`,
-            });
+            if (code !== 0) {
+              sendSse(res, {
+                v: 1,
+                kind: 'error',
+                message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
+              });
+            } else if (!captureDir) {
+              sendSse(res, {
+                v: 1,
+                kind: 'error',
+                message: 'capture path missing in ingest stream',
+              });
+            }
+          } else {
+            const onChild = (c: ChildProcess) => {
+              childRef = c;
+            };
+            const cliOpts =
+              payload.kind === 'url'
+                ? {
+                    url: payload.url,
+                    progressJson: true as const,
+                    onIngestProgress: forward,
+                    onChild,
+                  }
+                : {
+                    reingestCaptureDir: path.join(vaultRoot, 'Captures', payload.captureId),
+                    progressJson: true as const,
+                    onIngestProgress: forward,
+                    onChild,
+                  };
+            const { code, stdout, stderr, captureDir } = await runIngestCli(cliOpts);
+            if (code !== 0) {
+              sendSse(res, {
+                v: 1,
+                kind: 'error',
+                message: stderr.trim() ? stderr.slice(-8000) : `ingest exited with code ${code}`,
+              });
+            } else if (!captureDir) {
+              sendSse(res, {
+                v: 1,
+                kind: 'error',
+                message: `capture path missing in stdout: ${stdout.slice(-2000)}`,
+              });
+            }
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -345,9 +378,29 @@ export function vaultApiMiddleware() {
           return;
         }
         try {
-          const { code, stdout, stderr, captureDir } = await runIngestCli({
-            url: parsedBody.url,
-          });
+          await assertIngestBackendReady();
+          let code: number;
+          let stdout: string;
+          let stderr: string;
+          let captureDir: string | null;
+          if (pythonIngestBaseUrl()) {
+            const r = await runPythonIngestStream({
+              url: parsedBody.url,
+              onProgress: () => {},
+            });
+            code = r.code;
+            stdout = r.stdout;
+            stderr = r.stderr;
+            captureDir = r.captureDir;
+          } else {
+            const r = await runIngestCli({
+              url: parsedBody.url,
+            });
+            code = r.code;
+            stdout = r.stdout;
+            stderr = r.stderr;
+            captureDir = r.captureDir;
+          }
           if (code !== 0) {
             sendJson(res, 502, {
               error: 'ingest failed',

@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from brain_api.progress import format_line
 from brain_api.settings import Settings
@@ -24,7 +24,18 @@ STUB_CAPTURE_ID = "stub-id"
 
 
 class IngestBody(BaseModel):
-    url: str
+    """Exactly one of `url` (new ingest) or `reingest_capture_dir` (absolute capture folder)."""
+
+    url: str | None = None
+    reingest_capture_dir: str | None = None
+
+    @model_validator(mode="after")
+    def _one_of(self) -> IngestBody:
+        has_url = bool(self.url and str(self.url).strip())
+        has_re = bool(self.reingest_capture_dir and str(self.reingest_capture_dir).strip())
+        if has_url == has_re:
+            raise ValueError("provide exactly one of url or reingest_capture_dir")
+        return self
 
 
 def _ingest_auth_enabled(settings: Settings) -> bool:
@@ -70,7 +81,7 @@ async def ingest(
                 status_code=401,
                 content={"message": "Invalid or missing X-Ingest-Key"},
             )
-    _ = body.url
+    _ = body.url or body.reingest_capture_dir
     return StreamingResponse(
         _stub_ndjson_stream(),
         media_type="application/x-ndjson",
