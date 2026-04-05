@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a 3-theme switcher (Dark / Light-Parchment / Solarized) to reader-web with CSS variable swapping, localStorage persistence, and no flash on reload.
+**Goal:** Add a 3-theme switcher (Dark / Light-Parchment / Solarized) to reader with CSS variable swapping, localStorage persistence, and no flash on reload.
 
 **Architecture:** `data-theme` attribute on `<html>` drives CSS variable overrides. A flash-prevention inline script in `<head>` applies the saved theme before CSS loads. Switcher UI (3 SVG icon buttons in a pill) renders in the masthead (desktop) and mobile-topbar (mobile). All theme colors live in CSS variables; hardcoded rgba accent/signal values get new variables.
 
@@ -15,11 +15,11 @@
 ### Task 1: Flash-prevention script in index.html
 
 **Files:**
-- Modify: `reader-web/index.html:2,15-16`
+- Modify: `reader/index.html:2,15-16`
 
 - [ ] **Step 1: Add data-theme attribute and inline script**
 
-In `reader-web/index.html`, add `data-theme="dark"` to the `<html>` tag and insert a flash-prevention script before the font `<link>`:
+In `reader/index.html`, add `data-theme="dark"` to the `<html>` tag and insert a flash-prevention script before the font `<link>`:
 
 ```html
 <html lang="vi" data-theme="dark">
@@ -44,8 +44,8 @@ Open the app in browser, set theme to `light` via console (`localStorage.setItem
 - [ ] **Step 3: Commit**
 
 ```bash
-git add reader-web/index.html
-git commit -m "feat(reader-web): add theme flash-prevention script in head"
+git add reader/index.html
+git commit -m "feat(reader): add theme flash-prevention script in head"
 ```
 
 ---
@@ -53,7 +53,7 @@ git commit -m "feat(reader-web): add theme flash-prevention script in head"
 ### Task 2: CSS theme variable blocks + new utility variables
 
 **Files:**
-- Modify: `reader-web/src/style.css:1-24` (`:root` block)
+- Modify: `reader/src/style.css:1-24` (`:root` block)
 
 - [ ] **Step 1: Add new utility variables to `:root`**
 
@@ -127,8 +127,8 @@ Open the app — should look exactly the same as before (dark is default). No vi
 - [ ] **Step 5: Commit**
 
 ```bash
-git add reader-web/src/style.css
-git commit -m "feat(reader-web): add light and solarized CSS variable blocks"
+git add reader/src/style.css
+git commit -m "feat(reader): add light and solarized CSS variable blocks"
 ```
 
 ---
@@ -136,7 +136,7 @@ git commit -m "feat(reader-web): add light and solarized CSS variable blocks"
 ### Task 3: Replace hardcoded rgba values with variables
 
 **Files:**
-- Modify: `reader-web/src/style.css` at lines 1336, 2475, 2555, 156
+- Modify: `reader/src/style.css` at lines 1336, 2475, 2555, 156
 
 - [ ] **Step 1: Replace accent hover rgba at line 1336**
 
@@ -177,8 +177,8 @@ Check the captures table hover, YouTube subtitle current-row highlight, transcri
 - [ ] **Step 6: Commit**
 
 ```bash
-git add reader-web/src/style.css
-git commit -m "refactor(reader-web): replace hardcoded rgba colors with CSS variables"
+git add reader/src/style.css
+git commit -m "refactor(reader): replace hardcoded rgba colors with CSS variables"
 ```
 
 ---
@@ -186,7 +186,7 @@ git commit -m "refactor(reader-web): replace hardcoded rgba colors with CSS vari
 ### Task 4: Noise and grid-bg theme adaptation
 
 **Files:**
-- Modify: `reader-web/src/style.css:49-68` (`.noise` and `.grid-bg`)
+- Modify: `reader/src/style.css:49-68` (`.noise` and `.grid-bg`)
 
 - [ ] **Step 1: Adjust noise opacity for light theme**
 
@@ -208,8 +208,8 @@ Toggle themes via console (`document.documentElement.setAttribute('data-theme','
 - [ ] **Step 3: Commit**
 
 ```bash
-git add reader-web/src/style.css
-git commit -m "fix(reader-web): adjust noise and grid opacity for light theme"
+git add reader/src/style.css
+git commit -m "fix(reader): adjust noise and grid opacity for light theme"
 ```
 
 ---
@@ -217,7 +217,7 @@ git commit -m "fix(reader-web): adjust noise and grid opacity for light theme"
 ### Task 5: Theme transition CSS
 
 **Files:**
-- Modify: `reader-web/src/style.css` (after the `html, body` block around line 47)
+- Modify: `reader/src/style.css` (after the `html, body` block around line 47)
 
 - [ ] **Step 1: Add transition for smooth theme switching**
 
@@ -247,8 +247,8 @@ Toggle theme via console — should animate smoothly over 200ms, no jarring flas
 - [ ] **Step 3: Commit**
 
 ```bash
-git add reader-web/src/style.css
-git commit -m "feat(reader-web): add smooth CSS transitions for theme switching"
+git add reader/src/style.css
+git commit -m "feat(reader): add smooth CSS transitions for theme switching"
 ```
 
 ---
@@ -256,7 +256,7 @@ git commit -m "feat(reader-web): add smooth CSS transitions for theme switching"
 ### Task 6: Theme switcher UI — CSS styles
 
 **Files:**
-- Modify: `reader-web/src/style.css` (add new block near the masthead styles)
+- Modify: `reader/src/style.css` (add new block near the masthead styles)
 
 - [ ] **Step 1: Add theme-switcher CSS**
 
@@ -321,8 +321,8 @@ Add the following CSS block after the `.status-strip` styles:
 - [ ] **Step 2: Commit**
 
 ```bash
-git add reader-web/src/style.css
-git commit -m "feat(reader-web): add theme switcher button styles"
+git add reader/src/style.css
+git commit -m "feat(reader): add theme switcher button styles"
 ```
 
 ---
@@ -330,7 +330,7 @@ git commit -m "feat(reader-web): add theme switcher button styles"
 ### Task 7: Theme switcher UI — HTML + JS in main.ts
 
 **Files:**
-- Modify: `reader-web/src/main.ts`
+- Modify: `reader/src/main.ts`
 
 - [ ] **Step 1: Add SVG icon constants and switcher HTML function**
 
@@ -420,8 +420,8 @@ Open the app. Check:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add reader-web/src/main.ts
-git commit -m "feat(reader-web): add theme switcher component with persistence"
+git add reader/src/main.ts
+git commit -m "feat(reader): add theme switcher component with persistence"
 ```
 
 ---
@@ -429,7 +429,7 @@ git commit -m "feat(reader-web): add theme switcher component with persistence"
 ### Task 8: Light theme shadow adjustments
 
 **Files:**
-- Modify: `reader-web/src/style.css`
+- Modify: `reader/src/style.css`
 
 - [ ] **Step 1: Lighten shadows for light theme**
 
@@ -453,8 +453,8 @@ Open a capture detail on light theme. Check modal shadow looks subtle but visibl
 - [ ] **Step 3: Commit**
 
 ```bash
-git add reader-web/src/style.css
-git commit -m "fix(reader-web): soften shadows for light theme"
+git add reader/src/style.css
+git commit -m "fix(reader): soften shadows for light theme"
 ```
 
 ---
@@ -504,5 +504,5 @@ If any contrast, spacing, or visual issues are discovered, fix them before the f
 
 ```bash
 git add -A
-git commit -m "fix(reader-web): address visual issues from theme QA"
+git commit -m "fix(reader): address visual issues from theme QA"
 ```

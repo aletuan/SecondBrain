@@ -1,0 +1,2517 @@
+import './style.css';
+import { marked } from 'marked';
+import type { CaptureDetail, CaptureListItem, ReactionEntry } from './types.js';
+import { ratingStarsOnly } from '../vault/reactionsMarkdown.js';
+import {
+  findActiveSegmentIndex,
+  mergeTranscriptsForUi,
+  type MergedTranscriptLine,
+} from './transcriptParse.js';
+import { parseListField } from '../vault/parseListField.js';
+import {
+  filterCaptures,
+  type CaptureListFilters,
+  type SourceFilter,
+  isThreadsCapture,
+  isXCapture,
+  isYoutubeCapture,
+} from './captureFilters.js';
+import { normalizeLegacyReaderHash } from './hashRoute.js';
+
+/** Minimal surface used from YouTube IFrame API (avoids @types/youtube). */
+type YtPlayerApi = {
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  playVideo(): void;
+  getCurrentTime(): number;
+  destroy(): void;
+};
+
+let ytCaptureCleanup: (() => void) | null = null;
+let filmstripLightboxCleanup: (() => void) | null = null;
+
+/** Full library for Captures view; client filters apply on top. */
+let capturesListAll: CaptureListItem[] = [];
+let captureListFilter: CaptureListFilters = { categoryId: null, source: 'all' };
+/** 1-based; client-side pagination for the captures table (search resets to 1). */
+let libraryTablePage = 1;
+
+function loadYoutubeIframeApi(): Promise<void> {
+  const w = window as unknown as {
+    YT?: { Player?: new (id: string, opts: object) => YtPlayerApi };
+    onYouTubeIframeAPIReady?: () => void;
+  };
+  if (w.YT?.Player) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const prev = w.onYouTubeIframeAPIReady;
+    w.onYouTubeIframeAPIReady = () => {
+      prev?.();
+      resolve();
+    };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      s.async = true;
+      document.head.appendChild(s);
+    }
+  });
+}
+
+const app = document.querySelector<HTMLDivElement>('#app')!;
+
+marked.setOptions({ gfm: true, breaks: true });
+
+function esc(s: string): string {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ── Theme switcher ──────────────────────────────────────── */
+const THEME_ICONS = {
+  dark: '<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>',
+  light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+  solarized: '<svg viewBox="0 0 24 24"><path d="M10 2v7.527a2 2 0 0 1-1 1.732L6 13v1h12v-1l-3-1.741A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/><path d="M9 20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1H9z"/></svg>',
+} as const;
+
+/** Library row “open” affordance (row click opens detail; icon is decorative). */
+const LIB_OPEN_CHEVRON_SVG =
+  '<svg class="mock-table-open__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 6 6 6-6 6"/></svg>';
+
+type ThemeName = 'dark' | 'light' | 'solarized';
+const THEMES: ThemeName[] = ['dark', 'light', 'solarized'];
+
+function currentTheme(): ThemeName {
+  return (document.documentElement.getAttribute('data-theme') as ThemeName) || 'dark';
+}
+
+function setTheme(t: ThemeName): void {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.classList.toggle('active', (btn as HTMLElement).dataset.theme === t);
+  });
+}
+
+function themeSwitcherHtml(): string {
+  const cur = currentTheme();
+  return `<div class="theme-switcher">${THEMES.map(
+    (t) =>
+      `<button type="button" class="theme-btn${t === cur ? ' active' : ''}" data-theme="${t}" aria-label="Theme: ${t}" title="${t[0].toUpperCase() + t.slice(1)}">${THEME_ICONS[t]}</button>`,
+  ).join('')}</div>`;
+}
+
+/** Staggered step highlights while waiting on `postIngest` (cosmetic; API is single round-trip). */
+const INGEST_AGENT_STEP_MS = 1050;
+
+function ingestAgentVisibleSteps(panel: HTMLElement): HTMLElement[] {
+  const noYt = panel.classList.contains('ingest-agent-status--no-yt');
+  return [...panel.querySelectorAll<HTMLElement>('.ingest-agent-step')].filter(
+    (el) => !noYt || !el.classList.contains('ingest-agent-step--yt-only'),
+  );
+}
+
+function ingestAgentResetSteps(panel: HTMLElement) {
+  panel.querySelectorAll('.ingest-agent-step').forEach((el) => {
+    el.classList.remove('is-active', 'is-done', 'is-error');
+    el.classList.add('is-pending');
+  });
+}
+
+function ingestAgentSetStep(step: HTMLElement, state: 'pending' | 'active' | 'done' | 'error') {
+  step.classList.remove('is-pending', 'is-active', 'is-done', 'is-error');
+  step.classList.add(`is-${state}`);
+}
+
+function ingestAgentMarkAllDone(panel: HTMLElement) {
+  ingestAgentVisibleSteps(panel).forEach((el) => ingestAgentSetStep(el, 'done'));
+}
+
+function ingestAgentMarkActiveError(panel: HTMLElement) {
+  const vis = ingestAgentVisibleSteps(panel);
+  const active = vis.find((el) => el.classList.contains('is-active'));
+  const target = active ?? vis[vis.length - 1];
+  if (target) ingestAgentSetStep(target, 'error');
+}
+
+function startIngestAgentStepTicker(panel: HTMLElement): () => void {
+  const steps = ingestAgentVisibleSteps(panel);
+  ingestAgentResetSteps(panel);
+  if (steps.length === 0) return () => {};
+  let idx = 0;
+  ingestAgentSetStep(steps[0]!, 'active');
+  const id = window.setInterval(() => {
+    if (idx >= steps.length - 1) {
+      window.clearInterval(id);
+      return;
+    }
+    ingestAgentSetStep(steps[idx]!, 'done');
+    idx += 1;
+    ingestAgentSetStep(steps[idx]!, 'active');
+  }, INGEST_AGENT_STEP_MS);
+  return () => window.clearInterval(id);
+}
+
+type NoteToHtmlOpts = { omitImages?: boolean };
+
+/**
+ * Reader-only rendering. `omitImages` drops figures from markdown/HTML output (vault files unchanged).
+ */
+function noteToHtml(markdown: string, captureId: string, opts?: NoteToHtmlOpts): string {
+  let md = markdown;
+  const omit = Boolean(opts?.omitImages);
+
+  if (omit) {
+    md = md.replace(/!\[\[assets\/[^|\]]+(?:\|[^\]]*)?\]\]\s*/g, '');
+    md = md.replace(/!\[[^\]]*\]\([^)]+\)\s*/g, '');
+    md = md.replace(/<img\b[^>]*>\s*/gi, '');
+    md = stripImageSectionHeadings(md);
+  } else {
+    md = md.replace(
+      /!\[\[assets\/([^|\]]+)(?:\|[^\]]*)?\]\]/g,
+      (_, name: string) =>
+        `![](/api/captures/${encodeURIComponent(captureId)}/assets/${encodeURIComponent(name.trim())})`,
+    );
+  }
+
+  // Convert Obsidian wikilinks [[Captures/<id>/note|Title]] → in-app links
+  md = md.replace(
+    /\[\[Captures\/(.+?)\/note\|([^\]]+)\]\]/g,
+    (_, folder: string, alias: string) => {
+      const id = folder.trim();
+      const label = alias.trim().replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+      return `[${label}](#/capture/${encodeURIComponent(id)})`;
+    },
+  );
+  md = md.replace(
+    /\[\[Captures\/(.+?)\/note\]\]/g,
+    (_, folder: string) => {
+      const id = folder.trim();
+      return `[${id}](#/capture/${encodeURIComponent(id)})`;
+    },
+  );
+
+  let html = marked.parse(md) as string;
+  if (omit) {
+    html = html.replace(/<img\b[^>]*>/gi, '');
+    html = html.replace(/<picture\b[^>]*>[\s\S]*?<\/picture>/gi, '');
+  }
+  return html;
+}
+
+/**
+ * Paragraphs that are only bare `<img>` or `<a><img></a>` (whitespace between allowed).
+ * Used to group consecutive image blocks into a horizontal filmstrip in capture notes.
+ */
+function collectSlideImagesFromP(p: HTMLParagraphElement): HTMLImageElement[] | null {
+  const imgs: HTMLImageElement[] = [];
+  for (const child of Array.from(p.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      if (child.textContent?.trim()) return null;
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) return null;
+    const el = child as HTMLElement;
+    /* marked `breaks: true` joins consecutive `![](…)` lines into one <p> with <br> between imgs */
+    if (el.tagName === 'BR') continue;
+    if (el.tagName === 'IMG') {
+      imgs.push(el as HTMLImageElement);
+      continue;
+    }
+    if (el.tagName === 'A') {
+      if (el.childElementCount !== 1 || el.firstElementChild?.tagName !== 'IMG') return null;
+      imgs.push(el.firstElementChild as HTMLImageElement);
+      continue;
+    }
+    return null;
+  }
+  return imgs.length > 0 ? imgs : null;
+}
+
+function bindFilmstripKeyboard(track: HTMLElement): void {
+  track.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    ev.preventDefault();
+    const step = Math.min(Math.round(track.clientWidth * 0.72), 420);
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollBy({
+      left: ev.key === 'ArrowRight' ? step : -step,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  });
+}
+
+function bindFilmstripChrome(track: HTMLElement, idxEl: HTMLElement, slides: HTMLElement[]): void {
+  const total = slides.length;
+  if (total === 0) return;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const setIdx = (i: number) => {
+    idxEl.textContent = `${pad(Math.min(i + 1, total))} / ${pad(total)}`;
+  };
+
+  if (typeof IntersectionObserver === 'undefined') {
+    setIdx(0);
+    return;
+  }
+
+  const ratios = new Map<Element, number>();
+  slides.forEach((s) => ratios.set(s, 0));
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        ratios.set(e.target, e.intersectionRatio);
+      }
+      let pick = 0;
+      let maxR = -1;
+      slides.forEach((s, i) => {
+        const r = ratios.get(s) ?? 0;
+        if (r > maxR) {
+          maxR = r;
+          pick = i;
+        }
+      });
+      if (maxR < 0.08) return;
+      setIdx(pick);
+    },
+    { root: track, threshold: [0.15, 0.35, 0.55, 0.75, 0.95] },
+  );
+  slides.forEach((s) => io.observe(s));
+  setIdx(0);
+}
+
+function closeFilmstripImageLightbox(): void {
+  filmstripLightboxCleanup?.();
+  filmstripLightboxCleanup = null;
+}
+
+/** Full-size viewer for filmstrip images (dialog on `document.body`). */
+function openFilmstripImageLightbox(source: HTMLImageElement): void {
+  closeFilmstripImageLightbox();
+
+  const prevHtmlOverflow = document.documentElement.style.overflow;
+  const prevBodyOverflow = document.body.style.overflow;
+  const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  const root = document.createElement('div');
+  root.className = 'cap-img-lightbox';
+  root.setAttribute('role', 'dialog');
+  root.setAttribute('aria-modal', 'true');
+  root.setAttribute('aria-label', 'Enlarged image');
+
+  const scrim = document.createElement('button');
+  scrim.type = 'button';
+  scrim.className = 'cap-img-lightbox__scrim';
+  scrim.setAttribute('aria-label', 'Close image viewer');
+
+  const stage = document.createElement('div');
+  stage.className = 'cap-img-lightbox__stage';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'cap-img-lightbox__close';
+  closeBtn.setAttribute('aria-label', 'Close (Escape)');
+  const closeMark = document.createElement('span');
+  closeMark.className = 'cap-img-lightbox__close-mark';
+  closeMark.setAttribute('aria-hidden', 'true');
+  const closeSr = document.createElement('span');
+  closeSr.className = 'visually-hidden';
+  closeSr.textContent = 'Close';
+  closeBtn.append(closeMark, closeSr);
+
+  const figure = document.createElement('figure');
+  figure.className = 'cap-img-lightbox__figure';
+
+  const big = document.createElement('img');
+  big.className = 'cap-img-lightbox__img';
+  big.decoding = 'async';
+  big.src = source.currentSrc || source.src;
+  const alt = source.getAttribute('alt');
+  if (alt != null) big.setAttribute('alt', alt);
+
+  const cap = document.createElement('figcaption');
+  cap.className = 'cap-img-lightbox__caption';
+
+  const onImgLoad = (): void => {
+    const w = big.naturalWidth;
+    const h = big.naturalHeight;
+    if (w > 0 && h > 0) {
+      cap.textContent = `${w.toLocaleString('en-US')} × ${h.toLocaleString('en-US')} px`;
+    }
+  };
+  if (big.complete) onImgLoad();
+  else big.addEventListener('load', onImgLoad, { once: true });
+
+  figure.append(big, cap);
+  stage.append(closeBtn, figure);
+  root.append(scrim, stage);
+  document.body.appendChild(root);
+
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  const onKey = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      teardown();
+    }
+  };
+
+  const teardown = (): void => {
+    document.removeEventListener('keydown', onKey, true);
+    root.remove();
+    document.documentElement.style.overflow = prevHtmlOverflow;
+    document.body.style.overflow = prevBodyOverflow;
+    filmstripLightboxCleanup = null;
+    prevActive?.focus({ preventScroll: true });
+  };
+
+  filmstripLightboxCleanup = teardown;
+
+  scrim.addEventListener('click', () => teardown());
+  closeBtn.addEventListener('click', () => teardown());
+  stage.addEventListener('click', (ev) => {
+    if (ev.target === stage) teardown();
+  });
+
+  document.addEventListener('keydown', onKey, true);
+  closeBtn.focus({ preventScroll: true });
+}
+
+function bindFilmstripImageLightbox(prose: HTMLElement): void {
+  prose.addEventListener('click', (ev: Event) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLImageElement)) return;
+    if (!t.closest('.prose-filmstrip__slide')) return;
+    ev.preventDefault();
+    openFilmstripImageLightbox(t);
+  });
+}
+
+/** Wrap runs of 2+ consecutive image-only paragraphs in `#note-prose` into a horizontal scroll strip. */
+function wrapConsecutiveProseImagesInFilmstrips(prose: Element): void {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const blocks = Array.from(prose.children);
+    for (let i = 0; i < blocks.length; i += 1) {
+      const el = blocks[i]!;
+      const imgs0 = el instanceof HTMLParagraphElement ? collectSlideImagesFromP(el) : null;
+      if (!imgs0) continue;
+      let j = i + 1;
+      while (j < blocks.length) {
+        const b = blocks[j]!;
+        if (!(b instanceof HTMLParagraphElement)) break;
+        const im = collectSlideImagesFromP(b);
+        if (!im) break;
+        j += 1;
+      }
+      const runEls = blocks.slice(i, j) as HTMLParagraphElement[];
+      const flatImgs = runEls.flatMap((para) => collectSlideImagesFromP(para)!);
+      if (flatImgs.length < 2) continue;
+
+      const strip = document.createElement('div');
+      strip.className = 'prose-filmstrip';
+      strip.setAttribute('role', 'region');
+      strip.setAttribute('aria-label', 'Image strip — scroll horizontally');
+
+      const head = document.createElement('div');
+      head.className = 'prose-filmstrip__head';
+
+      const eyebrow = document.createElement('span');
+      eyebrow.className = 'prose-filmstrip__eyebrow';
+      eyebrow.textContent = 'Images';
+
+      const idx = document.createElement('span');
+      idx.className = 'prose-filmstrip__idx';
+      idx.setAttribute('aria-live', 'polite');
+      const total = flatImgs.length;
+      idx.textContent = `01 / ${String(total).padStart(2, '0')}`;
+
+      const hint = document.createElement('span');
+      hint.className = 'prose-filmstrip__hint';
+      hint.textContent = '← scroll →';
+
+      head.append(eyebrow, idx, hint);
+
+      const track = document.createElement('div');
+      track.className = 'prose-filmstrip__track';
+      track.setAttribute('tabindex', '0');
+      track.setAttribute(
+        'aria-label',
+        'Scroll horizontally; use left/right arrow keys when this strip is focused',
+      );
+
+      const slides: HTMLElement[] = [];
+      for (const img of flatImgs) {
+        const slide = document.createElement('div');
+        slide.className = 'prose-filmstrip__slide';
+        slide.appendChild(img);
+        track.appendChild(slide);
+        slides.push(slide);
+      }
+
+      strip.append(head, track);
+      bindFilmstripChrome(track, idx, slides);
+      bindFilmstripKeyboard(track);
+
+      prose.insertBefore(strip, runEls[0]!);
+      runEls.forEach((para) => para.remove());
+      changed = true;
+      break;
+    }
+  }
+}
+
+/** Drop “images” section + body until next ATX heading (YouTube: redundant vs embed). */
+function stripImageSectionHeadings(md: string): string {
+  const lines = md.split(/\r?\n/);
+  const out: string[] = [];
+  const imageSectionTitle = /^#{2,6}\s+(Hình ảnh|Images|Ảnh)\s*$/;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    if (imageSectionTitle.test(line)) {
+      i += 1;
+      while (i < lines.length && !/^#{1,6}\s+/.test(lines[i]!)) {
+        i += 1;
+      }
+      i -= 1;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+function escAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+}
+
+/** Middle segment of `YYYY-MM-DD--slug--hash` for compact toolbar label. */
+function captureBreadcrumbLabel(id: string): string {
+  const m = /^[\d]{4}-[\d]{2}-[\d]{2}--(.+)--[a-f0-9]{6}$/.exec(id);
+  const slug = m?.[1] ?? id;
+  if (slug.length <= 42) return slug;
+  return `${slug.slice(0, 38)}…`;
+}
+
+/** ISO instant → English prose, Asia/Ho_Chi_Minh, 24h. */
+function formatIngestedUi(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso.trim() || '—';
+  const d = new Date(t);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
+/** Home tile: ISO for `<time datetime>` + label text (matches detail view formatting). */
+function captureListIngestedForCard(r: CaptureListItem): { iso: string; text: string } {
+  const raw = r.ingested_at?.trim();
+  if (raw) {
+    const t = Date.parse(raw);
+    if (!Number.isNaN(t)) return { iso: raw, text: formatIngestedUi(raw) };
+  }
+  const m = /^(\d{4}-\d{2}-\d{2})--/.exec(r.id);
+  if (m) {
+    const iso = `${m[1]}T12:00:00+07:00`;
+    return { iso, text: formatIngestedUi(iso) };
+  }
+  return { iso: '', text: '—' };
+}
+
+/** Avoid repeating the same H1 under the hero title. */
+function stripLeadingH1IfMatches(markdown: string, title: string): string {
+  const trimmed = markdown.trimStart();
+  const m = /^#\s+(.+)\s*$/m.exec(trimmed);
+  if (!m) return markdown;
+  const h1 = m[1]!.trim();
+  if (h1 === title.trim() || h1.toLowerCase() === title.trim().toLowerCase()) {
+    return trimmed.replace(/^#\s+[^\n\r]*(?:\r\n|\n|\r|$)/, '').trimStart();
+  }
+  return markdown;
+}
+
+function safeExternalHref(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Host/path heuristics (Reader UI: hide YouTube-only ingest step when not YouTube). */
+function isLikelyYoutubeUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    if (!/^https?:$/i.test(u.protocol)) return false;
+    const h = u.hostname.toLowerCase();
+    if (h === 'youtu.be' || h.endsWith('.youtube.com') || h === 'youtube.com') return true;
+    if (h.endsWith('.youtube-nocookie.com') || h === 'youtube-nocookie.com') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyXOrTwitterUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    if (!/^https?:$/i.test(u.protocol)) return false;
+    const h = u.hostname.toLowerCase().replace(/^www\./, '');
+    return h === 'x.com' || h === 'twitter.com';
+  } catch {
+    return false;
+  }
+}
+
+const FM_SKIP_IN_GRID = new Set(['url', 'fetch_method', 'publish', 'ingested_at', 'categories', 'type']);
+
+/** YAML keys superseded by the Rating row (stats from `.comment`, same as library table). */
+function isEvaluationVoteFmKey(k: string): boolean {
+  const n = k.trim().toLowerCase();
+  return n === 'evaluation' || n === 'vote';
+}
+
+/** Parse `categories` from note (same shapes as `tags`). */
+function parseCategoryList(raw: string | boolean | undefined): string[] {
+  return parseListField(raw);
+}
+
+/** Parse `tags` from note frontmatter (JSON array, bracket list, or comma-separated). */
+function parseTagList(raw: string | boolean | undefined): string[] {
+  return parseListField(raw);
+}
+
+/** Strip optional leading `#` for UI only; vault YAML unchanged. */
+function formatTagForDisplay(raw: string): string {
+  return raw.trim().replace(/^#+\s*/, '');
+}
+
+function renderCaptureTagChips(tags: string[]): string {
+  if (tags.length === 0) return '';
+  const chips = tags
+    .map((t) => `<span class="capture-tag">${esc(formatTagForDisplay(t))}</span>`)
+    .join('');
+  return `<div class="capture-tags capture-tags--fm" aria-label="Tags">${chips}</div>`;
+}
+
+function renderCategoryChipsPlain(ids: string[]): string {
+  if (ids.length === 0) return '<span class="fm-value-empty">—</span>';
+  return ids
+    .map(
+      (id) =>
+        `<span class="capture-tag cap-category-chip" data-id="${escAttr(id)}">${esc(formatTagForDisplay(id))}</span>`,
+    )
+    .join('');
+}
+
+/** One cell in frontmatter table (tags = chips; boolean = pill; text = body). */
+function formatFmCellValue(key: string, v: string | boolean, tagList: string[]): string {
+  if (key === 'tags') {
+    return tagList.length
+      ? renderCaptureTagChips(tagList)
+      : '<span class="fm-value-empty">—</span>';
+  }
+  if (typeof v === 'boolean') {
+    return `<span class="fm-value-bool${v ? ' fm-value-bool--true' : ' fm-value-bool--false'}">${v ? 'true' : 'false'}</span>`;
+  }
+  const s = String(v);
+  if (!s.trim()) return '<span class="fm-value-empty">—</span>';
+  return `<span class="fm-value-text">${esc(s)}</span>`;
+}
+
+function layoutShell(): string {
+  return `
+  <header class="mobile-topbar">
+    <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open navigation menu">
+      <span class="burger" aria-hidden="true"></span>
+    </button>
+    <span class="mobile-brand">Second brain</span>
+  </header>
+  <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" aria-hidden="true"></div>
+  <nav id="nav-drawer" class="nav-drawer" aria-label="Navigation menu" aria-hidden="true">
+    <div class="drawer-header">
+      <span>Navigation</span>
+      <button type="button" class="drawer-close" id="drawer-close" aria-label="Close menu">×</button>
+    </div>
+    <div class="drawer-brand">
+      <p class="app-nav__title drawer-brand__title"><span>Second</span> <em>brain.</em></p>
+    </div>
+    <div class="drawer-links">
+      <button type="button" class="drawer-link active" data-route="home">Ingest</button>
+      <button type="button" class="drawer-link" data-route="captures">Captures</button>
+    </div>
+    <div class="drawer-theme" aria-label="Theme">${themeSwitcherHtml()}</div>
+    <div class="drawer-status-wrap">
+      <div class="status-strip app-nav__status" id="drawer-app-nav-status" aria-live="polite"></div>
+    </div>
+  </nav>
+  <div class="app">
+    <nav class="app-nav" aria-label="App navigation">
+      <div class="app-nav__inner">
+        <div class="app-nav__mark-wrap">
+          <h1 class="app-nav__title" id="app-nav-title"><span>Second</span> <em>brain.</em></h1>
+          <div class="app-nav__theme" aria-label="Theme">${themeSwitcherHtml()}</div>
+        </div>
+        <div class="app-nav__section">
+          <h2 class="app-nav__section-title">Views</h2>
+          <div class="app-nav__views">
+            <button type="button" class="app-nav-route active" data-route="home">Ingest</button>
+            <button type="button" class="app-nav-route" data-route="captures">Captures</button>
+          </div>
+        </div>
+        <div class="app-nav__section">
+          <h2 class="app-nav__section-title">Categories</h2>
+          <ul id="app-nav-categories" class="app-nav__list app-nav__list--categories" aria-label="Filter by category">
+            <li class="app-nav__loading">Loading…</li>
+          </ul>
+        </div>
+        <div class="app-nav__section">
+          <h2 class="app-nav__section-title">Source</h2>
+          <div class="app-nav__sources" role="group" aria-label="Filter by source">
+            <button type="button" class="app-nav-source" data-source="all" aria-pressed="true">All</button>
+            <button type="button" class="app-nav-source" data-source="youtube" aria-pressed="false">YouTube</button>
+            <button type="button" class="app-nav-source" data-source="x" aria-pressed="false">X / Twitter</button>
+            <button type="button" class="app-nav-source" data-source="threads" aria-pressed="false">Threads</button>
+            <button type="button" class="app-nav-source" data-source="other" aria-pressed="false">Other</button>
+          </div>
+          <div class="app-nav__status-wrap">
+            <div class="status-strip app-nav__status" id="app-nav-status" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+    </nav>
+    <main id="main"></main>
+  </div>
+  `;
+}
+
+function parseHash(): { view: string; id?: string } {
+  const h = (location.hash.slice(1) || '/').replace(/^\/+/, '');
+  const parts = h.split('/').filter(Boolean);
+  if (parts[0] === 'capture' && parts[1]) return { view: 'capture', id: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'captures') return { view: 'captures' };
+  return { view: 'home' };
+}
+
+function setHash(view: string, id?: string) {
+  if (view === 'home') location.hash = '#/';
+  else if (view === 'captures') location.hash = '#/captures';
+  else if (view === 'capture' && id) location.hash = `#/capture/${encodeURIComponent(id)}`;
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${r.status} ${path}`);
+  return r.json() as Promise<T>;
+}
+
+type Health = {
+  ok: boolean;
+  vaultRoot: string;
+  brainRoot: string;
+  ingestAvailable: boolean;
+  /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
+  ingestSse?: boolean;
+  /** Ingest uses the Python API when `PYTHON_INGEST_URL` is set. */
+  ingestBackend?: 'python' | null;
+};
+
+function ingestStatusStripLine(h: Health): string {
+  if (h.ingestAvailable) return 'Vault · ingest ready';
+  if (h.ingestBackend === 'python') return 'Ingest · disabled';
+  if (h.ingestBackend === null) return 'Ingest · not configured';
+  return 'Ingest · check setup';
+}
+
+function webIngestAsideLi(h: Health): string {
+  if (h.ingestAvailable) {
+    return '<li>Web ingest <strong>on</strong> — via Python API</li>';
+  }
+  if (h.ingestBackend === 'python') {
+    return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code></li>';
+  }
+  if (h.ingestBackend === null) {
+    return '<li>Web ingest <strong>off</strong> — set <code>PYTHON_INGEST_URL</code> (Python ingest is required)</li>';
+  }
+  return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code> and <code>PYTHON_INGEST_URL</code></li>';
+}
+
+function ingestUnavailablePanelHtml(h: Health): string {
+  if (h.ingestBackend === 'python') {
+    return `<p class="hint" style="margin:0">Unavailable: web ingest is turned off (<code>READER_ALLOW_INGEST=0</code>). You can still call the Python ingest API directly.</p>`;
+  }
+  if (h.ingestBackend === null) {
+    return `<p class="hint" style="margin:0">Unavailable: set <code>PYTHON_INGEST_URL</code> to your FastAPI ingest service (e.g. <code>http://127.0.0.1:8765</code>) and run <code>pnpm api:dev</code> from the repo root.</p>`;
+  }
+  return `<p class="hint" style="margin:0">Unavailable: check <code>READER_ALLOW_INGEST</code> and <code>PYTHON_INGEST_URL</code>.</p>`;
+}
+
+function appNavStatusHtml(h: Health): string {
+  return `
+    <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${ingestStatusStripLine(h)}</div>
+    <div class="app-nav__vault-block status-strip-mono" title="Obsidian · local reader">
+      <span class="app-nav__vault-label">Vault</span>
+      <code class="app-nav__vault-path">${esc(h.vaultRoot)}</code>
+    </div>
+  `;
+}
+
+function updateAppNavStatus(h: Health): void {
+  const html = appNavStatusHtml(h);
+  const desktop = document.getElementById('app-nav-status');
+  if (desktop) desktop.innerHTML = html;
+  const drawer = document.getElementById('drawer-app-nav-status');
+  if (drawer) drawer.innerHTML = html;
+}
+
+type IngestSseEvent =
+  | { v: 1; kind: 'phase'; phase: 'fetch' | 'translate' | 'vault' | 'llm'; state: 'active' | 'done' }
+  | { v: 1; kind: 'done'; captureDir: string; captureId: string }
+  | { v: 1; kind: 'error'; message: string; phase?: string };
+
+function applyIngestSseToPanel(panel: HTMLElement, ev: IngestSseEvent) {
+  if (ev.kind !== 'phase') return;
+  const step = panel.querySelector<HTMLElement>(`[data-step="${ev.phase}"]`);
+  if (!step) return;
+  ingestAgentSetStep(step, ev.state === 'active' ? 'active' : 'done');
+}
+
+function runIngestSseJob(
+  jobId: string,
+  onProgress: (ev: IngestSseEvent) => void,
+): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const es = new EventSource(`/api/ingest/stream?jobId=${encodeURIComponent(jobId)}`);
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      try {
+        es.close();
+      } catch {
+        /* ignore */
+      }
+      fn();
+    };
+    es.onmessage = (msg) => {
+      if (settled) return;
+      let ev: unknown;
+      try {
+        ev = JSON.parse(msg.data);
+      } catch {
+        finish(() => reject(new Error('invalid SSE payload')));
+        return;
+      }
+      if (!ev || typeof ev !== 'object') {
+        finish(() => reject(new Error('invalid SSE payload')));
+        return;
+      }
+      const p = ev as IngestSseEvent;
+      if (p.v !== 1) return;
+      if (p.kind === 'phase' || p.kind === 'done' || p.kind === 'error') {
+        onProgress(p);
+      }
+      if (p.kind === 'done') {
+        finish(() => resolve({ ok: true, captureDir: p.captureDir, captureId: p.captureId }));
+        return;
+      }
+      if (p.kind === 'error') {
+        finish(() => reject(new Error(p.message || 'ingest error')));
+      }
+    };
+    es.onerror = () => {
+      if (settled) return;
+      finish(() => reject(new Error('Ingest stream connection interrupted (SSE).')));
+    };
+  });
+}
+
+async function postIngestWithSse(
+  body: { url: string },
+  onProgress: (ev: IngestSseEvent) => void,
+): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  const r = await fetch('/api/ingest/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const data = (await r.json().catch(() => ({}))) as { error?: string; jobId?: string };
+  if (!r.ok) {
+    throw new Error(data.error || `${r.status} /api/ingest/start`);
+  }
+  if (typeof data.jobId !== 'string' || !data.jobId) {
+    throw new Error('ingest/start: missing jobId');
+  }
+  return runIngestSseJob(data.jobId, onProgress);
+}
+
+async function postReingestWithSse(
+  captureId: string,
+  onProgress: (ev: IngestSseEvent) => void,
+): Promise<{ ok: true; captureDir: string; captureId: string }> {
+  const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/reingest/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: '{}',
+  });
+  const data = (await r.json().catch(() => ({}))) as { error?: string; jobId?: string };
+  if (!r.ok) {
+    throw new Error(data.error || `${r.status} /api/captures/…/reingest/start`);
+  }
+  if (typeof data.jobId !== 'string' || !data.jobId) {
+    throw new Error('reingest/start: missing jobId');
+  }
+  return runIngestSseJob(data.jobId, onProgress);
+}
+
+async function postIngest(body: { url: string }): Promise<{
+  ok: true;
+  captureDir: string;
+  captureId: string;
+}> {
+  const r = await fetch('/api/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const data = (await r.json().catch(() => ({}))) as {
+    error?: string;
+    stderr?: string;
+    ok?: boolean;
+    captureId?: string;
+    captureDir?: string;
+  };
+  if (!r.ok) {
+    const tail = data.stderr ? `\n${data.stderr.slice(0, 1200)}` : '';
+    throw new Error((data.error || `${r.status}`) + tail);
+  }
+  return data as { ok: true; captureDir: string; captureId: string };
+}
+
+/** Maps ingest error text to a short explanation for `#ingest-status-msg`. */
+function ingestFailurePresentation(
+  raw: string,
+  context?: { ingestUrl?: string },
+): { friendly: string; detail: string } {
+  const s = raw.trim();
+  const low = s.toLowerCase();
+  const xUrl = context?.ingestUrl ? isLikelyXOrTwitterUrl(context.ingestUrl) : false;
+  let friendly =
+    'Could not ingest. See the detail lines below (log/terminal) to troubleshoot.';
+  if (low.includes('reader_allow_ingest') || low.includes('ingest disabled')) {
+    friendly =
+      'Web ingest is off (READER_ALLOW_INGEST). Enable it or run `pnpm ingest` in the terminal.';
+  } else if (low.includes('too many pending')) {
+    friendly = 'Too many ingest jobs are queued — wait a few seconds and try again.';
+  } else if (low.includes('unknown or expired jobid') || low.includes('missing jobid')) {
+    friendly = 'Ingest session expired or invalid — run again from the start.';
+  } else if (
+    low.includes('stream connection interrupted') ||
+    low.includes('kết nối tiến trình ingest') ||
+    low.includes('(sse)')
+  ) {
+    friendly = 'Lost connection to the ingest progress stream — retry or reload the page.';
+  } else if (low.includes('invalid sse payload')) {
+    friendly = 'Server sent unreadable progress data — retry or update the reader.';
+  } else if (low.includes('apify_token') || /\bapify\b/.test(low)) {
+    friendly =
+      'This URL needs Apify — set `APIFY_TOKEN` in the Brain repo `.env` (or `api/.env`) and restart the Python API (`pnpm api:dev`), then try again.';
+  } else if (
+    low.includes('configure x api') ||
+    low.includes('x_bearer_token') ||
+    (low.includes('x_bearer') && low.includes('twitter'))
+  ) {
+    friendly =
+      'Missing X_BEARER_TOKEN — set it in the Brain repo `.env` (read-only app token from developer.x.com).';
+  } else if (
+    low.includes('x api:') ||
+    low.includes('x_linked_article:') ||
+    low.includes('tweet links to') ||
+    low.includes('article could not be loaded') ||
+    low.includes('bot/error page') ||
+    low.includes('open graph has no usable')
+  ) {
+    if (xUrl && (/\b401\b/.test(low) || /\b403\b/.test(low))) {
+      friendly =
+        'X API returned 401/403 — Bearer token may be expired, revoked, or lack tweet read access. Create a new token at https://developer.x.com and set X_BEARER_TOKEN.';
+    } else if (xUrl && (low.includes('empty response') || low.includes('tweet missing'))) {
+      friendly =
+        'Tweet missing, deleted, account protected, or not visible to this token — try another URL or check app permissions.';
+    } else if (xUrl) {
+      friendly =
+        'X pipeline error: tweet lookup, linked article fetch, or HTML error/bot page from X (similar to “Something went wrong” in a browser). See details below.';
+    } else {
+      friendly = 'X/Twitter ingest error — see details below.';
+    }
+  } else if (low.includes('openai_api_key') || /\bopenai\b/.test(low)) {
+    friendly = xUrl
+      ? 'OPENAI_API_KEY is required for note enrich (summary/insight). X link ingest does not use YouTube transcript.'
+      : 'Valid OPENAI_API_KEY is required for YouTube transcript translation or note enrich — check Brain `.env`.';
+  } else if (low.includes('capture path not detected') || low.includes('capture path missing')) {
+    friendly =
+      'Ingest may have finished but the capture path could not be parsed from output — see the log detail below.';
+  } else if (low.includes('routing') && (low.includes('yaml') || low.includes('config'))) {
+    friendly = 'Routing config error (`config/routing.yaml`) — ensure the file exists and is valid.';
+  } else if (low.includes(' 401 ') || low.includes(' 403 ') || /\b401\b/.test(low) || /\b403\b/.test(low)) {
+    friendly = 'Access denied (401/403) — token, permissions, or API limits.';
+  } else if (low.includes(' 404 ') || /\b404\b/.test(low)) {
+    friendly = 'Not found (404) — wrong URL, removed, or not public.';
+  } else if (low.includes('timeout') || low.includes('etimedout')) {
+    friendly = 'Timed out — slow source, unstable network, or busy service.';
+  } else if (
+    low.includes('econnrefused') ||
+    low.includes('enotfound') ||
+    low.includes('network') ||
+    low.includes('fetch failed')
+  ) {
+    friendly = 'Network error while fetching URL — check Internet, VPN, or URL.';
+  } else if (low.includes('ingest failed') || low.includes('ingest exited') || low.includes('exit code')) {
+    friendly = 'Ingest exited with an error — see the log detail below.';
+  }
+  if (
+    xUrl &&
+    friendly.startsWith('Could not ingest.') &&
+    !friendly.includes('X') &&
+    !friendly.includes('Twitter')
+  ) {
+    friendly =
+      'Could not ingest X link — often X_BEARER_TOKEN, missing/deleted tweet, or API limits. See details below.';
+  }
+  const detail = s.length > 1400 ? `${s.slice(0, 1400)}…` : s;
+  return { friendly, detail };
+}
+
+function navKey(view: string): string {
+  if (view === 'capture') return 'captures';
+  return view;
+}
+
+function updateNavActive(view: string) {
+  const key = navKey(view);
+  document.querySelectorAll('.app-nav-route').forEach((btn) => {
+    const r = (btn as HTMLElement).dataset.route;
+    btn.classList.toggle('active', r === key);
+  });
+  document.querySelectorAll('.drawer-link').forEach((btn) => {
+    const r = (btn as HTMLElement).dataset.route;
+    btn.classList.toggle('active', r === key);
+  });
+}
+
+function closeMobileNav() {
+  document.getElementById('nav-drawer')?.classList.remove('is-open');
+  document.getElementById('nav-drawer-backdrop')?.classList.remove('is-open');
+  document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'false');
+}
+
+function openMobileNav() {
+  document.getElementById('nav-drawer')?.classList.add('is-open');
+  document.getElementById('nav-drawer-backdrop')?.classList.add('is-open');
+  document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'true');
+}
+
+function bindMobileNav() {
+  const drawer = document.getElementById('nav-drawer');
+  const backdrop = document.getElementById('nav-drawer-backdrop');
+  const toggle = document.getElementById('menu-toggle');
+  toggle?.addEventListener('click', () => {
+    if (drawer?.classList.contains('is-open')) closeMobileNav();
+    else openMobileNav();
+  });
+  backdrop?.addEventListener('click', closeMobileNav);
+  document.getElementById('drawer-close')?.addEventListener('click', closeMobileNav);
+  document.querySelectorAll('.drawer-link').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = (btn as HTMLElement).dataset.route;
+      if (r === 'home') setHash('home');
+      if (r === 'captures') setHash('captures');
+      closeMobileNav();
+    });
+  });
+}
+
+function onCategoryNavClick(e: MouseEvent) {
+  const t = (e.target as HTMLElement).closest('button.app-nav-cat');
+  if (!t) return;
+  const raw = (t as HTMLElement).dataset.categoryId;
+  captureListFilter.categoryId = raw === undefined || raw === '' ? null : raw;
+  syncCapturesNavFilterUi();
+  if (parseHash().view === 'captures') {
+    mountCapturesView();
+  } else {
+    setHash('captures');
+  }
+  closeMobileNav();
+}
+
+function syncCapturesNavFilterUi() {
+  document.querySelectorAll('.app-nav-source').forEach((el) => {
+    const s = (el as HTMLElement).dataset.source as SourceFilter | undefined;
+    if (!s) return;
+    el.setAttribute('aria-pressed', captureListFilter.source === s ? 'true' : 'false');
+  });
+  document.querySelectorAll('.app-nav-cat').forEach((el) => {
+    const id = (el as HTMLElement).dataset.categoryId ?? '';
+    const cur = captureListFilter.categoryId ?? '';
+    const isSel = id === cur;
+    el.classList.toggle('is-active', isSel);
+    if (isSel) el.setAttribute('aria-current', 'true');
+    else el.removeAttribute('aria-current');
+  });
+}
+
+function bindSourceFilterButtons() {
+  document.querySelectorAll('.app-nav-source').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const s = (btn as HTMLElement).dataset.source as SourceFilter | undefined;
+      if (!s) return;
+      captureListFilter.source = s;
+      syncCapturesNavFilterUi();
+      if (parseHash().view === 'captures') {
+        mountCapturesView();
+      } else {
+        setHash('captures');
+      }
+      closeMobileNav();
+    });
+  });
+}
+
+async function loadTaxonomyCategoriesNav() {
+  const ul = document.getElementById('app-nav-categories');
+  if (!ul) return;
+  try {
+    const r = await fetch('/api/taxonomy/categories');
+    if (!r.ok) throw new Error(String(r.status));
+    const data = (await r.json()) as { items?: { id: string; label: string }[] };
+    const list = data.items ?? [];
+    const liAll =
+      '<li><button type="button" class="app-nav-cat" data-category-id="">All</button></li>';
+    const liRest = list
+      .map(
+        (t) =>
+          `<li><button type="button" class="app-nav-cat" data-category-id="${escAttr(t.id)}">${esc(t.label)}</button></li>`,
+      )
+      .join('');
+    ul.innerHTML = liAll + liRest;
+  } catch {
+    ul.innerHTML = `<li class="app-nav__loading">Could not load categories</li><li><button type="button" class="app-nav-cat" data-category-id="">All</button></li>`;
+  }
+  syncCapturesNavFilterUi();
+}
+
+function bindCaptureRows(main: HTMLElement) {
+  const openRow = (tr: HTMLElement) => {
+    const cid = tr.dataset.id;
+    if (cid) setHash('capture', cid);
+  };
+  main.querySelectorAll('tr.capture-row').forEach((tr) => {
+    tr.addEventListener('click', () => openRow(tr as HTMLElement));
+    tr.addEventListener('keydown', (ev: Event) => {
+      const ke = ev as KeyboardEvent;
+      if (ke.key === 'Enter' || ke.key === ' ') {
+        ke.preventDefault();
+        openRow(tr as HTMLElement);
+      }
+    });
+  });
+}
+
+function mountCapturesView() {
+  libraryTablePage = 1;
+  const main = document.querySelector<HTMLElement>('#main')!;
+  const filtered = filterCaptures(capturesListAll, captureListFilter);
+  main.innerHTML = renderCapturesTable(capturesListAll, filtered);
+  bindLibraryTable();
+  bindCaptureRows(main);
+  document.getElementById('lib-clear-filters')?.addEventListener('click', () => {
+    captureListFilter = { categoryId: null, source: 'all' };
+    syncCapturesNavFilterUi();
+    mountCapturesView();
+  });
+}
+
+function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
+  return `
+    <div>
+      <div class="ingest-label">Vault</div>
+      <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.5">Same folder as Obsidian · <code style="color:var(--signal)">READER_VAULT_ROOT</code></p>
+    </div>
+    <div class="side-aside-block">
+      <h4>Status</h4>
+      <ul>
+        <li><strong>Vault</strong> — absolute path in the status strip</li>
+        ${webIngestAsideLi(h)}
+        <li>Home: <strong>${shownOnHome}</strong> recent cards · <strong>${vaultTotal}</strong> captures in vault</li>
+      </ul>
+    </div>
+    <div class="side-aside-block">
+      <h4>Quick links</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.6">
+        → <code style="color:var(--signal)">Captures/…</code> in vault
+      </p>
+    </div>
+  `;
+}
+
+function totalReactionEntries(rows: CaptureListItem[]): number {
+  return rows.reduce((s, r) => s + (r.reaction_count ?? 0), 0);
+}
+
+function sideCaptures(rows: CaptureListItem[]): string {
+  const n = rows.length;
+  const yt = rows.filter(isYoutubeCapture).length;
+  const xCount = rows.filter(isXCapture).length;
+  const threads = rows.filter(isThreadsCapture).length;
+  const reactions = totalReactionEntries(rows);
+  return `
+    <div class="ingest-label">Overview</div>
+    <div class="stat-block stat-block--overview" role="group" aria-label="Library statistics">
+      <div class="stat stat--tile stat--tile-total">
+        <b>${n}</b><span class="stat__label">Captures</span>
+      </div>
+      <div class="stat stat--tile stat--tile-comments">
+        <b>${reactions}</b><span class="stat__label">Reactions</span>
+        <span class="stat__hint" title="Total entries in .comment files (ratings)"><code>.comment</code></span>
+      </div>
+      <div class="stat stat--tile stat--tile-yt">
+        <b>${yt}</b><span class="stat__label">YouTube</span>
+      </div>
+      <div class="stat stat--tile stat--tile-x">
+        <b>${xCount}</b><span class="stat__label">X / Twitter</span>
+      </div>
+      <div class="stat stat--tile stat--tile-threads">
+        <b>${threads}</b><span class="stat__label">Threads</span>
+      </div>
+    </div>
+  `;
+}
+
+function sideCapture(d: CaptureDetail): string {
+  return `
+    <div class="ingest-label">Capture</div>
+    <div class="side-aside-block">
+      <h4>${esc(d.id)}</h4>
+      <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.55">Folder under <code style="color:var(--signal)">Captures/</code> — edit <code style="color:var(--signal)">note.md</code> in Obsidian.</p>
+    </div>
+  `;
+}
+
+/* ── Skeleton placeholders ──────────────────────────────── */
+
+function skeletonCardsHtml(count: number): string {
+  return Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton skeleton-card__line skeleton-card__line--meta"></div>
+      <div class="skeleton skeleton-card__line skeleton-card__line--title"></div>
+      <div class="skeleton skeleton-card__line skeleton-card__line--ingested"></div>
+    </div>`).join('');
+}
+
+function skeletonTableRowsHtml(count: number): string {
+  return Array.from({ length: count }, () => `
+    <tr class="skeleton-row">
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--title"></div></td>
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--source"></div></td>
+      <td><div class="skeleton skeleton-row__bar skeleton-row__bar--rating"></div></td>
+      <td></td>
+    </tr>`).join('');
+}
+
+function skeletonProseHtml(): string {
+  return `
+    <div class="skeleton-prose">
+      <div class="skeleton skeleton-prose__title"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+      <div class="skeleton skeleton-prose__line"></div>
+    </div>`;
+}
+
+/** Max recent capture cards on home (grid shows up to 3×3 on wide desktop). */
+const HOME_RECENT_CAPTURE_LIMIT = 9;
+const LIBRARY_PAGE_SIZE = 10;
+
+const CAPTURE_FOLDER_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** `YYYY-MM-DD--stem--hash` → `stem`; otherwise returns `id`. */
+function friendlySlugFromCaptureId(id: string): string {
+  const parts = id.split('--');
+  if (parts.length < 3) return id;
+  if (!CAPTURE_FOLDER_DATE.test(parts[0]!)) return id;
+  const hash = parts[parts.length - 1]!;
+  const stem = parts.slice(1, -1).join('--');
+  if (!stem || !/^[a-f0-9]{4,12}$/i.test(hash)) return id;
+  return stem;
+}
+
+function captureSourceLabel(r: CaptureListItem): string {
+  const u = r.url?.trim();
+  if (u) {
+    try {
+      const host = new URL(u).hostname.replace(/^www\./i, '');
+      if (host) return host;
+    } catch {
+      /* invalid URL */
+    }
+  }
+  return r.source || '—';
+}
+
+/** Primary line in library table: note heading when distinct from folder id, else short slug. */
+function captureTablePrimaryLine(r: CaptureListItem): string {
+  if (r.title && r.title !== r.id) return r.title;
+  return friendlySlugFromCaptureId(r.id);
+}
+
+/** Library + frontmatter: compact stars + one decimal (spec format B). */
+function formatRatingDisplay(avg: number | null, count: number): string {
+  if (avg == null || count === 0) {
+    return '<span class="capture-rating capture-rating--empty">—</span>';
+  }
+  const b = Math.min(5, Math.max(1, Math.round(avg)));
+  const stars = ratingStarsOnly(b);
+  const num = avg.toFixed(1);
+  const label = `Average rating ${num} out of 5, ${count} vote(s)`;
+  return `<span class="capture-rating" aria-label="${escAttr(label)}">${stars} ${num}</span>`;
+}
+
+function formatLibraryRatingCell(r: CaptureListItem): string {
+  return formatRatingDisplay(r.reaction_avg, r.reaction_count);
+}
+
+function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: number): string {
+  const ingestShellClass = h.ingestAvailable ? 'ingest-shell' : 'ingest-shell ingest-shell-muted';
+  const ingestInner = h.ingestAvailable
+    ? `
+    <div class="ingest-inner">
+      <div class="ingest-inner__row">
+        <div class="ingest-input-wrap">
+          <input type="url" id="ingest-url" placeholder="https://www.youtube.com/watch?v=… or https://x.com/…/status/…" autocomplete="url" />
+        </div>
+        <button type="button" class="btn-ingest" id="ingest-run">Run ingest</button>
+      </div>
+      <div
+        class="ingest-agent-status"
+        id="ingest-status"
+        hidden
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="ingest-agent-status__head">
+          <span class="ingest-agent-status__badge" aria-hidden="true">Agent</span>
+          <div class="ingest-agent-status__head-text">
+            <p class="ingest-agent-status__msg" id="ingest-status-msg"></p>
+            <div class="ingest-agent-status__scan" aria-hidden="true"></div>
+          </div>
+        </div>
+        <ol class="ingest-agent-status__steps" id="ingest-status-steps" aria-label="Ingest progress">
+          <li class="ingest-agent-step" data-step="fetch">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Fetch &amp; normalize</span>
+              <span class="ingest-agent-step__hint">Adapter · routing</span>
+            </span>
+          </li>
+          <li class="ingest-agent-step" data-step="vault">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Write vault</span>
+              <span class="ingest-agent-step__hint">Captures/… · assets</span>
+            </span>
+          </li>
+          <li class="ingest-agent-step ingest-agent-step--yt-only" data-step="translate">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Translate transcript</span>
+              <span class="ingest-agent-step__hint">YouTube · EN → VI (batch)</span>
+            </span>
+          </li>
+          <li class="ingest-agent-step" data-step="llm">
+            <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+            <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+            <span class="ingest-agent-step__body">
+              <span class="ingest-agent-step__label">Enrich note</span>
+              <span class="ingest-agent-step__hint">Summary · insight (LLM)</span>
+            </span>
+          </li>
+        </ol>
+        <div class="ingest-agent-status__footer" id="ingest-status-footer"></div>
+      </div>
+    </div>`
+    : `<div class="ingest-inner">
+      ${ingestUnavailablePanelHtml(h)}
+    </div>`;
+
+  const cards =
+    recent.length === 0
+      ? '<p class="hint">No captures yet — enter a URL above when web ingest is on, or add captures via your usual ingest workflow.</p>'
+      : recent
+          .map((r) => {
+            const sourceType = r.youtube_video_id
+              ? 'youtube'
+              : r.url && isLikelyXOrTwitterUrl(r.url)
+                ? 'x'
+                : 'article';
+            const ing = captureListIngestedForCard(r);
+            return `
+        <button type="button" class="card" data-card-id="${esc(r.id)}" data-source-type="${sourceType}">
+          <div class="card-meta">
+            <span>${esc(r.source)}<span class="card-source-dot" aria-hidden="true"></span></span>
+            <span>${esc(r.fetch_method || '—')}</span>
+          </div>
+          <h3>${esc(r.title)}</h3>
+          ${
+            ing.iso
+              ? `<time class="card-ingested" datetime="${escAttr(ing.iso)}">${esc(ing.text)}</time>`
+              : `<span class="card-ingested">${esc(ing.text)}</span>`
+          }
+        </button>`;
+          })
+          .join('');
+
+  return `
+    <div class="view view-ingest active">
+      <section class="ingest-zone" aria-label="URL input">
+        <div class="recent-captures-bar recent-captures-bar--library">
+          <div class="recent-captures-bar__titles">
+            <h2 class="section-title" id="ingest-zone-heading">Ingest</h2>
+          </div>
+        </div>
+        <div class="sources" aria-label="Configured sources">
+          <span class="chip on">X API</span>
+          <span class="chip on">Apify</span>
+          <span class="chip on">Readability</span>
+          <span class="chip on">YouTube</span>
+        </div>
+        <div class="${ingestShellClass}">${ingestInner}</div>
+      </section>
+      <div class="recent-captures-bar">
+        <div class="recent-captures-bar__titles">
+          <h2 class="section-title" id="recent-captures-heading">Recent captures</h2>
+        </div>
+        <a href="#/captures" class="recent-captures-cta">Open library<span class="recent-captures-cta__arrow" aria-hidden="true"> →</span></a>
+      </div>
+      <div class="cards" role="region" aria-labelledby="recent-captures-heading">${cards}</div>
+      <p class="hint home-captures-hint">Click a card for detail · <em>Captures</em> in the menu or the library link above.</p>
+      <div class="main-aux-blocks">${sideHome(h, recent.length, vaultCaptureTotal)}</div>
+    </div>
+  `;
+}
+
+function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureListItem[]): string {
+  const body = filteredRows
+    .map(
+      (r) => `
+    <tr class="capture-row" tabindex="0" data-id="${esc(r.id)}" data-slug="${esc(friendlySlugFromCaptureId(r.id))}">
+      <td class="capture-title-cell" title="${esc(r.id)}">
+        <div class="capture-title">${esc(captureTablePrimaryLine(r))}</div>
+      </td>
+      <td class="capture-source-cell">${esc(captureSourceLabel(r))}</td>
+      <td class="capture-rating-cell">${formatLibraryRatingCell(r)}</td>
+      <td class="capture-action-cell"><span class="mock-table-open" aria-hidden="true">${LIB_OPEN_CHEVRON_SVG}</span></td>
+    </tr>`,
+    )
+    .join('');
+  const emptyVault = allRows.length === 0;
+  const emptyFiltered = filteredRows.length === 0 && allRows.length > 0;
+  const tableOrEmpty = emptyVault
+    ? '<p class="hint">No captures yet.</p>'
+    : emptyFiltered
+      ? `<div class="captures-empty-filter">
+          <p class="hint">No captures match the filters.</p>
+          <button type="button" class="btn-ghost" id="lib-clear-filters">Clear filters</button>
+        </div>`
+      : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
+            <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
+          </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>
+          <nav class="lib-pagination" id="lib-pagination" aria-label="Library pagination" hidden>
+            <button type="button" class="lib-pagination__btn" id="lib-page-prev" aria-label="Previous page">
+              <span aria-hidden="true" class="lib-pagination__chev">‹</span>
+            </button>
+            <div class="lib-pagination__meter" aria-live="polite" aria-atomic="true">
+              <span class="lib-pagination__cur" id="lib-page-cur"></span>
+              <span class="lib-pagination__sep" aria-hidden="true">/</span>
+              <span class="lib-pagination__total" id="lib-page-total"></span>
+            </div>
+            <button type="button" class="lib-pagination__btn" id="lib-page-next" aria-label="Next page">
+              <span aria-hidden="true" class="lib-pagination__chev">›</span>
+            </button>
+          </nav>`;
+  return `
+    <div class="view active">
+      <div class="recent-captures-bar recent-captures-bar--library">
+        <div class="recent-captures-bar__titles">
+          <h2 class="section-title" id="library-view-heading">Library captures</h2>
+        </div>
+      </div>
+      ${sideCaptures(allRows)}
+      <div class="toolbar toolbar--captures">
+        <div class="search-wrap">
+          <input type="search" id="lib-search" placeholder="Search title, slug, URL, source…" aria-label="Search captures" />
+        </div>
+      </div>
+      ${tableOrEmpty}
+    </div>
+  `;
+}
+
+function updateLibraryTableVisibility(): void {
+  const tbody = document.getElementById('lib-tbody');
+  const input = document.querySelector<HTMLInputElement>('#lib-search');
+  const nav = document.getElementById('lib-pagination');
+  if (!tbody || !input) return;
+  const q = input.value.trim().toLowerCase();
+  const rows = [...tbody.querySelectorAll<HTMLElement>('tr.capture-row')];
+  const matches: HTMLElement[] = [];
+  for (const tr of rows) {
+    const t = tr.textContent?.toLowerCase() ?? '';
+    const slug = tr.dataset.slug?.toLowerCase() ?? '';
+    const id = tr.dataset.id?.toLowerCase() ?? '';
+    const match = !q || t.includes(q) || slug.includes(q) || id.includes(q);
+    if (match) matches.push(tr);
+  }
+  const n = matches.length;
+  const totalPages = n === 0 ? 0 : Math.ceil(n / LIBRARY_PAGE_SIZE);
+  if (totalPages > 0 && libraryTablePage > totalPages) libraryTablePage = totalPages;
+  if (libraryTablePage < 1) libraryTablePage = 1;
+  const start = (libraryTablePage - 1) * LIBRARY_PAGE_SIZE;
+  const end = start + LIBRARY_PAGE_SIZE;
+  const matchIndex = new Map<HTMLElement, number>();
+  matches.forEach((tr, i) => matchIndex.set(tr, i));
+  for (const tr of rows) {
+    const idx = matchIndex.get(tr);
+    if (idx === undefined) {
+      tr.style.display = 'none';
+    } else {
+      tr.style.display = idx >= start && idx < end ? '' : 'none';
+    }
+  }
+  if (nav) {
+    const prev = nav.querySelector<HTMLButtonElement>('#lib-page-prev');
+    const next = nav.querySelector<HTMLButtonElement>('#lib-page-next');
+    const curEl = nav.querySelector<HTMLElement>('#lib-page-cur');
+    const totEl = nav.querySelector<HTMLElement>('#lib-page-total');
+    if (totalPages <= 1) {
+      nav.hidden = true;
+    } else {
+      nav.hidden = false;
+      if (prev) prev.disabled = libraryTablePage <= 1;
+      if (next) next.disabled = libraryTablePage >= totalPages;
+      if (curEl) curEl.textContent = String(libraryTablePage);
+      if (totEl) totEl.textContent = String(totalPages);
+    }
+  }
+}
+
+function bindLibraryTable(): void {
+  const input = document.querySelector<HTMLInputElement>('#lib-search');
+  const tbody = document.getElementById('lib-tbody');
+  if (!input || !tbody) return;
+  input.addEventListener('input', () => {
+    libraryTablePage = 1;
+    updateLibraryTableVisibility();
+  });
+  document.getElementById('lib-page-prev')?.addEventListener('click', () => {
+    libraryTablePage -= 1;
+    updateLibraryTableVisibility();
+  });
+  document.getElementById('lib-page-next')?.addEventListener('click', () => {
+    libraryTablePage += 1;
+    updateLibraryTableVisibility();
+  });
+  updateLibraryTableVisibility();
+}
+
+function renderSubRows(lines: MergedTranscriptLine[]): string {
+  return lines
+    .map(
+      (L, i) => `
+    <button type="button" class="yt-sub-row" role="listitem" data-start="${L.startSec}" data-i="${i}">
+      <span class="yt-sub-ts">${esc(L.stamp)}</span>
+      <span class="yt-sub-lines">
+        <span class="yt-sub-line yt-sub-en">${esc(L.en || '—')}</span>
+        <span class="yt-sub-line yt-sub-vi">${esc(L.vi || '—')}</span>
+      </span>
+    </button>`,
+    )
+    .join('');
+}
+
+/**
+ * Scroll only `#yt-sub-list` (never the page): keep the active row in a comfortable reading position.
+ * — Start: scrollTop stays 0 until centering would need to scroll up (row climbs from top toward middle).
+ * — Middle: vertical center of the row ≈ vertical center of the list viewport.
+ * — End: `ideal` hits maxScroll; the row naturally sits lower toward the bottom (no empty padding below).
+ */
+function scrollSubRowToReadingPosition(list: HTMLElement, row: HTMLElement) {
+  if (row.hidden || row.offsetParent === null) return;
+  const listRect = list.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  if (rowRect.height <= 0) return;
+  const maxScroll = list.scrollHeight - list.clientHeight;
+  if (maxScroll <= 0) return;
+
+  const rowTopInContent = list.scrollTop + (rowRect.top - listRect.top);
+  const rowCenterInContent = rowTopInContent + rowRect.height / 2;
+  const ideal = rowCenterInContent - list.clientHeight / 2;
+  list.scrollTop = Math.max(0, Math.min(ideal, maxScroll));
+}
+
+/**
+ * Segmented transcript UI: YT IFrame API player, click row / milestone to seek, live highlight.
+ * Returns cleanup (interval + player.destroy).
+ */
+function bindYoutubeSubPanel(
+  videoId: string,
+  lines: MergedTranscriptLine[],
+  mainEl: HTMLElement,
+): () => void {
+  const panel = mainEl.querySelector<HTMLElement>('#yt-sub-panel');
+  const list = mainEl.querySelector<HTMLElement>('#yt-sub-list');
+  const search = mainEl.querySelector<HTMLInputElement>('#yt-sub-search');
+
+  let pollId = 0;
+  let playerReady = false;
+  let player: YtPlayerApi | null = null;
+  let pendingSeek: number | null = null;
+  let lastIdx = -1;
+
+  const seek = (t: number) => {
+    if (playerReady && player) {
+      player.seekTo(Math.floor(t), true);
+      player.playVideo();
+    } else {
+      pendingSeek = t;
+    }
+  };
+
+  const syncHighlight = () => {
+    if (!playerReady || !player || !list) return;
+    const idx = findActiveSegmentIndex(lines, player.getCurrentTime());
+    if (idx === lastIdx) return;
+    lastIdx = idx;
+    list.querySelectorAll('.yt-sub-row').forEach((row, i) => {
+      row.classList.toggle('is-current', i === idx);
+    });
+    const currentRow = list.querySelector<HTMLElement>(`.yt-sub-row[data-i="${idx}"]`);
+    if (currentRow) scrollSubRowToReadingPosition(list, currentRow);
+  };
+
+  mainEl.querySelectorAll('.yt-tick').forEach((el) => {
+    el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.t)));
+  });
+  mainEl.querySelectorAll('.yt-ms button').forEach((el) => {
+    el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.seek)));
+  });
+
+  list?.querySelectorAll('.yt-sub-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      seek(Number((row as HTMLElement).dataset.start));
+      if (list) scrollSubRowToReadingPosition(list, row as HTMLElement);
+    });
+  });
+
+  panel?.querySelectorAll('.yt-sub-mode').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = (btn as HTMLElement).dataset.subMode;
+      if (!mode || !panel) return;
+      panel.dataset.mode = mode;
+      panel.querySelectorAll('.yt-sub-mode').forEach((b) =>
+        b.classList.toggle('active', (b as HTMLElement).dataset.subMode === mode),
+      );
+    });
+  });
+
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    list?.querySelectorAll('.yt-sub-row').forEach((row) => {
+      const text = row.textContent?.toLowerCase() ?? '';
+      (row as HTMLElement).hidden = Boolean(q && !text.includes(q));
+    });
+  });
+
+  void loadYoutubeIframeApi().then(() => {
+    const YT = (window as unknown as { YT: { Player: new (id: string, opts: object) => unknown } }).YT;
+    if (!YT?.Player) return;
+    new YT.Player('yt-player-root', {
+      videoId,
+      playerVars: { enablejsapi: 1, modestbranding: 1, rel: 0 },
+      events: {
+        onReady: (ev: { target: YtPlayerApi }) => {
+          player = ev.target;
+          playerReady = true;
+          if (pendingSeek != null) {
+            player.seekTo(Math.floor(pendingSeek), true);
+            player.playVideo();
+            pendingSeek = null;
+          }
+          pollId = window.setInterval(syncHighlight, 280);
+        },
+      },
+    });
+  });
+
+  return () => {
+    window.clearInterval(pollId);
+    playerReady = false;
+    lastIdx = -1;
+    try {
+      player?.destroy();
+    } catch {
+      /* YouTube API may throw if iframe already gone */
+    }
+    player = null;
+  };
+}
+
+function reactionStarDisplay(rating: number): string {
+  return `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`;
+}
+
+function formatReactionTime(at: string): string {
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return at;
+  return new Date(t).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function renderReactionsTimelineHtml(entries: ReactionEntry[]): string {
+  if (entries.length === 0) {
+    return '<p class="hint cap-reactions-empty">No reactions yet.</p>';
+  }
+  const items = entries
+    .map((e) => {
+      const stars = reactionStarDisplay(e.rating);
+      const textBlock = e.text
+        ? `<p class="cap-reactions-item__text">${esc(e.text)}</p>`
+        : '';
+      return `<li class="cap-reactions-item">
+  <div class="cap-reactions-item__head">
+    <time class="cap-reactions-item__time" datetime="${escAttr(e.at)}">${esc(formatReactionTime(e.at))}</time>
+    <span class="cap-reactions-item__stars" title="${e.rating}/5" aria-label="${e.rating} out of 5 stars">${stars}</span>
+  </div>
+  ${textBlock}
+</li>`;
+    })
+    .join('');
+  return `<ul class="cap-reactions-list">${items}</ul>`;
+}
+
+function bindCaptureReingest(captureId: string, detail: CaptureDetail, h: Health): void {
+  const dlg = document.querySelector<HTMLDialogElement>('#cap-reingest-dlg');
+  const openBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-open');
+  if (!dlg || !openBtn || !h.ingestSse) return;
+
+  const cancelBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-cancel');
+  const confirmBtn = document.querySelector<HTMLButtonElement>('#cap-reingest-confirm');
+  const st = document.querySelector<HTMLElement>('#cap-reingest-status');
+  const stMsg = document.querySelector<HTMLElement>('#cap-reingest-status-msg');
+  const stFoot = document.querySelector<HTMLElement>('#cap-reingest-status-footer');
+  if (!cancelBtn || !confirmBtn || !st || !stMsg || !stFoot) return;
+
+  const yt = Boolean(detail.youtubeVideoId);
+  openBtn.addEventListener('click', () => dlg.showModal());
+  cancelBtn.addEventListener('click', () => dlg.close());
+  confirmBtn.addEventListener('click', async () => {
+    dlg.close();
+    st.hidden = false;
+    st.className = [
+      'ingest-agent-status',
+      'cap-reingest-runner',
+      'ingest-agent-status--running',
+      yt ? '' : 'ingest-agent-status--no-yt',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    ingestAgentResetSteps(st);
+    stMsg.textContent = 'Running ingest pipeline again';
+    stFoot.innerHTML = '';
+    stFoot.style.whiteSpace = '';
+    openBtn.disabled = true;
+    try {
+      const out = await postReingestWithSse(captureId, (ev) => {
+        if (ev.kind === 'phase') applyIngestSseToPanel(st, ev);
+      });
+      ingestAgentMarkAllDone(st);
+      st.className = [
+        'ingest-agent-status',
+        'cap-reingest-runner',
+        'ingest-agent-status--ok',
+        yt ? '' : 'ingest-agent-status--no-yt',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      stMsg.textContent = 'Done · capture written.';
+      stFoot.style.whiteSpace = '';
+      stFoot.innerHTML = `<button type="button" class="btn-link" id="cap-reingest-done-cap">${esc(out.captureId)}</button><span class="ingest-agent-status__path mono-sm">${esc(out.captureDir)}</span><span class="cap-reingest-done-hint">Reloading page to show updated content…</span>`;
+      document.querySelector('#cap-reingest-done-cap')?.addEventListener('click', () => setHash('capture', out.captureId));
+      window.setTimeout(() => setHash('capture', captureId), 1600);
+    } catch (e) {
+      ingestAgentMarkActiveError(st);
+      st.className = [
+        'ingest-agent-status',
+        'cap-reingest-runner',
+        'ingest-agent-status--err',
+        yt ? '' : 'ingest-agent-status--no-yt',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const raw = e instanceof Error ? e.message : String(e);
+      const { friendly, detail } = ingestFailurePresentation(raw);
+      stMsg.textContent = friendly;
+      stFoot.textContent = detail;
+      stFoot.style.whiteSpace = 'pre-wrap';
+    } finally {
+      openBtn.disabled = false;
+    }
+  });
+}
+
+async function bindCaptureReactions(captureId: string): Promise<void> {
+  const timeline = document.querySelector<HTMLElement>('#cap-reactions-timeline');
+  const errEl = document.querySelector<HTMLElement>('#cap-reactions-err');
+  const submit = document.querySelector<HTMLButtonElement>('#cap-reactions-submit');
+  const ta = document.querySelector<HTMLTextAreaElement>('#cap-reactions-note');
+  const starBtns = document.querySelectorAll<HTMLButtonElement>('.cap-reactions-star');
+  if (!timeline || !submit || !ta) return;
+
+  let selected: number | null = null;
+
+  const setErr = (msg: string) => {
+    if (!errEl) return;
+    if (!msg) {
+      errEl.hidden = true;
+      errEl.textContent = '';
+    } else {
+      errEl.hidden = false;
+      errEl.textContent = msg;
+    }
+  };
+
+  const syncStarUi = () => {
+    starBtns.forEach((b) => {
+      const n = Number(b.dataset.star);
+      const on = selected !== null && n <= selected;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    submit.disabled = selected === null;
+  };
+
+  starBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      selected = Number(b.dataset.star);
+      syncStarUi();
+      setErr('');
+    });
+  });
+
+  const load = async () => {
+    try {
+      const { entries } = await fetchJson<{ entries: ReactionEntry[] }>(
+        `/api/captures/${encodeURIComponent(captureId)}/reactions`,
+      );
+      const sorted = [...entries].sort((a, b) => {
+        const ta = Date.parse(a.at);
+        const tb = Date.parse(b.at);
+        return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+      });
+      timeline.innerHTML = renderReactionsTimelineHtml(sorted);
+    } catch (e) {
+      timeline.innerHTML = `<p class="err cap-reactions-load-err">${esc(e instanceof Error ? e.message : String(e))}</p>`;
+    }
+  };
+
+  submit.addEventListener('click', async () => {
+    if (selected === null) {
+      setErr('Pick a star rating before submitting.');
+      return;
+    }
+    setErr('');
+    submit.disabled = true;
+    const body: { rating: number; comment?: string } = { rating: selected };
+    const c = ta.value.trim();
+    if (c) body.comment = c;
+    try {
+      const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify(body),
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string };
+      if (!r.ok) {
+        setErr(typeof j.error === 'string' ? j.error : `${r.status}`);
+        submit.disabled = selected === null;
+        syncStarUi();
+        return;
+      }
+      ta.value = '';
+      selected = null;
+      syncStarUi();
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      submit.disabled = selected === null;
+      syncStarUi();
+    }
+  });
+
+  syncStarUi();
+  await load();
+}
+
+async function bindCaptureCategories(captureId: string): Promise<void> {
+  const dlg = document.querySelector<HTMLDialogElement>('#cap-categories-dlg');
+  const fields = document.querySelector<HTMLDivElement>('#cap-categories-dlg-fields');
+  const chipsWrap = document.querySelector<HTMLSpanElement>('#cap-categories-chips');
+  const editBtn = document.querySelector<HTMLButtonElement>('#cap-categories-edit');
+  const cancelBtn = document.querySelector<HTMLButtonElement>('#cap-categories-cancel');
+  const saveBtn = document.querySelector<HTMLButtonElement>('#cap-categories-save');
+  if (!dlg || !fields || !chipsWrap || !editBtn || !cancelBtn || !saveBtn) return;
+  const chipBox = chipsWrap;
+
+  let taxonomy: { id: string; label: string }[] = [];
+  try {
+    const r = await fetch('/api/taxonomy/categories');
+    if (r.ok) {
+      const j = (await r.json()) as { items?: { id: string; label: string }[] };
+      taxonomy = j.items ?? [];
+    }
+  } catch {
+    /* ignore */
+  }
+  const labelMap = new Map(taxonomy.map((t) => [t.id, t.label]));
+
+  function refreshChipLabels(ids: string[]) {
+    if (ids.length === 0) {
+      chipBox.innerHTML = '<span class="fm-value-empty">—</span>';
+      return;
+    }
+    chipBox.innerHTML = ids
+      .map((id) => {
+        const lab = labelMap.get(id) ?? id;
+        return `<span class="capture-tag cap-category-chip" data-id="${escAttr(id)}">${esc(formatTagForDisplay(lab))}</span>`;
+      })
+      .join('');
+  }
+
+  function parseIdsFromChips(): string[] {
+    return Array.from(chipBox.querySelectorAll<HTMLElement>('.cap-category-chip'))
+      .map((el) => el.dataset.id ?? '')
+      .filter(Boolean);
+  }
+
+  refreshChipLabels(parseIdsFromChips());
+
+  editBtn.addEventListener('click', () => {
+    const selected = new Set(parseIdsFromChips());
+    fields.innerHTML = taxonomy
+      .map(
+        (t) =>
+          `<label class="cap-categories-label"><input type="checkbox" name="cat" value="${escAttr(t.id)}" ${selected.has(t.id) ? 'checked' : ''} /> ${esc(t.label)}</label>`,
+      )
+      .join('');
+    dlg.showModal();
+  });
+
+  cancelBtn.addEventListener('click', () => dlg.close());
+
+  saveBtn.addEventListener('click', async () => {
+    const checked = Array.from(
+      fields.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
+    ).map((i) => i.value);
+    const r = await fetch(`/api/captures/${encodeURIComponent(captureId)}/categories`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: checked }),
+    });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      window.alert(j.error ?? 'Save failed');
+      return;
+    }
+    const j = (await r.json()) as { categories: string[] };
+    dlg.close();
+    refreshChipLabels(j.categories);
+  });
+}
+
+function renderCaptureDetail(
+  d: CaptureDetail,
+  opts?: { reingestAvailable?: boolean },
+): string {
+  const yt = d.youtubeVideoId;
+  const maxT =
+    d.milestones && d.milestones.length > 0
+      ? Math.max(...d.milestones.map((m) => m.t), 1)
+      : 1;
+  const ticks =
+    d.milestones
+      ?.map((m) => {
+        const left = `${(m.t / maxT) * 100}%`;
+        const hl = m.kind === 'highlight' ? ' hl' : '';
+        return `<div class="yt-tick${hl}" style="left:${left}" data-t="${m.t}" title="${esc(m.label)}"></div>`;
+      })
+      .join('') ?? '';
+  const msBtns =
+    d.milestones
+      ?.map((m) => {
+        const mm = Math.floor(m.t / 60);
+        const ss = String(m.t % 60).padStart(2, '0');
+        return `<button type="button" data-seek="${m.t}">${mm}:${ss} — ${esc(m.label)}</button>`;
+      })
+      .join('') ?? '';
+
+  const subLines = yt ? mergeTranscriptsForUi(d.transcriptEn ?? '', d.transcriptVi ?? '') : [];
+  const useSubPanel = Boolean(yt && subLines.length > 0);
+
+  const ytMilestonesBlock =
+    d.milestones?.length
+      ? `
+      <span class="ingest-label">Milestones · click to seek</span>
+      <div class="yt-track" id="yt-track">${ticks}</div>
+      <div class="yt-ms" id="yt-ms">${msBtns}</div>`
+      : '';
+
+  const ytHint = useSubPanel
+    ? 'Click a subtitle line or milestone to seek. The current line is highlighted.'
+    : 'Seek: <code>?start=</code> on the YouTube embed.';
+
+  const ytVideoBlock = useSubPanel
+    ? `<div id="yt-player-root" class="yt-player-root" title="YouTube"></div>`
+    : `<iframe id="yt-iframe" title="YouTube" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" src="https://www.youtube.com/embed/${esc(yt!)}?enablejsapi=1"></iframe>`;
+
+  /** Collapsible markdown transcript: full-width row below the split (same width as #cap-note), not inside the video column. */
+  const ytSubRawUnderVideo = useSubPanel
+    ? `
+      <details class="yt-sub-raw source-details" id="yt-sub-raw">
+        <summary class="source-details-summary yt-sub-raw-summary">Raw transcript (markdown)</summary>
+        <div class="yt-sub-raw-grid">
+          <div><span class="tr-col-label">English</span><pre class="transcript-pre">${esc(d.transcriptEn || '(none)')}</pre></div>
+          <div><span class="tr-col-label">Vietnamese (LLM)</span><pre class="transcript-pre">${esc(d.transcriptVi || '(none)')}</pre></div>
+        </div>
+      </details>`
+    : '';
+
+  const ytTranscriptBlock = useSubPanel
+    ? `
+      <div class="yt-sub-panel" id="yt-sub-panel" data-mode="bilingual">
+        <div class="yt-sub-list" id="yt-sub-list" role="list">${renderSubRows(subLines)}</div>
+        <div class="yt-sub-toolbar">
+          <label class="yt-sub-search-wrap">
+            <span class="visually-hidden">Search subtitles</span>
+            <input type="search" id="yt-sub-search" class="yt-sub-search" placeholder="Search subtitles…" autocomplete="off" />
+          </label>
+          <div class="yt-sub-modes" role="group" aria-label="Display mode">
+            <button type="button" class="yt-sub-mode active" data-sub-mode="bilingual">Bilingual</button>
+            <button type="button" class="yt-sub-mode" data-sub-mode="en">EN</button>
+            <button type="button" class="yt-sub-mode" data-sub-mode="vi">VI</button>
+          </div>
+        </div>
+      </div>`
+    : `
+      <div class="transcript-tabs" role="tablist" aria-label="Transcript language">
+        <button type="button" class="tr-tab active" data-tab="en">English</button>
+        <button type="button" class="tr-tab" data-tab="vi">Vietnamese</button>
+        <button type="button" class="tr-tab" data-tab="both">Side by side</button>
+      </div>
+      <div class="tr-pane active" data-pane="en">
+        <pre class="transcript-pre">${esc(d.transcriptEn || '(none)')}</pre>
+      </div>
+      <div class="tr-pane" data-pane="vi">
+        <pre class="transcript-pre">${esc(d.transcriptVi || '(none)')}</pre>
+      </div>
+      <div class="tr-pane tr-split" data-pane="both">
+        <div><span class="tr-col-label">EN</span><pre class="transcript-pre">${esc(d.transcriptEn || '—')}</pre></div>
+        <div><span class="tr-col-label">VI (LLM)</span><pre class="transcript-pre">${esc(d.transcriptVi || '—')}</pre></div>
+      </div>`;
+
+  const tagList = parseTagList(d.noteFm.tags);
+  const categoryIds = parseCategoryList(d.noteFm.categories);
+  const fmEntries = Object.entries(d.noteFm).filter(
+    ([k]) => !FM_SKIP_IN_GRID.has(k) && !isEvaluationVoteFmKey(k),
+  );
+  const ratingRow = `<div class="fm-row fm-row--rating">
+        <dt class="fm-grid__key">Rating</dt>
+        <dd class="fm-grid__value">${formatRatingDisplay(d.reaction_avg, d.reaction_count)}</dd>
+      </div>`;
+  const categoryRow = `<div class="fm-row fm-row--categories">
+        <dt class="fm-grid__key">categories</dt>
+        <dd class="fm-grid__value">
+          <div class="cap-categories-wrap" id="cap-categories-wrap">
+            <span class="cap-categories-chips" id="cap-categories-chips">${renderCategoryChipsPlain(categoryIds)}</span>
+            <button
+              type="button"
+              class="btn-ghost btn-tiny btn-categories-edit"
+              id="cap-categories-edit"
+              aria-label="Edit categories for this capture"
+            >
+              Edit
+            </button>
+          </div>
+        </dd>
+      </div>`;
+  const fmNoteInner = fmEntries
+    .map(
+      ([k, v]) => `
+      <div class="fm-row">
+        <dt class="fm-grid__key">${esc(k)}</dt>
+        <dd class="fm-grid__value">${formatFmCellValue(k, v, tagList)}</dd>
+      </div>`,
+    )
+    .join('');
+  const fmNote =
+    fmEntries.length > 0
+      ? `${ratingRow}${categoryRow}${fmNoteInner}`
+      : `${ratingRow}${categoryRow}<div class="fm-row fm-row--empty"><dt class="fm-grid__key">—</dt><dd class="fm-grid__value"><span class="fm-value-empty">(empty)</span></dd></div>`;
+
+  const fetchMethod = String(d.noteFm.fetch_method ?? d.sourceFm.fetch_method ?? '')
+    .trim();
+  const fetchDisplay = fetchMethod || '—';
+  const fetchTitle =
+    'Ingest strategy (fetch_method). Older captures may only declare this in source.md — merged from note + source.';
+
+  const title = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
+  const ingestedRaw = String(d.noteFm.ingested_at ?? d.sourceFm.ingested_at ?? '').trim();
+  const rawUrl = String(d.noteFm.url ?? '').trim();
+  const href = rawUrl ? safeExternalHref(rawUrl) : null;
+  const sourceKind = String(d.noteFm.source ?? d.sourceFm.source ?? '').trim();
+
+  const metaParts: string[] = [];
+  if (ingestedRaw) {
+    metaParts.push(
+      `<time class="detail-meta-time" datetime="${escAttr(ingestedRaw)}">${esc(formatIngestedUi(ingestedRaw))}</time>`,
+    );
+  }
+  if (sourceKind) {
+    metaParts.push(`<span class="mono-sm" title="source (frontmatter)">${esc(sourceKind)}</span>`);
+  }
+  metaParts.push(
+    `<span class="mono-sm" title="${esc(fetchTitle)}">${esc(fetchDisplay)}</span>`,
+  );
+  if (href) {
+    metaParts.push(
+      `<a href="${escAttr(href)}" target="_blank" rel="noopener noreferrer" class="detail-meta-link">Open source ↗</a>`,
+    );
+  }
+  const metaLine = metaParts.join('<span class="detail-meta-sep" aria-hidden="true">·</span>');
+
+  const bc = captureBreadcrumbLabel(d.id);
+
+  const tocLinks = [
+    `<a href="#cap-frontmatter">Frontmatter</a>`,
+    ...(yt ? [`<a href="#cap-youtube">Video</a>`] : []),
+    `<a href="#cap-note">Note</a>`,
+    `<a href="#cap-source">Source</a>`,
+    `<a href="#cap-reactions">Reactions</a>`,
+  ].join('');
+
+  const starBtns = [1, 2, 3, 4, 5]
+    .map(
+      (n) =>
+        `<button type="button" class="cap-reactions-star" data-star="${n}" aria-label="${n} star${n === 1 ? '' : 's'}" aria-pressed="false">★</button>`,
+    )
+    .join('');
+
+  const sourceExcerpt = d.sourceBody;
+  const sourceTooLong = sourceExcerpt.length > 12000;
+
+  const reingestBtn = opts?.reingestAvailable
+    ? `<button type="button" class="btn-ghost btn-tiny btn-reingest" id="cap-reingest-open">Re-ingest</button>`
+    : '';
+  const reingestPanelClass = yt ? '' : ' ingest-agent-status--no-yt';
+  const reingestBlock = opts?.reingestAvailable
+    ? `
+    <dialog id="cap-reingest-dlg" class="cap-reingest-dlg">
+      <h2 class="cap-reingest-dlg__title" id="cap-reingest-dlg-title">Re-ingest this capture?</h2>
+      <p class="cap-reingest-dlg__body">The pipeline will <strong>overwrite</strong> <code>*.note.md</code>, <code>*.source.md</code>, and the <code>assets/</code> folder from the URL in frontmatter. <code>.comment</code> (ratings) and <code>milestones.yaml</code> (if present) are kept.</p>
+      <div class="cap-reingest-dlg__actions">
+        <button type="button" class="btn-ghost" id="cap-reingest-cancel" value="cancel">Cancel</button>
+        <button type="button" class="btn-ingest" id="cap-reingest-confirm">Re-ingest</button>
+      </div>
+    </dialog>
+    <div
+      class="ingest-agent-status cap-reingest-runner${reingestPanelClass}"
+      id="cap-reingest-status"
+      hidden
+      role="status"
+      aria-live="polite"
+    >
+      <div class="ingest-agent-status__head">
+        <span class="ingest-agent-status__badge" aria-hidden="true">Agent</span>
+        <div class="ingest-agent-status__head-text">
+          <p class="ingest-agent-status__msg" id="cap-reingest-status-msg">Re-ingesting…</p>
+        </div>
+      </div>
+      <ol class="ingest-agent-status__steps" id="cap-reingest-status-steps" aria-label="Re-ingest progress">
+        <li class="ingest-agent-step" data-step="fetch">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Fetch &amp; normalize</span>
+            <span class="ingest-agent-step__hint">Adapter · routing</span>
+          </span>
+        </li>
+        <li class="ingest-agent-step ingest-agent-step--yt-only" data-step="translate">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Translate transcript</span>
+            <span class="ingest-agent-step__hint">YouTube · EN → VI</span>
+          </span>
+        </li>
+        <li class="ingest-agent-step" data-step="vault">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Write vault</span>
+            <span class="ingest-agent-step__hint">Overwrite capture</span>
+          </span>
+        </li>
+        <li class="ingest-agent-step" data-step="llm">
+          <span class="ingest-agent-step__rail" aria-hidden="true"></span>
+          <span class="ingest-agent-step__dot" aria-hidden="true"></span>
+          <span class="ingest-agent-step__body">
+            <span class="ingest-agent-step__label">Enrich note</span>
+            <span class="ingest-agent-step__hint">Summary · insight</span>
+          </span>
+        </li>
+      </ol>
+      <div class="ingest-agent-status__footer" id="cap-reingest-status-footer"></div>
+    </div>`
+    : '';
+
+  return `
+    <div class="toolbar detail-toolbar">
+      <button type="button" class="btn-ghost" id="cap-back">← Library</button>
+      <span class="detail-breadcrumb" title="${escAttr(d.id)}">Captures / ${esc(bc)}</span>
+      ${reingestBtn}
+    </div>
+    <div class="main-aux-blocks capture-detail-aux">${sideCapture(d)}</div>
+    ${reingestBlock}
+    <div class="view active">
+    <nav class="detail-toc" aria-label="On this page">${tocLinks}</nav>
+    <div class="detail-hero">
+      <h2 id="cap-title">${esc(title)}</h2>
+      <div class="detail-meta-line" aria-label="Metadata summary">${metaLine}</div>
+    </div>
+    <div class="section cap-anchor" id="cap-frontmatter">
+      <h3>Frontmatter (note)</h3>
+      <p class="hint fm-frontmatter-hint">This table comes from the note YAML. <code>ingested_at</code>, <code>url</code>, and <code>fetch_method</code> are merged into the meta line above; <code>tags</code> show as chips in the cell. <strong>Rating</strong> is the average from <code>.comment</code> (same as the Library column); do not duplicate <code>evaluation</code>/<code>vote</code> in YAML.</p>
+      <dl class="fm-grid">${fmNote}</dl>
+    </div>
+    ${
+      yt
+        ? `
+    <div class="section cap-anchor" id="cap-youtube">
+      <h3>Video &amp; transcript</h3>
+      <p class="hint" style="margin-top:0">${ytHint}</p>
+      <div class="yt-split">
+        <div class="yt-split__media">
+          <div class="yt-iframe-wrap">
+            ${ytVideoBlock}
+          </div>
+          ${ytMilestonesBlock}
+        </div>
+        <div class="yt-split__transcript">
+          ${ytTranscriptBlock}
+        </div>
+        ${ytSubRawUnderVideo}
+      </div>
+    </div>`
+        : ''
+    }
+    <div class="section cap-anchor" id="cap-note">
+      <h3>note.md</h3>
+      <div class="prose" id="note-prose"></div>
+    </div>
+    <div class="section cap-anchor" id="cap-source">
+      <h3>source.md</h3>
+      <details class="source-details">
+        <summary class="source-details-summary">Full source · collapsed by default${
+          sourceTooLong ? ` · ${sourceExcerpt.length.toLocaleString('en-US')} characters` : ''
+        }</summary>
+        <pre class="transcript-pre source-details-pre">${esc(sourceExcerpt)}</pre>
+      </details>
+    </div>
+    <div class="section cap-anchor" id="cap-reactions">
+      <h3>Reactions</h3>
+      <p class="hint cap-reactions-intro">Rate 1–5 stars; optional note. Saves a Markdown timeline in <code>.comment</code> next to the capture (readable in Obsidian).</p>
+      <div class="cap-reactions-form" id="cap-reactions-form">
+        <div class="cap-reactions-stars" role="group" aria-label="Choose 1 to 5 stars">${starBtns}</div>
+        <label class="cap-reactions-label" for="cap-reactions-note">Note <span class="cap-reactions-optional">(optional)</span></label>
+        <textarea id="cap-reactions-note" class="cap-reactions-textarea" rows="3" maxlength="8000" placeholder="Takeaways, things to remember…"></textarea>
+        <button type="button" class="btn-ingest cap-reactions-submit" id="cap-reactions-submit" disabled>Submit</button>
+        <p class="cap-reactions-err" id="cap-reactions-err" role="alert" hidden></p>
+      </div>
+      <div class="cap-reactions-timeline" id="cap-reactions-timeline" aria-live="polite">
+        <p class="hint cap-reactions-loading">Loading reactions…</p>
+      </div>
+    </div>
+    <dialog id="cap-categories-dlg" class="cap-categories-dlg">
+      <h2 class="cap-categories-dlg__title" id="cap-categories-dlg-title">Categories</h2>
+      <div id="cap-categories-dlg-fields" class="cap-categories-dlg-fields"></div>
+      <div class="cap-categories-dlg__actions">
+        <button type="button" class="btn-ghost" id="cap-categories-cancel">Cancel</button>
+        <button type="button" class="btn-ingest" id="cap-categories-save">Save</button>
+      </div>
+    </dialog>
+    </div>
+  `;
+}
+
+function bindRail() {
+  document.querySelectorAll('.app-nav-route').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = (btn as HTMLElement).dataset.route;
+      if (r === 'home') setHash('home');
+      if (r === 'captures') setHash('captures');
+    });
+  });
+}
+
+async function route() {
+  ytCaptureCleanup?.();
+  ytCaptureCleanup = null;
+  closeFilmstripImageLightbox();
+
+  const legacy = normalizeLegacyReaderHash(location.hash);
+  if (legacy) {
+    const { pathname, search } = location;
+    history.replaceState(null, '', `${pathname}${search}${legacy}`);
+    void route();
+    return;
+  }
+
+  const main = document.querySelector<HTMLElement>('#main')!;
+  const { view, id } = parseHash();
+  updateNavActive(view);
+
+  try {
+    if (view === 'home') {
+      main.innerHTML = `
+        <div class="view active">
+          <div class="cards">${skeletonCardsHtml(3)}</div>
+        </div>`;
+      const [h, capData] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
+      ]);
+      updateAppNavStatus(h);
+      const allCaps = capData.captures;
+      const recent = allCaps.slice(0, HOME_RECENT_CAPTURE_LIMIT);
+      main.innerHTML = renderHome(h, recent, allCaps.length);
+
+      main.querySelectorAll('.card[data-card-id]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const cid = (el as HTMLElement).dataset.cardId;
+          if (cid) setHash('capture', cid);
+        });
+      });
+
+      const runBtn = main.querySelector<HTMLButtonElement>('#ingest-run');
+      const urlIn = main.querySelector<HTMLInputElement>('#ingest-url');
+      const st = main.querySelector<HTMLElement>('#ingest-status');
+      const stMsg = main.querySelector<HTMLElement>('#ingest-status-msg');
+      const stFoot = main.querySelector<HTMLElement>('#ingest-status-footer');
+      if (runBtn && urlIn && st && stMsg && stFoot && h.ingestAvailable) {
+        runBtn.addEventListener('click', async () => {
+          const url = urlIn.value.trim();
+          if (!url) {
+            st.hidden = false;
+            st.className =
+              'ingest-agent-status ingest-agent-status--compact ingest-agent-status--err';
+            stMsg.textContent = 'Enter a URL.';
+            stFoot.textContent = '';
+            stFoot.style.whiteSpace = '';
+            return;
+          }
+          const yt = isLikelyYoutubeUrl(url);
+          const useSse = Boolean(h.ingestSse);
+          let stopTicker = () => {};
+          st.className = [
+            'ingest-agent-status',
+            'ingest-agent-status--running',
+            yt ? '' : 'ingest-agent-status--no-yt',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          st.hidden = false;
+          stMsg.textContent = 'Running ingest pipeline';
+          stFoot.innerHTML = '';
+          stFoot.style.whiteSpace = '';
+          ingestAgentResetSteps(st);
+          if (!useSse) {
+            stopTicker = startIngestAgentStepTicker(st);
+          }
+          runBtn.disabled = true;
+          runBtn.classList.add('processing');
+          try {
+            const out = useSse
+              ? await postIngestWithSse({ url }, (ev) => {
+                  if (ev.kind === 'phase') applyIngestSseToPanel(st, ev);
+                })
+              : await postIngest({ url });
+            stopTicker();
+            ingestAgentMarkAllDone(st);
+            st.className = [
+              'ingest-agent-status',
+              'ingest-agent-status--ok',
+              yt ? '' : 'ingest-agent-status--no-yt',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            stMsg.textContent = 'Done · capture written.';
+            stFoot.style.whiteSpace = '';
+            stFoot.innerHTML = `<button type="button" class="btn-link" id="ingest-open-cap">${esc(out.captureId)}</button><span class="ingest-agent-status__path mono-sm">${esc(out.captureDir)}</span>`;
+            main.querySelector('#ingest-open-cap')?.addEventListener('click', () => setHash('capture', out.captureId));
+          } catch (e) {
+            stopTicker();
+            ingestAgentMarkActiveError(st);
+            st.className = [
+              'ingest-agent-status',
+              'ingest-agent-status--err',
+              yt ? '' : 'ingest-agent-status--no-yt',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            const raw = e instanceof Error ? e.message : String(e);
+            const { friendly, detail } = ingestFailurePresentation(raw, { ingestUrl: url });
+            stMsg.textContent = friendly;
+            stFoot.textContent = detail;
+            stFoot.style.whiteSpace = 'pre-wrap';
+          } finally {
+            runBtn.disabled = false;
+            runBtn.classList.remove('processing');
+          }
+        });
+      }
+      return;
+    }
+    if (view === 'captures') {
+      main.innerHTML = `
+        <div class="view active">
+          <div class="mock-table-wrap"><table class="mock-table"><thead><tr>
+            <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
+          </tr></thead><tbody>${skeletonTableRowsHtml(5)}</tbody></table></div>
+        </div>`;
+      const [h, { captures }] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<{ captures: CaptureListItem[] }>('/api/captures'),
+      ]);
+      updateAppNavStatus(h);
+      capturesListAll = captures;
+      mountCapturesView();
+      return;
+    }
+    if (view === 'capture' && id) {
+      main.innerHTML = `
+        <div class="toolbar detail-toolbar">
+          <button type="button" class="btn-ghost" id="cap-back-skel">← Library</button>
+        </div>
+        <div class="view active">${skeletonProseHtml()}</div>`;
+      document.querySelector('#cap-back-skel')?.addEventListener('click', () => setHash('captures'));
+      const [h, d] = await Promise.all([
+        fetchJson<Health>('/api/health'),
+        fetchJson<CaptureDetail>(`/api/captures/${encodeURIComponent(id)}`),
+      ]);
+      main.innerHTML = renderCaptureDetail(d, {
+        reingestAvailable: h.ingestAvailable && Boolean(h.ingestSse),
+      });
+      updateAppNavStatus(h);
+      document.querySelector('#cap-back')?.addEventListener('click', () => setHash('captures'));
+      const titleLine = d.noteBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? d.id;
+      const omitNoteImages =
+        Boolean(d.youtubeVideoId) ||
+        d.noteFm.source === 'youtube' ||
+        d.sourceFm.source === 'youtube';
+      const noteHtml = noteToHtml(stripLeadingH1IfMatches(d.noteBody, titleLine), d.id, {
+        omitImages: omitNoteImages,
+      });
+      const prose = document.querySelector('#note-prose');
+
+      if (prose) {
+        prose.innerHTML = noteHtml;
+        wrapConsecutiveProseImagesInFilmstrips(prose);
+        bindFilmstripImageLightbox(prose as HTMLElement);
+      }
+
+      const mergedSub = d.youtubeVideoId
+        ? mergeTranscriptsForUi(d.transcriptEn ?? '', d.transcriptVi ?? '')
+        : [];
+      const useSubPanel = Boolean(d.youtubeVideoId && mergedSub.length > 0);
+
+      if (useSubPanel && d.youtubeVideoId) {
+        ytCaptureCleanup = bindYoutubeSubPanel(d.youtubeVideoId, mergedSub, main);
+      } else {
+        const iframe = document.querySelector<HTMLIFrameElement>('#yt-iframe');
+        const seek = (t: number) => {
+          if (!iframe || !d.youtubeVideoId) return;
+          iframe.src = `https://www.youtube.com/embed/${d.youtubeVideoId}?start=${Math.floor(t)}&autoplay=1&enablejsapi=1`;
+        };
+        document.querySelectorAll('.yt-tick').forEach((el) => {
+          el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.t)));
+        });
+        document.querySelectorAll('.yt-ms button').forEach((el) => {
+          el.addEventListener('click', () => seek(Number((el as HTMLElement).dataset.seek)));
+        });
+
+        main.querySelectorAll('.tr-tab').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tab = (btn as HTMLElement).dataset.tab!;
+            main.querySelectorAll('.tr-tab').forEach((b) =>
+              b.classList.toggle('active', (b as HTMLElement).dataset.tab === tab),
+            );
+            main.querySelectorAll('.tr-pane').forEach((p) =>
+              p.classList.toggle('active', (p as HTMLElement).dataset.pane === tab),
+            );
+          });
+        });
+      }
+      bindCaptureReingest(d.id, d, h);
+      void bindCaptureReactions(d.id);
+      void       bindCaptureCategories(d.id);
+      return;
+    }
+  } catch (e) {
+    main.innerHTML = `<div class="err">${esc(e instanceof Error ? e.message : String(e))}</div>`;
+  }
+}
+
+export function initApp() {
+  app.innerHTML = layoutShell();
+  bindRail();
+  bindSourceFilterButtons();
+  document.getElementById('app-nav-categories')?.addEventListener('click', onCategoryNavClick);
+  syncCapturesNavFilterUi();
+  void loadTaxonomyCategoriesNav();
+  bindMobileNav();
+  window.addEventListener('hashchange', () => route());
+  void route();
+}
+
+document.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('.theme-btn');
+  if (btn?.dataset.theme && THEMES.includes(btn.dataset.theme as ThemeName)) {
+    setTheme(btn.dataset.theme as ThemeName);
+  }
+});
+
+initApp();

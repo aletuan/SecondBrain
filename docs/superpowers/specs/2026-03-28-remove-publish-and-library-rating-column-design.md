@@ -5,13 +5,13 @@
 
 **Liên quan:**  
 - Spec reactions vault: [`2026-03-27-reader-reactions-vault-comment-design.md`](./2026-03-27-reader-reactions-vault-comment-design.md) (`{slug}.comment`, `parseReactionsMarkdown`).  
-- `reader-web/vault/service.ts` (`listCaptures`, `getCommentPath`), `reader-web/vault/reactionsMarkdown.ts`, `reader-web/src/main.ts`, `reader-web/src/types.ts`.
+- `reader/vault/service.ts` (`listCaptures`, `getCommentPath`), `reader/vault/reactionsMarkdown.ts`, `reader/src/main.ts`, `reader/src/types.ts`.
 
 ---
 
 ## 1. Mục tiêu
 
-1. **Không còn hiển thị “publish / private”** trong reader-web (pill meta, cột thư viện, tag trên card trang chủ, v.v.), và **ẩn khóa `publish` trong bảng Frontmatter** (đã chọn **A** — skip giống `url` / `fetch_method`).
+1. **Không còn hiển thị “publish / private”** trong reader (pill meta, cột thư viện, tag trên card trang chủ, v.v.), và **ẩn khóa `publish` trong bảng Frontmatter** (đã chọn **A** — skip giống `url` / `fetch_method`).
 2. **Thay cột “Trạng thái”** trong bảng Thư viện Captures bằng cột **“Đánh giá”**, hiển thị **trung bình vote** từ file `{slug}.comment` (định dạng **B**: **sao rút gọn + số** trong cùng ô).
 
 **Phi mục tiêu (v1):** Sắp xếp theo điểm; chỉnh ingest/CLI để ghi `publish`; thay đổi schema API lớn (gỡ hẳn field `publish` khỏi JSON).
@@ -30,7 +30,7 @@
 | Trang Ingest — card “Captures gần đây” | Bỏ tag `publish` / `private`; giữ tag `youtube` khi có. |
 | Sidebar Thư viện (`sideCaptures`) | Bỏ/replace bullet nhắc `publish:false`. |
 | Copy trợ giúp ingest | Bỏ hoặc sửa dòng nhắc `publish:false` nếu còn. |
-| README reader-web | Cập nhật nếu đề cập cột trạng thái / publish. |
+| README reader | Cập nhật nếu đề cập cột trạng thái / publish. |
 
 ---
 

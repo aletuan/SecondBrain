@@ -3,7 +3,7 @@
 **Ngày:** 2026-03-28  
 **Trạng thái:** Đã duyệt — plan: `docs/superpowers/plans/2026-03-28-enrich-outline-vs-detail.md`
 
-**Liên quan:** `src/llm/enrich.ts` (`ENRICH_SYSTEM_PROMPT`), `src/llm/enrichSource.ts` (`truncateSourceForEnrich`, `ENRICH_MAX_CHARS`).
+**Liên quan:** `cli/src/llm/enrich.ts` (`ENRICH_SYSTEM_PROMPT`), `cli/src/llm/enrichSource.ts` (`truncateSourceForEnrich`, `ENRICH_MAX_CHARS`).
 
 ---
 
@@ -74,7 +74,7 @@ Kỳ vọng người dùng: khi nguồn **đã có** định nghĩa/ví dụ cho
 
 ## 5. Thiết kế kỹ thuật (đề xuất triển khai)
 
-1. **Sửa `ENRICH_SYSTEM_PROMPT`** theo mục 4A — cập nhật `tests/llm/enrich.test.ts` (substring/assertions cho quy tắc mới).
+1. **Sửa `ENRICH_SYSTEM_PROMPT`** theo mục 4A — cập nhật `cli/tests/llm/enrich.test.ts` (substring/assertions cho quy tắc mới).
 2. **`buildEnrichmentSections`:** truyền `max_tokens` (hằng số hoặc `resolveEnrichMaxCompletionTokens()` từ env).
 3. **README / CLAUDE.md:** một dòng cho biến env mới nếu có.
 4. **Kiểm tra thủ công:** 1 URL X long post kiểu “nhiều ví dụ”; so sánh `note.md` trước/sau.

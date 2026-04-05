@@ -6,7 +6,7 @@
 **Liên quan:**
 
 - Spec category taxonomy: [`2026-03-29-category-design.md`](./2026-03-29-category-design.md) (`categories` trong frontmatter note, `config/categories.yaml`).
-- Code hiện tại: `reader-web/src/main.ts` (`layoutShell`, `setSideInner`, `sideCaptures`, …), `reader-web/src/style.css` (`.app` grid 3 cột).
+- Code hiện tại: `reader/src/main.ts` (`layoutShell`, `setSideInner`, `sideCaptures`, …), `reader/src/style.css` (`.app` grid 3 cột).
 - Thảo luận layout: Option A (ASCII): nav trái có **section** Categories + Nguồn; **main** có **hàng thống kê** ở màn list/overview; **không** `aside.side`; **detail** không hàng KPI.
 
 ---
@@ -86,7 +86,7 @@
 
 ### 5.5 State
 
-- Biến module (hoặc object đơn) trong `main.ts` hoặc file nhỏ `reader-web/src/captureFilters.ts` — `selectedCategoryId: string | null`, `selectedSource: 'all' | 'youtube' | 'x' | 'threads' | 'other'`.
+- Biến module (hoặc object đơn) trong `main.ts` hoặc file nhỏ `reader/src/captureFilters.ts` — `selectedCategoryId: string | null`, `selectedSource: 'all' | 'youtube' | 'x' | 'threads' | 'other'`.
 - Vào `#/captures`: có thể reset filter hoặc khôi phục từ `sessionStorage` — **chốt trong plan**.
 
 ---

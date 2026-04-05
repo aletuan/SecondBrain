@@ -1,6 +1,6 @@
 /**
  * Smoke-check API keys from `.env` (no secrets printed).
- * Run: pnpm verify-keys
+ * Run: cd reader && pnpm verify-keys
  */
 import 'dotenv/config';
 import { ApifyClient } from 'apify-client';

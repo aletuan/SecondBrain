@@ -2,18 +2,18 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "reader-web-dev",
+      "name": "reader-dev",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 5174,
-      "cwd": "reader-web"
+      "cwd": "reader"
     },
     {
-      "name": "reader-web-preview",
+      "name": "reader-preview",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["preview"],
       "port": 4173,
-      "cwd": "reader-web"
+      "cwd": "reader"
     }
   ]
 }

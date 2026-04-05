@@ -2,13 +2,7 @@
 
 Bản **Excalidraw** (mở bằng plugin Excalidraw trong Obsidian, hoặc [excalidraw.com](https://excalidraw.com)): cùng thư mục với file này — [`ingest-youtube-x.excalidraw`](ingest-youtube-x.excalidraw).
 
-**Cập nhật sơ đồ:** file `.excalidraw` được tạo lại từ script (font Excalifont, mũi tên gắn shape) — chạy:
-
-```bash
-node scripts/generate-ingest-youtube-x-excalidraw.mjs
-```
-
-Sau đó chỉnh tay trong Excalidraw nếu cần chi tiết thêm; nếu muốn giữ bản có thể tái tạo, hãy đưa thay đổi vào script.
+**Cập nhật sơ đồ:** chỉnh trực tiếp [`ingest-youtube-x.excalidraw`](ingest-youtube-x.excalidraw) trong Excalidraw (plugin Obsidian hoặc [excalidraw.com](https://excalidraw.com)).
 
 > **Lưu ý:** Bản sao cũng có thể nằm trong vault tại `vault/Diagrams/ingest-youtube-x.excalidraw`, nhưng thư mục `vault/` bị gitignore nên **không hiện trong file tree** của Cursor/IDE.
 
@@ -41,6 +35,6 @@ flowchart TD
 
 ## Tham chiếu code
 
-- `src/ingest/runIngest.ts`
-- `src/adapters/youtube.ts`, `src/adapters/xApi.ts`
+- `cli/src/ingest/runIngest.ts`
+- `cli/src/adapters/youtube.ts`, `cli/src/adapters/xApi.ts`
 - `docs/handoffs/2026-03-20-x-ingest-open-issues.md`

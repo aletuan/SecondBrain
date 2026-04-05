@@ -14,44 +14,44 @@
 
 | File | Vai trò |
 |------|---------|
-| `reader-web/vault/reactionsMarkdown.ts` | `averageReactionStats`, helper sao chỉ-visual (vd. `ratingStarsOnly`) dùng chung với `ratingToStarLine` |
-| `reader-web/vault/service.ts` | `listCaptures`: sau mỗi item, đọc `.comment`, gắn `reaction_avg`, `reaction_count`; cập nhật `CaptureListItem` export |
-| `reader-web/src/types.ts` | Đồng bộ `CaptureListItem` với service |
-| `reader-web/src/main.ts` | FM skip `publish`, bỏ pill meta/detail, card tags, sidebar bullet; bảng + skeleton + loading header: cột Đánh giá + `formatLibraryRatingCell(r)` |
-| `reader-web/src/style.css` | Class skeleton cột rating (đổi tên `--status` → `--rating` hoặc tái dùng width) |
-| `reader-web/tests/reactionsMarkdown.test.ts` | Thêm test `averageReactionStats` (+ stars-only nếu cần) |
+| `reader/vault/reactionsMarkdown.ts` | `averageReactionStats`, helper sao chỉ-visual (vd. `ratingStarsOnly`) dùng chung với `ratingToStarLine` |
+| `reader/vault/service.ts` | `listCaptures`: sau mỗi item, đọc `.comment`, gắn `reaction_avg`, `reaction_count`; cập nhật `CaptureListItem` export |
+| `reader/src/types.ts` | Đồng bộ `CaptureListItem` với service |
+| `reader/src/main.ts` | FM skip `publish`, bỏ pill meta/detail, card tags, sidebar bullet; bảng + skeleton + loading header: cột Đánh giá + `formatLibraryRatingCell(r)` |
+| `reader/src/style.css` | Class skeleton cột rating (đổi tên `--status` → `--rating` hoặc tái dùng width) |
+| `reader/tests/reactionsMarkdown.test.ts` | Thêm test `averageReactionStats` (+ stars-only nếu cần) |
 
 ---
 
 ## Task 1: `averageReactionStats` + sao chỉ-visual
 
-**Files:** `reader-web/vault/reactionsMarkdown.ts`, `reader-web/tests/reactionsMarkdown.test.ts`
+**Files:** `reader/vault/reactionsMarkdown.ts`, `reader/tests/reactionsMarkdown.test.ts`
 
 - [ ] **Step 1:** Thêm `averageReactionStats(entries: ParsedReactionEntry[]): { avg: number | null; count: number }` — `count` = số entry có `rating` hợp lệ; `avg` = arithmetic mean hoặc `null` khi `count === 0`.
 - [ ] **Step 2:** Refactor: tách phần `★…☆` từ `ratingToStarLine` thành hàm ví dụ `ratingStarsOnly(rating: number): string` (integer 1–5, cùng validation), `ratingToStarLine` = `ratingStarsOnly` + `` ` (${rating}/5)` ``.
 - [ ] **Step 3:** Vitest: rỗng; một entry; nhiều entry; trung bình không nguyên (assert `avg`).
-- [ ] **Step 4:** `cd reader-web && pnpm exec vitest run tests/reactionsMarkdown.test.ts`
+- [ ] **Step 4:** `pnpm vitest run reader/tests/reactionsMarkdown.test.ts`
 
-- [ ] **Step 5:** Commit `feat(reader-web): average reaction stats and stars-only helper`
+- [ ] **Step 5:** Commit `feat(reader): average reaction stats and stars-only helper`
 
 ---
 
 ## Task 2: `listCaptures` + types
 
-**Files:** `reader-web/vault/service.ts`, `reader-web/src/types.ts`
+**Files:** `reader/vault/service.ts`, `reader/src/types.ts`
 
 - [ ] **Step 1:** Mở rộng `CaptureListItem`: `reaction_avg: number | null`, `reaction_count: number` (0 khi không có dữ liệu).
 - [ ] **Step 2:** Trong vòng lặp `listCaptures`, sau khi build item: `captureDir = path.join(capDir, id)`, `getCommentPath(captureDir)` → đọc UTF-8; nếu OK → `parseReactionsMarkdown` → `averageReactionStats`; catch/`ENOENT` → null/0.
-- [ ] **Step 3:** Đồng bộ `reader-web/src/types.ts` (field names giống service).
-- [ ] **Step 4:** `cd reader-web && pnpm exec tsc --noEmit`
+- [ ] **Step 3:** Đồng bộ `reader/src/types.ts` (field names giống service).
+- [ ] **Step 4:** `cd reader && pnpm exec tsc --noEmit`
 
-- [ ] **Step 5:** Commit `feat(reader-web): listCaptures reaction average from vault comment file`
+- [ ] **Step 5:** Commit `feat(reader): listCaptures reaction average from vault comment file`
 
 ---
 
 ## Task 3: UI — gỡ publish + cột Đánh giá
 
-**Files:** `reader-web/src/main.ts`, `reader-web/src/style.css`
+**Files:** `reader/src/main.ts`, `reader/src/style.css`
 
 - [ ] **Step 1:** `FM_SKIP_IN_GRID`: thêm `'publish'`.
 - [ ] **Step 2:** `renderCaptureDetail` meta: bỏ biến `publish` và mảng `metaParts` chứa pill publish/private (giữ time, source, fetch, link nguồn).
@@ -62,15 +62,15 @@
 - [ ] **Step 7:** Skeleton `skeletonTableRowsHtml` + loading view `view === 'captures'`: đổi `<th>Trạng thái</th>` → **Đánh giá**; CSS class `skeleton-row__bar--status` → `--rating` (cập nhật selector trong `style.css`, width ~4–5rem nếu cần).
 - [ ] **Step 8:** Kiểm tra tay: `#/captures`, vault có/không `.comment`.
 
-- [ ] **Step 9:** Commit `feat(reader-web): remove publish UI and add library rating column`
+- [ ] **Step 9:** Commit `feat(reader): remove publish UI and add library rating column`
 
 ---
 
 ## Task 4: Docs + verification
 
-- [ ] **Step 1:** Nếu `docs/reader-web.md` hoặc `reader-web/README.md` mô tả cột Trạng thái / publish — cập nhật một đoạn ngắn.
-- [ ] **Step 2:** `cd reader-web && pnpm exec tsc --noEmit && pnpm exec vitest run`
-- [ ] **Step 3:** Từ root: `pnpm test` (nếu CI gồm reader-web).
+- [ ] **Step 1:** Nếu `docs/reader.md` hoặc `reader/README.md` mô tả cột Trạng thái / publish — cập nhật một đoạn ngắn.
+- [ ] **Step 2:** `cd reader && pnpm exec tsc --noEmit && pnpm exec vitest run`
+- [ ] **Step 3:** Từ root: `pnpm test` (nếu CI gồm reader).
 
 - [ ] **Step 4:** Commit doc/chore nếu có thay đổi; hoặc gộp vào task 3 nếu chỉ README nhỏ.
 
@@ -80,4 +80,4 @@
 
 - Không còn UI publish/private ở các vị trí spec §2; frontmatter không hiện `publish`.
 - Bảng Thư viện có cột Đánh giá đúng format B; API trả `reaction_avg` / `reaction_count`.
-- Test parser/stats pass; typecheck reader-web pass.
+- Test parser/stats pass; typecheck reader pass.

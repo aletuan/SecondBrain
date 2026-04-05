@@ -2,7 +2,7 @@
 
 **Trạng thái:** Bản nháp để bạn xem xét và xác nhận trước khi triển khai code.  
 **Ngày:** 2026-03-21  
-**Liên quan:** Reader Web (`reader-web`), API vault (`reader-web/vault`), pipeline Brain (`src/ingest/runIngest.ts`, CLI `src/cli.ts`).
+**Liên quan:** Reader Web (`reader`), API vault (`reader/vault`), pipeline Brain (`cli/src/ingest/runIngest.ts`, CLI `cli/src/cli.ts`).
 
 ---
 
@@ -36,7 +36,7 @@
 
 ## 4. Ánh xạ phase pipeline ↔ bước UI
 
-Theo `src/ingest/runIngest.ts`, thứ tự logic gợi ý:
+Theo `cli/src/ingest/runIngest.ts`, thứ tự logic gợi ý:
 
 | Phase (mã) | Ý nghĩa | Bước UI (`data-step`) |
 |------------|---------|------------------------|
@@ -105,12 +105,12 @@ Mỗi message một object JSON:
 
 | Khu vực | File / nội dung |
 |---------|------------------|
-| Brain CLI | `src/cli.ts`, `src/ingest/runIngest.ts` — hook phase + `--progress-json` (stderr) |
-| Reader API | `reader-web/vault/apiMiddleware.ts` — route `start` + `stream`, không buffer body SSE |
-| Reader spawn | `reader-web/vault/runIngestCli.ts` — tùy chọn streaming stderr |
-| Vite / serve | `reader-web/vite.config.ts`, `reader-web/serve.ts` — proxy SSE no-buffer nếu cần |
-| UI | `reader-web/src/main.ts` — `EventSource`, map `phase` → `ingestAgentSetStep`, bỏ ticker khi SSE OK |
-| Docs | `docs/reader-web.md` — mô tả API mới, env, hạn chế |
+| Brain CLI | `cli/src/cli.ts`, `cli/src/ingest/runIngest.ts` — hook phase + `--progress-json` (stderr) |
+| Reader API | `reader/vault/apiMiddleware.ts` — route `start` + `stream`, không buffer body SSE |
+| Reader spawn | `reader/vault/runIngestCli.ts` — tùy chọn streaming stderr |
+| Vite / serve | `reader/vite.config.ts`, `reader/serve.ts` — proxy SSE no-buffer nếu cần |
+| UI | `reader/src/main.ts` — `EventSource`, map `phase` → `ingestAgentSetStep`, bỏ ticker khi SSE OK |
+| Docs | `docs/reader.md` — mô tả API mới, env, hạn chế |
 
 ---
 
