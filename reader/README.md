@@ -59,7 +59,7 @@ If neither vault env is set, the app resolves `../vault` from the `reader/` work
 
 ## API (local middleware)
 
-- `GET /api/health` — `vaultRoot`, `brainRoot`, `ingestAvailable`, `ingestSse` (same as `ingestAvailable` when the SSE ingest flow is built in)
+- `GET /api/health` — `vaultRoot`, `brainRoot`, `ingestAvailable`, `ingestSse` (same as `ingestAvailable` when the SSE ingest flow is built in), `ingestBackend`: `python` \| `ts-cli` \| `null` (which path is configured; `PYTHON_INGEST_URL` wins over `cli/`)
 - `POST /api/ingest` — JSON `{ "url": "https://…" }` → with **`PYTHON_INGEST_URL`**: proxies NDJSON stream from Python; **without**: runs the Brain CLI ingest in `READER_BRAIN_ROOT`. **Local-only**; set `READER_ALLOW_INGEST=0` to turn off. The **web UI** uses SSE (`/start` + `/stream`) when `ingestSse` is true; otherwise it falls back to this endpoint.
 - `POST /api/ingest/start` — body `{ "url": "https://…" }` → `{ ok, jobId }`. Open `GET /api/ingest/stream?jobId=…` as **SSE** (`text/event-stream`); each event is `data: <JSON>` with `v:1` and `kind`: `phase` \| `done` \| `error` (from CLI stderr or Python NDJSON, depending on `PYTHON_INGEST_URL`).
 - `GET /api/taxonomy/categories` — with **`PYTHON_INGEST_URL`**: proxies Python `GET /v1/taxonomy/categories`; **without**: reads `config/categories.yaml` / `categories.example.yaml` under `READER_BRAIN_ROOT`.

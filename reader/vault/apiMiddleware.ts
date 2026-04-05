@@ -23,13 +23,19 @@ import {
   runPythonIngestStream,
 } from './pythonIngest.js';
 
-function ingestBackendConfigured(): boolean {
-  if (pythonIngestBaseUrl()) return true;
+/** When `PYTHON_INGEST_URL` is set, ingest uses the Python API regardless of `cli/` on disk. */
+function resolvedIngestBackend(): 'python' | 'ts-cli' | null {
+  if (pythonIngestBaseUrl()) return 'python';
   const brainRoot = resolveBrainRepoRoot();
   const cliPath = path.join(brainRoot, 'cli', 'src', 'cli.ts');
-  return (
-    fsSync.existsSync(cliPath) && fsSync.existsSync(path.join(brainRoot, 'package.json'))
-  );
+  if (fsSync.existsSync(cliPath) && fsSync.existsSync(path.join(brainRoot, 'package.json'))) {
+    return 'ts-cli';
+  }
+  return null;
+}
+
+function ingestBackendConfigured(): boolean {
+  return resolvedIngestBackend() !== null;
 }
 import { runIngestCli } from './runIngestCli.js';
 
@@ -193,13 +199,15 @@ export function vaultApiMiddleware() {
       if (req.method === 'GET' && urlRaw === '/api/health') {
         const vaultRoot = resolveVaultRoot();
         const brainRoot = resolveBrainRepoRoot();
-        const ingestAvailable = ingestAllowed() && ingestBackendConfigured();
+        const ingestBackend = resolvedIngestBackend();
+        const ingestAvailable = ingestAllowed() && ingestBackend !== null;
         sendJson(res, 200, {
           ok: true,
           vaultRoot,
           brainRoot,
           ingestAvailable,
           ingestSse: ingestAvailable,
+          ingestBackend,
         });
         return;
       }

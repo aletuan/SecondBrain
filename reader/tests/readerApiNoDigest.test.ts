@@ -42,6 +42,8 @@ describe('reader API without digest/challenge', () => {
     expect(r.status).toBe(200);
     const j = (await r.json()) as Record<string, unknown>;
     expect(j).toHaveProperty('ingestAvailable');
+    expect(j).toHaveProperty('ingestBackend');
+    expect(['python', 'ts-cli', null]).toContain(j.ingestBackend);
     expect(j).not.toHaveProperty('digestAvailable');
   });
 

@@ -722,11 +722,52 @@ type Health = {
   ingestAvailable: boolean;
   /** When true, use `POST /api/ingest/start` + SSE stream for live steps. */
   ingestSse?: boolean;
+  /** Which backend the reader would use: from `PYTHON_INGEST_URL` or local `cli/`. */
+  ingestBackend?: 'python' | 'ts-cli' | null;
 };
+
+function ingestStatusStripLine(h: Health): string {
+  if (h.ingestAvailable) return 'Vault · ingest ready';
+  if (h.ingestBackend === 'python' || h.ingestBackend === 'ts-cli') return 'Ingest · disabled';
+  if (h.ingestBackend === null) return 'Ingest · not configured';
+  return 'Ingest · check setup';
+}
+
+function webIngestAsideLi(h: Health): string {
+  if (h.ingestAvailable) {
+    const via =
+      h.ingestBackend === 'python'
+        ? 'Python API'
+        : h.ingestBackend === 'ts-cli'
+          ? 'TypeScript CLI (local)'
+          : 'local';
+    return `<li>Web ingest <strong>on</strong> — via ${via}</li>`;
+  }
+  if (h.ingestBackend === 'python' || h.ingestBackend === 'ts-cli') {
+    return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code></li>';
+  }
+  if (h.ingestBackend === null) {
+    return '<li>Web ingest <strong>off</strong> — set <code>PYTHON_INGEST_URL</code> or point <code>READER_BRAIN_ROOT</code> at a repo with <code>cli/</code></li>';
+  }
+  return '<li>Web ingest <strong>off</strong> — check <code>READER_ALLOW_INGEST</code> and ingest configuration</li>';
+}
+
+function ingestUnavailablePanelHtml(h: Health): string {
+  if (h.ingestBackend === 'python') {
+    return `<p class="hint" style="margin:0">Unavailable: web ingest is turned off (<code>READER_ALLOW_INGEST=0</code>). You can still call the Python ingest API directly.</p>`;
+  }
+  if (h.ingestBackend === 'ts-cli') {
+    return `<p class="hint" style="margin:0">Unavailable: <code>READER_ALLOW_INGEST=0</code>. From the Brain repo you can run <code>pnpm ingest</code> in a terminal.</p>`;
+  }
+  if (h.ingestBackend === null) {
+    return `<p class="hint" style="margin:0">Unavailable: set <code>PYTHON_INGEST_URL</code> to your FastAPI service, or use <code>READER_BRAIN_ROOT</code> with a checkout that includes <code>cli/src/cli.ts</code> and dependencies.</p>`;
+  }
+  return `<p class="hint" style="margin:0">Unavailable: check <code>READER_ALLOW_INGEST</code>, <code>PYTHON_INGEST_URL</code>, and <code>READER_BRAIN_ROOT</code>.</p>`;
+}
 
 function appNavStatusHtml(h: Health): string {
   return `
-    <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${h.ingestAvailable ? 'Vault · ingest ready' : 'Ingest · check CLI'}</div>
+    <div class="pulse${h.ingestAvailable ? '' : ' warn'}">${ingestStatusStripLine(h)}</div>
     <div class="app-nav__vault-block status-strip-mono" title="Obsidian · local reader">
       <span class="app-nav__vault-label">Vault</span>
       <code class="app-nav__vault-path">${esc(h.vaultRoot)}</code>
@@ -866,7 +907,7 @@ async function postIngest(body: { url: string }): Promise<{
   return data as { ok: true; captureDir: string; captureId: string };
 }
 
-/** Maps CLI/API error text to a short explanation for `#ingest-status-msg`. */
+/** Maps ingest error text to a short explanation for `#ingest-status-msg`. */
 function ingestFailurePresentation(
   raw: string,
   context?: { ingestUrl?: string },
@@ -927,7 +968,7 @@ function ingestFailurePresentation(
       : 'Valid OPENAI_API_KEY is required for YouTube transcript translation or note enrich — check Brain `.env`.';
   } else if (low.includes('capture path not detected') || low.includes('capture path missing')) {
     friendly =
-      'Ingest may have finished but the capture path could not be parsed from output — see CLI log below.';
+      'Ingest may have finished but the capture path could not be parsed from output — see the log detail below.';
   } else if (low.includes('routing') && (low.includes('yaml') || low.includes('config'))) {
     friendly = 'Routing config error (`config/routing.yaml`) — ensure the file exists and is valid.';
   } else if (low.includes(' 401 ') || low.includes(' 403 ') || /\b401\b/.test(low) || /\b403\b/.test(low)) {
@@ -944,7 +985,7 @@ function ingestFailurePresentation(
   ) {
     friendly = 'Network error while fetching URL — check Internet, VPN, or URL.';
   } else if (low.includes('ingest failed') || low.includes('ingest exited') || low.includes('exit code')) {
-    friendly = 'CLI ingest exited with an error — see stderr/log excerpt below.';
+    friendly = 'Ingest exited with an error — see the log detail below.';
   }
   if (
     xUrl &&
@@ -1119,7 +1160,7 @@ function sideHome(h: Health, shownOnHome: number, vaultTotal: number): string {
       <h4>Status</h4>
       <ul>
         <li><strong>Vault</strong> — absolute path in the status strip</li>
-        <li>Web ingest ${h.ingestAvailable ? '<strong>on</strong> (Brain CLI)' : '<strong>off</strong> or repo missing'}</li>
+        ${webIngestAsideLi(h)}
         <li>Home: <strong>${shownOnHome}</strong> recent cards · <strong>${vaultTotal}</strong> captures in vault</li>
       </ul>
     </div>
@@ -1324,12 +1365,12 @@ function renderHome(h: Health, recent: CaptureListItem[], vaultCaptureTotal: num
       </div>
     </div>`
     : `<div class="ingest-inner">
-      <p class="hint" style="margin:0">Unavailable: <code>READER_BRAIN_ROOT</code> or <code>READER_ALLOW_INGEST=0</code>. Use <code>pnpm ingest</code> in the terminal.</p>
+      ${ingestUnavailablePanelHtml(h)}
     </div>`;
 
   const cards =
     recent.length === 0
-      ? '<p class="hint">No captures yet — enter a URL above or ingest from the CLI.</p>'
+      ? '<p class="hint">No captures yet — enter a URL above when web ingest is on, or add captures via your usual ingest workflow.</p>'
       : recent
           .map((r) => {
             const sourceType = r.youtube_video_id
