@@ -11,14 +11,14 @@ describe('digest/challenge CLI removal', () => {
   });
 
   it('cli.ts does not register digest or challenge commands', () => {
-    const cliPath = path.join(import.meta.dirname, '../src/cli.ts');
+    const cliPath = path.join(import.meta.dirname, '../cli/src/cli.ts');
     const src = readFileSync(cliPath, 'utf8');
     expect(src).not.toMatch(/\.command\(\s*['`]digest['`]/);
     expect(src).not.toMatch(/\.command\(\s*['`]challenge['`]/);
   });
 
   it('cli.ts does not import digest or challenge modules', () => {
-    const cliPath = path.join(import.meta.dirname, '../src/cli.ts');
+    const cliPath = path.join(import.meta.dirname, '../cli/src/cli.ts');
     const src = readFileSync(cliPath, 'utf8');
     expect(src).not.toContain("from './digest.js'");
     expect(src).not.toContain("from './challenge/fromDigest.js'");

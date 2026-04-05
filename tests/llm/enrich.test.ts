@@ -13,7 +13,7 @@ import {
   resolveEnrichModel,
   resolveEnrichTemperature,
   TAG_SYSTEM_PROMPT,
-} from '../../src/llm/enrich.js';
+} from '../../cli/src/llm/enrich.js';
 
 let tmp: string | undefined;
 

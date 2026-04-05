@@ -14,12 +14,12 @@ pnpm test                             # Run all tests (vitest)
 pnpm test:watch                       # Watch mode
 pnpm typecheck                        # TypeScript strict check (no emit)
 pnpm ingest <url>                     # Ingest (LLM on note.md + YouTube Vi transcript when OPENAI_API_KEY + segments)
-pnpm exec tsx src/cli.ts ingest [options] <url>          # Prefer for options, e.g. --progress-json (avoids stray `--` in argv)
+pnpm exec tsx cli/src/cli.ts ingest [options] <url>          # Prefer for options, e.g. --progress-json (avoids stray `--` in argv)
 pnpm translate-transcript -- --capture path/to/Captures/…   # Add/replace ## Transcript (vi) on disk
 pnpm suggest-milestones -- --capture path/to/Captures/… --max-sec 600
 ```
 
-**Reader web** (optional, separate package): `cd reader-web && pnpm install && pnpm dev` (or repo root `pnpm reader:dev`) — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader-web/README.md` and `docs/reader-web.md`.
+**Reader web** (optional, separate package): `cd reader-web && pnpm install && pnpm dev` (or repo root `pnpm reader:dev`) — local UI over the vault; ingest from the UI shells `node …/tsx/dist/cli.mjs cli/src/cli.ts ingest` in `READER_BRAIN_ROOT` with the same defaults as the CLI. See `reader-web/README.md` and `docs/reader-web.md`.
 
 Run a single test file: `pnpm vitest run tests/path/to/file.test.ts`
 
@@ -27,15 +27,15 @@ Run a single test file: `pnpm vitest run tests/path/to/file.test.ts`
 
 **Pipeline**: URL → Router → Adapter → Normaliser → Vault Writer → LLM Enrichment
 
-- **Router** (`src/router.ts`): YAML config (`config/routing.yaml`) maps host/path patterns to adapter strategies
-- **Adapters** (`src/adapters/`): Fetch content per strategy — `httpReadability.ts` (default, Mozilla Readability + jsdom), `apify.ts` (Apify actors), `youtube.ts` (transcripts via Apify), `xApi.ts` (X API v2 with article/long-post support)
-- **Normaliser** (`src/normaliser.ts`): Raw HTML → `CaptureBundle` (title, text, images, code blocks)
-- **Vault Writer** (`src/vault/writer.ts`): Writes `Captures/YYYY-MM-DD--slug--hash/` with `source.md`, `note.md`, `assets/`
-- **LLM Enrichment** (`src/llm/enrich.ts`): Appends Vietnamese-language sections (Tóm tắt, Insight) to the capture note via OpenAI
-- **Translate transcript** (`src/llm/translateTranscript.ts`): Batch EN→VI for YouTube segments (aligned with `youtube-crawl-translate` JSON-array pattern)
-- **Milestones** (`src/youtube/milestones.ts`, `suggestMilestones.ts`): `milestones.yaml` + optional LLM suggestions
+- **Router** (`cli/src/router.ts`): YAML config (`config/routing.yaml`) maps host/path patterns to adapter strategies
+- **Adapters** (`cli/src/adapters/`): Fetch content per strategy — `httpReadability.ts` (default, Mozilla Readability + jsdom), `apify.ts` (Apify actors), `youtube.ts` (transcripts via Apify), `xApi.ts` (X API v2 with article/long-post support)
+- **Normaliser** (`cli/src/normaliser.ts`): Raw HTML → `CaptureBundle` (title, text, images, code blocks)
+- **Vault Writer** (`cli/src/vault/writer.ts`): Writes `Captures/YYYY-MM-DD--slug--hash/` with `source.md`, `note.md`, `assets/`
+- **LLM Enrichment** (`cli/src/llm/enrich.ts`): Appends Vietnamese-language sections (Tóm tắt, Insight) to the capture note via OpenAI
+- **Translate transcript** (`cli/src/llm/translateTranscript.ts`): Batch EN→VI for YouTube segments (aligned with `youtube-crawl-translate` JSON-array pattern)
+- **Milestones** (`cli/src/youtube/milestones.ts`, `suggestMilestones.ts`): `milestones.yaml` + optional LLM suggestions
 
-**Core type**: `CaptureBundle` in `src/types/capture.ts` — the normalised data structure that flows through the pipeline.
+**Core type**: `CaptureBundle` in `cli/src/types/capture.ts` — the normalised data structure that flows through the pipeline.
 
 ## Project Conventions
 

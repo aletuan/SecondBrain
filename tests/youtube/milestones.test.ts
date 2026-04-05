@@ -4,7 +4,7 @@ import {
   milestonesToYaml,
   parseMilestonesYaml,
   validateMilestones,
-} from '../../src/youtube/milestones.js';
+} from '../../cli/src/youtube/milestones.js';
 
 describe('parseMilestonesYaml', () => {
   it('parses milestones key', () => {

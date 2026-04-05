@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bundleFromParts, normaliseRawHtml } from '../src/normaliser.js';
+import { bundleFromParts, normaliseRawHtml } from '../cli/src/normaliser.js';
 
 describe('bundleFromParts', () => {
   it('fills required shape with defaults', () => {

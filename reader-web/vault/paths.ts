@@ -7,7 +7,7 @@ export function resolveVaultRoot(cwd: string = process.cwd()): string {
   return path.resolve(cwd, '..', 'vault');
 }
 
-/** Repo root that contains `src/cli.ts` (Brain CLI). Default: parent of reader-web/. */
+/** Repo root that contains `cli/src/cli.ts` (Brain CLI). Default: parent of reader-web/. */
 export function resolveBrainRepoRoot(cwd: string = process.cwd()): string {
   const fromEnv = process.env.READER_BRAIN_ROOT?.trim();
   if (fromEnv) return path.isAbsolute(fromEnv) ? fromEnv : path.resolve(cwd, fromEnv);

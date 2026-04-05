@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ingestHttpReadability } from '../../src/adapters/httpReadability.js';
+import { ingestHttpReadability } from '../../cli/src/adapters/httpReadability.js';
 
 const fixtureHtml = `<!doctype html><html><head><title>T</title></head><body>
 <article><h1>Article</h1><p>Para one.</p><img src="https://cdn.example/img.png" alt="i" /></article>

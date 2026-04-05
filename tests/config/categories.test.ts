@@ -3,7 +3,7 @@ import {
   getAllowedCategoryIdsSorted,
   loadCategoriesFromYamlText,
   parseCategoriesYaml,
-} from '../../src/config/categories.js';
+} from '../../cli/src/config/categories.js';
 
 const exampleFixture = `items:
   - id: machine-learning

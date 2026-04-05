@@ -47,7 +47,7 @@ Open **`http://127.0.0.1:5174`** for dev (same host Vite binds to by default —
 |----------|---------|
 | `READER_VAULT_ROOT` | Vault path (preferred for this app) |
 | `VAULT_ROOT` | Same as CLI; used if `READER_VAULT_ROOT` unset |
-| `READER_BRAIN_ROOT` | Brain CLI repo (contains `src/cli.ts`); default parent of `reader-web/` |
+| `READER_BRAIN_ROOT` | Brain CLI repo (contains `cli/src/cli.ts`); default parent of `reader-web/` |
 | `READER_ALLOW_INGEST` | `0` / `false` disables ingest routes (`POST /api/ingest`, start/stream) |
 | `READER_PORT` | Preview server port (default `4173`) |
 | `READER_DEV_HOST` | Dev + HMR bind host (default `127.0.0.1`). Use `0.0.0.0` only on trusted LAN. |

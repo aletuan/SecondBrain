@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { ApifyClientLike } from '../../src/adapters/apify.js';
+import type { ApifyClientLike } from '../../cli/src/adapters/apify.js';
 import {
   extractYoutubeVideoId,
   ingestYouTubeViaApify,
   transcriptFromApifyYoutubeRow,
-} from '../../src/adapters/youtube.js';
+} from '../../cli/src/adapters/youtube.js';
 
 describe('extractYoutubeVideoId', () => {
   it('parses watch, embed, shorts, live, and youtu.be', () => {

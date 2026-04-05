@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { OpenAIClientLike } from '../../src/llm/enrich.js';
-import { suggestMilestonesFromTranscript } from '../../src/youtube/suggestMilestones.js';
+import type { OpenAIClientLike } from '../../cli/src/llm/enrich.js';
+import { suggestMilestonesFromTranscript } from '../../cli/src/youtube/suggestMilestones.js';
 
 describe('suggestMilestonesFromTranscript', () => {
   it('parses milestones from mock JSON', async () => {

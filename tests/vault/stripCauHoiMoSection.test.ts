@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stripCauHoiMoSection } from '../../src/vault/stripCauHoiMoSection.js';
+import { stripCauHoiMoSection } from '../../cli/src/vault/stripCauHoiMoSection.js';
 
 describe('stripCauHoiMoSection', () => {
   it('returns unchanged when heading is absent', () => {

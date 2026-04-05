@@ -9,9 +9,9 @@
  */
 import 'dotenv/config';
 import { ApifyClient } from 'apify-client';
-import { ingestYouTubeViaApify } from '../src/adapters/youtube.js';
-import { readRoutingYamlSync } from '../src/config/routingFile.js';
-import { loadRouting, resolveStrategy } from '../src/router.js';
+import { ingestYouTubeViaApify } from '../cli/src/adapters/youtube.js';
+import { readRoutingYamlSync } from '../cli/src/config/routingFile.js';
+import { loadRouting, resolveStrategy } from '../cli/src/router.js';
 
 /** Big Buck Bunny (CC) — thường có transcript để thử actor. */
 const DEFAULT_YT_URL = 'https://www.youtube.com/watch?v=YE7VzlLtp-4';

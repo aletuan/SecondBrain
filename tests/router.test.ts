@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadRouting, resolveStrategy } from '../src/router.js';
+import { loadRouting, resolveStrategy } from '../cli/src/router.js';
 
 const sampleYaml = `
 version: 1

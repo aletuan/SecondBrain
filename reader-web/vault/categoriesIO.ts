@@ -5,7 +5,7 @@ import { resolveBrainRepoRoot } from './paths.js';
 
 export type CategoryEntry = { id: string; label: string };
 
-/** Keep in sync with `src/config/categories.ts` / `config/categories.example.yaml`. */
+/** Keep in sync with `cli/src/config/categories.ts` / `config/categories.example.yaml`. */
 export async function loadCategoryTaxonomy(): Promise<CategoryEntry[]> {
   const brainRoot = resolveBrainRepoRoot(process.cwd());
   const local = path.join(brainRoot, 'config', 'categories.yaml');
@@ -45,7 +45,7 @@ export function allowedCategoryIdsSorted(entries: CategoryEntry[]): string[] {
   return [...new Set(entries.map(e => e.id))].sort((a, b) => a.localeCompare(b));
 }
 
-/** Keep in sync with `src/vault/writer.ts` `setCategoriesInNoteFrontmatter`. */
+/** Keep in sync with `cli/src/vault/writer.ts` `setCategoriesInNoteFrontmatter`. */
 export async function setCategoriesInNoteFrontmatter(
   notePath: string,
   ids: string[],

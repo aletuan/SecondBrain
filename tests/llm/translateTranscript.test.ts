@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { OpenAIClientLike } from '../../src/llm/enrich.js';
+import type { OpenAIClientLike } from '../../cli/src/llm/enrich.js';
 import {
   extractJsonStringArray,
   injectViTranscriptSection,
   parseEnTranscriptFromSourceMarkdown,
   translateTranscriptSegments,
-} from '../../src/llm/translateTranscript.js';
+} from '../../cli/src/llm/translateTranscript.js';
 
 describe('extractJsonStringArray', () => {
   it('parses raw JSON array', () => {

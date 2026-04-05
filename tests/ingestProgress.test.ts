@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatIngestProgressLine,
   tryParseIngestProgressLine,
-} from '../src/ingest/ingestProgress.js';
+} from '../cli/src/ingest/ingestProgress.js';
 
 describe('formatIngestProgressLine', () => {
   it('round-trips with tryParseIngestProgressLine for phase events', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ingestApify } from '../../src/adapters/apify.js';
+import { ingestApify } from '../../cli/src/adapters/apify.js';
 
 describe('ingestApify', () => {
   it('maps mocked dataset rows to a normalised bundle', async () => {

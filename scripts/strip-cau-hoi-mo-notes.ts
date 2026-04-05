@@ -8,7 +8,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
-import { stripCauHoiMoSection } from '../src/vault/stripCauHoiMoSection.js';
+import { stripCauHoiMoSection } from '../cli/src/vault/stripCauHoiMoSection.js';
 
 loadEnv();
 

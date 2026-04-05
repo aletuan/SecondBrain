@@ -247,7 +247,7 @@ export async function writeCapture(
 /** Folder basename: `YYYY-MM-DD--slug--[a-f0-9]{6}` */
 const CAPTURE_FOLDER_NAME_RE = /^\d{4}-\d{2}-\d{2}--.+--[a-f0-9]{6}$/;
 
-/** Single-line YAML frontmatter (same subset as reader-web `stripFrontmatter`). */
+/** Single-line YAML frontmatter (same subset as reader-web vault `stripFrontmatter`). */
 function stripSimpleYamlFrontmatter(raw: string): { fm: Record<string, string | boolean>; body: string } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\s*/.exec(raw);
   if (!m) return { fm: {}, body: raw };

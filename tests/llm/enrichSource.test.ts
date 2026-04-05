@@ -3,7 +3,7 @@ import {
   DEFAULT_ENRICH_MAX_CHARS,
   enrichMaxCharsFromEnv,
   truncateSourceForEnrich,
-} from '../../src/llm/enrichSource.js';
+} from '../../cli/src/llm/enrichSource.js';
 
 describe('truncateSourceForEnrich', () => {
   it('returns body unchanged when under limit', () => {

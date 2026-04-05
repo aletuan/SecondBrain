@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeErrorChain } from '../../src/cli/printError.js';
+import { describeErrorChain } from '../../cli/src/cli/printError.js';
 
 describe('describeErrorChain', () => {
   it('returns null for non-Error values', () => {

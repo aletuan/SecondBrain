@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bundleFromParts } from '../../src/normaliser.js';
-import { buildSourceMarkdownBody } from '../../src/vault/writer.js';
+import { bundleFromParts } from '../../cli/src/normaliser.js';
+import { buildSourceMarkdownBody } from '../../cli/src/vault/writer.js';
 
 describe('buildSourceMarkdownBody', () => {
   it('uses default article shape for web captures', () => {

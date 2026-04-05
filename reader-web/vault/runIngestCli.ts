@@ -38,7 +38,7 @@ export async function assertIngestEnvironment(cwd: string = process.cwd()): Prom
 }> {
   const brainRoot = resolveBrainRepoRoot(cwd);
   const vaultRoot = resolveVaultRoot(cwd);
-  await fs.access(path.join(brainRoot, 'src', 'cli.ts'));
+  await fs.access(path.join(brainRoot, 'cli', 'src', 'cli.ts'));
   await fs.access(path.join(brainRoot, 'package.json'));
   return { brainRoot, vaultRoot };
 }
@@ -60,7 +60,7 @@ export type IngestCliOptions = {
 };
 
 /**
- * Runs the Brain CLI ingest in `brainRoot` via `node …/tsx/dist/cli.mjs src/cli.ts ingest …`.
+ * Runs the Brain CLI ingest in `brainRoot` via `node …/tsx/dist/cli.mjs cli/src/cli.ts ingest …`.
  * Avoids `pnpm run ingest -- …`, which can forward a stray `--` into argv and break Commander
  * (“Expected 1 argument but got 2”).
  */
@@ -114,7 +114,7 @@ export async function runIngestCli(options: IngestCliOptions): Promise<{
 }> {
   const { brainRoot, vaultRoot } = await assertIngestEnvironment(options.cwd);
   const tsxCli = path.join(brainRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
-  const cliTs = path.join(brainRoot, 'src', 'cli.ts');
+  const cliTs = path.join(brainRoot, 'cli', 'src', 'cli.ts');
   await fs.access(tsxCli);
 
   let args: string[];

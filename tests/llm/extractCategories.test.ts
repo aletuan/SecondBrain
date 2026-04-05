@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { OpenAIClientLike } from '../../src/llm/enrich.js';
-import { extractCategories } from '../../src/llm/extractCategories.js';
+import type { OpenAIClientLike } from '../../cli/src/llm/enrich.js';
+import { extractCategories } from '../../cli/src/llm/extractCategories.js';
 
 function mockClient(content: string): OpenAIClientLike {
   return {

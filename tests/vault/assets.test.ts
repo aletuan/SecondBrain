@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bundleFromParts } from '../../src/normaliser.js';
-import { downloadImagesToAssets, getCaptureFiles, writeCapture } from '../../src/vault/writer.js';
+import { bundleFromParts } from '../../cli/src/normaliser.js';
+import { downloadImagesToAssets, getCaptureFiles, writeCapture } from '../../cli/src/vault/writer.js';
 
 let tmp: string | undefined;
 

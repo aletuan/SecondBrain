@@ -8,7 +8,7 @@ import {
   pickArticleUrlFromTweet,
   primaryTweetText,
   articlePlainTextFromApi,
-} from '../../src/adapters/xApi.js';
+} from '../../cli/src/adapters/xApi.js';
 
 describe('extractTweetIdFromUrl', () => {
   it('parses standard status URLs', () => {

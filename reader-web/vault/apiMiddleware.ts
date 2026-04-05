@@ -179,7 +179,7 @@ export function vaultApiMiddleware() {
       if (req.method === 'GET' && urlRaw === '/api/health') {
         const vaultRoot = resolveVaultRoot();
         const brainRoot = resolveBrainRepoRoot();
-        const cliPath = path.join(brainRoot, 'src', 'cli.ts');
+        const cliPath = path.join(brainRoot, 'cli', 'src', 'cli.ts');
         const ingestAvailable =
           ingestAllowed() &&
           fsSync.existsSync(cliPath) &&
