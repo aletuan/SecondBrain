@@ -41,7 +41,7 @@ pnpm verify-x-tweet
 - **Python** in `api/` — `uv run` / `pytest`
 - **Conventional commits**: `fix:`, `feat:`, `docs:`, `chore:`
 - **Config:** `.env` and `config/routing.yaml` gitignored; templates under `config/*.example.yaml`
-- **Vault** (`vault/`) gitignored; optional **`Wiki/`** seed lives in **`vault-template/Wiki/`** (copy into the vault root beside `Captures/` — see `vault-template/README.md`, `PLAN.md` §1)
+- **Vault** (`vault/`) gitignored; optional **`Wiki/`** seed lives in **`vault-template/Wiki/`** (copy into the vault root beside `Captures/` — see `vault-template/README.md`, `PLAN.md` §1). **Wiki curator checklist + post-ingest prompt:** `vault/Wiki/SCHEMA.md` and `vault/Wiki/WIKI_POST_INGEST_PROMPT.md` (sync from `vault-template/Wiki/` if needed).
 
 ## Environment Variables
 

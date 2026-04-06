@@ -16,3 +16,5 @@ Or merge manually: copy the `Wiki/` tree into your Obsidian vault root so you ha
 ## Layout
 
 See `Wiki/SCHEMA.md` for the canonical layout, editing rules, and how this relates to `Captures/**`.
+
+**Phase 1 (agent-driven):** after each ingest, run the checklist in `Wiki/SCHEMA.md` using the copy-paste block in `Wiki/WIKI_POST_INGEST_PROMPT.md`.
