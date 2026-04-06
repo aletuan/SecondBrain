@@ -19,6 +19,7 @@ touch .env   # repo root; add keys from the Environment table (never commit .env
 - **Vault:** `VAULT_ROOT` (API and reader; default `./vault` relative to how you start each process).
 - **Secrets:** put real keys only in **`.env`** at repo root (gitignored). The Python API also reads **`api/.env`** if present (see `brain_api.settings`).
 - **`vault/`** is gitignored (local Obsidian data).
+- **Wiki layer (optional):** seed `Wiki/` beside `Captures/` from [`vault-template/Wiki/`](vault-template/Wiki/) — see [`vault-template/README.md`](vault-template/README.md) and [`PLAN.md`](PLAN.md) §1.
 
 ## Commands
 
