@@ -1579,7 +1579,7 @@ function renderCapturesTable(allRows: CaptureListItem[], filteredRows: CaptureLi
           <button type="button" class="btn-ghost" id="lib-clear-filters">Clear filters</button>
         </div>`
       : `<div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
+            <th scope="col">Title</th><th scope="col" class="capture-source-th">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
           </tr></thead><tbody id="lib-tbody">${body}</tbody></table></div>
           <nav class="lib-pagination" id="lib-pagination" aria-label="Library pagination" hidden>
             <button type="button" class="lib-pagination__btn" id="lib-page-prev" aria-label="Previous page">
@@ -2555,7 +2555,7 @@ async function route() {
       main.innerHTML = `
         <div class="view active">
           <div class="mock-table-wrap"><table class="mock-table"><thead><tr>
-            <th scope="col">Title</th><th scope="col">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
+            <th scope="col">Title</th><th scope="col" class="capture-source-th">Source</th><th scope="col">Rating</th><th scope="col" class="capture-action-th"><span class="visually-hidden">Open</span></th>
           </tr></thead><tbody>${skeletonTableRowsHtml(5)}</tbody></table></div>
         </div>`;
       const [h, { captures }] = await Promise.all([

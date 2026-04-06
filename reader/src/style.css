@@ -2025,6 +2025,11 @@ main {
   background: var(--elevated);
 }
 
+.mock-table th.capture-source-th {
+  min-width: 10.5rem;
+  width: 12%;
+}
+
 .mock-table th.capture-action-th {
   width: 4.75rem;
   text-align: right;
@@ -2084,7 +2089,11 @@ tr.capture-row:focus-visible {
   font-size: 0.9333rem;
   color: color-mix(in srgb, var(--paper-read) 88%, var(--muted));
   line-height: 1.45;
-  overflow-wrap: anywhere;
+  min-width: 10.5rem;
+  max-width: 18rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mock-table-open {

@@ -2,7 +2,7 @@
 
 - Prefer stable fetch strategies for URL-backed sources; Apify and X API (per routing) matter for reliability, and captures should retain rich content (full text, images, code blocks) when adapters allow.
 - Vietnamese-facing copy and date/time labels should follow Vietnamese conventions; avoid redundant phrasing in time strings (for example drop unnecessary words like "lúc" when the format is already clear).
-- Use a fixed set of high-level capture categories with a fallback such as "Uncategorized" when unsure where a capture belongs.
+- Use a fixed set of high-level capture categories with a concise English reader-UI fallback such as "Uncategorized" when unsure where a capture belongs (including labels from the taxonomy API; avoid Vietnamese placeholder strings like "Khác/Chưa phân loại" in that chrome).
 - For post-capture prompts in notes, prefer short multiple-choice or comprehension-style questions over a single open-ended “opening question.”
 - When adding missing critical tests, prefer test-driven development.
 - For the reader ingest panel, per-stage progress should be visible while the pipeline runs (active/current stage), not only an all-complete state at the end.
