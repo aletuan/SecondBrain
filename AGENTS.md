@@ -7,6 +7,7 @@
 - When adding missing critical tests, prefer test-driven development.
 - For the reader ingest panel, per-stage progress should be visible while the pipeline runs (active/current stage), not only an all-complete state at the end.
 - For reader chrome (menus, buttons, placeholders, aria-labels), keep static UI copy in one language consistently; English was preferred where mixed EN/VI had crept in—this is separate from Vietnamese-facing vault or capture body text.
+- For post-ingest vault Wiki curation, follow `Wiki/SCHEMA.md` (Phase 1 checklist): write new wiki material (log entries, topic highlights, optional backlinks on `*.note.md`) in Vietnamese; do not edit `*.source.md`.
 
 ## Learned Workspace Facts
 
